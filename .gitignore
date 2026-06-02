@@ -2,28 +2,35 @@
 .DS_Store
 Thumbs.db
 
-# --- 백엔드 (Spring Boot / Maven / Gradle) ---
-/backend/target/
-/backend/build/
-/backend/.gradle/
-/backend/.settings/
-/backend/.classpath
-/backend/.project
-/backend/.idea/
-/backend/*.iml
-/backend/.vscode/
+# --- Backend (Spring Boot / Maven) ---
+backend/target/
+backend/build/
+backend/.gradle/
+backend/.settings/
+backend/.classpath
+backend/.project
 
-# --- 프론트엔드 (React / npm) ---
-/frontend/node_modules/
-/frontend/dist/
-/frontend/build/
-/frontend/.parcel-cache
-/frontend/.output/
-/frontend/.next/
-/frontend/.vscode/
+# --- Frontend (React) ---
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.parcel-cache/
+frontend/.output/
+frontend/.next/
 
-# --- 환경 설정 및 보안 (중요!) ---
-*.env
-*.env.local
-*.properties
-!application.properties
+# --- IDE ---
+.idea/
+.vscode/
+*.iml
+
+# --- Logs ---
+*.log
+
+# --- Environment ---
+.env
+.env.local
+
+# Spring Boot 민감 설정
+application-local.properties
+application-secret.properties
+application-prod.properties

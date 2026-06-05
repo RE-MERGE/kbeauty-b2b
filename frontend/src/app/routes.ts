@@ -1,0 +1,69 @@
+import { createBrowserRouter } from "react-router";
+import { Root } from "./Root";
+import { Home } from "../pages/Home";
+import { PurchaseAgency } from "../pages/PurchaseAgency";
+import { ShippingAgency } from "../pages/ShippingAgency";
+import { Suppliers } from "../pages/Suppliers";
+import { CustomsClearance } from "../pages/CustomsClearance";
+import { Support } from "../pages/Support";
+import { Login } from "../pages/Login";
+import { Cart } from "../pages/Cart";
+import { Orders } from "../pages/Orders";
+import { Admin } from "../pages/Admin";
+import { Checkout } from "../pages/Checkout";
+import { MyPage } from "../pages/MyPage";
+import { ProductDetail } from "../pages/ProductDetail";
+import { AdminDashboard } from "../pages/AdminDashboard";
+import { AdminSourcingRequests } from "../pages/AdminSourcingRequests";
+import { AdminShippingQuotes } from "../pages/AdminShippingQuotes";
+import { AdminInspection } from "../pages/AdminInspection";
+import { AdminPayments } from "../pages/AdminPayments";
+import { BuyerInspection } from "../pages/BuyerInspection";
+import { QuoteRequest } from "../pages/QuoteRequest";
+import { BuyerDashboard } from "../pages/BuyerDashboard";
+import { SellerDashboard } from "../pages/SellerDashboard";
+import { SellerProductRegister } from "../pages/SellerProductRegister";
+import { OrderDetail } from "../pages/OrderDetail";
+import { SupplierRegister } from "../pages/SupplierRegister";
+import { SellerShippingQuote } from "../pages/SellerShippingQuote";
+import { BuyerShippingQuotes } from "../pages/BuyerShippingQuotes";
+import { AllProducts } from "../pages/AllProducts";
+import { RestrictedBusinessTypes } from "../pages/RestrictedBusinessTypes";
+
+export const router = createBrowserRouter([
+  {
+    path: "/",
+    Component: Root,
+    children: [
+      { index: true, Component: Home },
+      { path: "purchase-agency", Component: PurchaseAgency },
+      { path: "shipping-agency", Component: ShippingAgency },
+      { path: "products", Component: AllProducts },
+      { path: "suppliers", Component: Suppliers },
+      { path: "customs", Component: CustomsClearance },
+      { path: "support", Component: Support },
+      { path: "auth", Component: Login },
+      { path: "cart", Component: Cart },
+      { path: "checkout", Component: Checkout },
+      { path: "orders", Component: Orders },
+      { path: "orders/:id", Component: OrderDetail },
+      { path: "mypage", Component: MyPage },
+      { path: "product/:id", Component: ProductDetail },
+      { path: "supplier-register", Component: SupplierRegister },
+      { path: "restricted-businesses", Component: RestrictedBusinessTypes },
+      { path: "quote-request", Component: QuoteRequest },
+      { path: "buyer", Component: BuyerDashboard },
+      { path: "buyer/shipping-quotes", Component: BuyerShippingQuotes },
+      { path: "seller", Component: SellerDashboard },
+      { path: "seller/products/new", Component: SellerProductRegister },
+      { path: "seller/shipping-quote", Component: SellerShippingQuote },
+      { path: "admin", Component: Admin },
+      { path: "admin/dashboard", Component: AdminDashboard },
+      { path: "admin/sourcing-requests", Component: AdminSourcingRequests },
+      { path: "admin/shipping-quotes", Component: AdminShippingQuotes },
+      { path: "admin/inspection", Component: AdminInspection },
+      { path: "admin/analytics", Component: AdminPayments },
+      { path: "inspection", Component: BuyerInspection },
+    ],
+  },
+]);

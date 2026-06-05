@@ -1,37 +1,222 @@
-# --- OS 시스템 파일 ---
+# =============================================
+# OS 시스템 파일
+# =============================================
+# macOS
 .DS_Store
-Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
 
-# --- Backend (Spring Boot / Maven) ---
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux (Ubuntu)
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+
+# =============================================
+# IDE
+# =============================================
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Eclipse
+.classpath
+.project
+.settings/
+*.launch
+.buildpath
+.target
+
+# NetBeans
+nbproject/
+nbbuild/
+nbdist/
+nb-configuration.xml
+
+
+# =============================================
+# Backend (Spring Boot / Maven / Gradle)
+# =============================================
 backend/target/
 backend/build/
 backend/.gradle/
-backend/.settings/
-backend/.classpath
-backend/.project
+backend/gradle/
+!backend/gradle/wrapper/gradle-wrapper.jar
+!backend/gradle/wrapper/gradle-wrapper.properties
+backend/.mvn/
+backend/*.jar
+backend/*.war
+backend/*.ear
+backend/hs_err_pid*
+backend/replay_pid*
 
-# --- Frontend (React) ---
+# 테스트 리포트
+backend/target/surefire-reports/
+backend/target/failsafe-reports/
+
+# Spring Boot 로그
+backend/logs/
+backend/*.log
+
+
+# =============================================
+# Frontend (React + TypeScript)
+# =============================================
 frontend/node_modules/
 frontend/dist/
 frontend/build/
 frontend/.parcel-cache/
-frontend/.output/
 frontend/.next/
+frontend/.cache/
+frontend/.temp/
+frontend/.turbo/
 
-# --- IDE ---
-.idea/
-.vscode/
-*.iml
+# TypeScript 컴파일 산출물
+frontend/*.tsbuildinfo
+frontend/tsconfig.tsbuildinfo
 
-# --- Logs ---
-*.log
+# 타입 선언 자동생성 파일
+frontend/src/**/*.d.ts.map
 
-# --- Environment ---
+# 테스트 커버리지
+frontend/coverage/
+frontend/.nyc_output/
+
+# Storybook 빌드
+frontend/storybook-static/
+
+# Vite 캐시
+frontend/.vite/
+
+# ESLint / Prettier 캐시
+frontend/.eslintcache
+frontend/.stylelintcache
+frontend/.prettiercache
+
+# npm / yarn / pnpm
+frontend/package-lock.json
+frontend/yarn.lock
+frontend/pnpm-lock.yaml
+frontend/.pnp.*
+frontend/.yarn/*
+!frontend/.yarn/patches
+!frontend/.yarn/plugins
+!frontend/.yarn/releases
+!frontend/.yarn/sdks
+!frontend/.yarn/versions
+
+
+# =============================================
+# 환경변수 / 민감 설정
+# =============================================
 .env
+.env.*
+!.env.example
 .env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# React 환경변수 (Vite / CRA)
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
 
 # Spring Boot 민감 설정
 application-local.properties
+application-local.yml
 application-secret.properties
+application-secret.yml
 application-prod.properties
-/.project
+application-prod.yml
+application-dev.properties
+application-dev.yml
+application-staging.properties
+application-staging.yml
+
+# 인증서 / 키파일
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+*.crt
+*.cer
+
+
+# =============================================
+# GitHub Actions / CI/CD
+# =============================================
+.actrc
+.secrets
+.env.docker
+.env.ci
+.env.staging
+
+
+# =============================================
+# Docker
+# =============================================
+docker-compose.override.yml
+docker-compose.local.yml
+
+
+# =============================================
+# AWS / 배포
+# =============================================
+.aws/
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+deploy-config.sh
+server-config.sh
+
+
+# =============================================
+# 로그
+# =============================================
+*.log
+*.log.*
+logs/
+log/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+
+# =============================================
+# 임시 파일
+# =============================================
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.orig
+*.rej
+.cache/
+tmp/
+temp/

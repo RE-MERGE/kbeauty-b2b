@@ -1,51 +1,188 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { Package, Upload, CheckCircle, ChevronLeft, Plus, X, AlertCircle } from "lucide-react";
+import {
+  Shirt, Tag, LayoutGrid, Store, Settings, Ruler, Palette,
+  Award, FileText, Image, ChevronLeft, Plus, X, AlertCircle, CheckCircle, CloudUpload
+} from "lucide-react";
 
-const categories = ["스킨케어", "메이크업", "마스크팩", "헤어케어", "바디케어", "클렌징", "더마코스메틱", "향수/아로마"];
-const certifications = ["FDA (미국)", "CE (유럽)", "TGA (호주)", "HSA (싱가포르)", "ISO 22716", "비건 인증", "cruelty-free", "MSDS"];
-const packagingTypes = ["유리병", "플라스틱 튜브", "펌프형", "스파우트 파우치", "에어리스 펌프", "메탈 튜브", "종이 패키지", "기타"];
+const subCategories: Record<string, Record<string, string[]>> = {
+  top: {
+    "티셔츠": ["반팔티", "긴팔티", "나시"],
+    "블라우스/셔츠": ["셔츠", "레이스 블라우스"],
+    "니트/스웨터": ["가디건", "풀오버", "조끼"],
+    "후드/맨투맨": ["후드집업", "크루넥"],
+    "재킷/블레이저": ["테일러드", "숏재킷"],
+  },
+  bottom: {
+    "스커트": ["미니", "미디", "롱", "플리츠"],
+    "팬츠": ["슬랙스", "청바지", "와이드팬츠"],
+    "레깅스": ["기본", "패턴"],
+    "반바지": ["숏팬츠", "버뮤다"],
+  },
+  dress: {
+    "원피스": ["미니", "미디", "맥시"],
+    "점프수트": ["오버올", "롬퍼"],
+    "투피스/세트": ["상하의 세트", "수트 세트"],
+  },
+  outer: {
+    "코트": ["롱코트", "하프코트", "트렌치"],
+    "패딩": ["롱패딩", "숏패딩", "조끼패딩"],
+    "점퍼/바람막이": ["야상", "항공점퍼"],
+    "가죽/인조가죽": ["라이더재킷"],
+  },
+  inner: {
+    "이너티": ["민소매", "반팔 이너"],
+    "속옷": ["브라", "팬티 세트"],
+    "홈웨어": ["파자마", "잠옷 세트"],
+  },
+  sports: {
+    "스포츠 상의": ["스포츠브라", "래쉬가드"],
+    "스포츠 하의": ["요가팬츠", "트레이닝팬츠"],
+    "스포츠 세트": ["상하의 세트"],
+  },
+  acc: {
+    "가방": ["토트백", "크로스백", "클러치"],
+    "모자": ["볼캡", "버킷햇", "베레모"],
+    "스카프/머플러": ["실크스카프", "울머플러"],
+    "벨트": ["가죽벨트", "체인벨트"],
+    "양말/타이즈": ["기본양말", "패턴타이즈"],
+  },
+  shoes: {
+    "힐/펌프스": ["스틸레토", "블록힐"],
+    "플랫/로퍼": ["발레리나", "옥스퍼드"],
+    "부츠": ["앵클부츠", "롱부츠"],
+    "스니커즈": ["캐주얼", "러닝화"],
+  },
+};
 
-type Ingredient = { name: string; pct: string };
+const mainCategoryLabels: Record<string, string> = {
+  top: "상의 (Top)",
+  bottom: "하의 (Bottom)",
+  dress: "원피스/세트 (Dress & Set)",
+  outer: "아우터 (Outer)",
+  inner: "이너/언더웨어 (Inner)",
+  sports: "스포츠/애슬레저 (Sports)",
+  acc: "액세서리 (Accessory)",
+  shoes: "신발 (Shoes)",
+};
+
+const sizeSystems = ["한국 사이즈 (XS–3XL)", "US 사이즈", "EU 사이즈", "프리사이즈", "넘버 사이즈 (23–29)"];
+const sizeOptions = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "프리"];
+const colorOptions = ["블랙", "화이트", "아이보리", "네이비", "베이지", "그레이", "카키", "브라운", "핑크", "레드", "블루", "기타"];
+const patternOptions = ["솔리드", "스트라이프", "체크", "플로럴", "도트", "애니멀", "타이다이", "그래픽"];
+
+const certGroups = [
+  {
+    label: "국내 인증",
+    items: ["KC 인증", "어린이제품 안전인증", "환경부 환경마크", "GR 우수재활용제품", "섬유품질표시 적합"],
+  },
+  {
+    label: "소재 / 환경 인증",
+    items: ["OEKO-TEX Standard 100", "GOTS (유기농 섬유)", "Recycled Content (GRS)", "비건 인증", "Fair Trade"],
+  },
+];
+
+function ToggleChip({ label, selected, onToggle }: { label: string; selected: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`py-1.5 px-3 text-xs rounded border transition-colors ${
+        selected
+          ? "bg-primary text-white border-primary"
+          : "border-border text-foreground hover:border-primary hover:text-primary"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+      <span className="text-primary">{icon}</span>
+      {children}
+    </h2>
+  );
+}
+
+function CertGroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 mb-2">
+      <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">{children}</span>
+      <div className="flex-1 h-px bg-border" />
+    </div>
+  );
+}
+
+const initialForm = {
+  productName: "",
+  engName: "",
+  brand: "",
+  season: "",
+  mainCategory: "",
+  subCategory: "",
+  moq: "",
+  unitPrice: "",
+  leadTime: "",
+  stock: "",
+  mainMaterial: "",
+  materialCert: "",
+  description: "",
+  careInstruction: "",
+  oemAvailable: false,
+  sampleAvailable: false,
+  whiteLabel: false,
+};
 
 export function SellerProductRegister() {
   const [submitted, setSubmitted] = useState(false);
-  const [ingredients, setIngredients] = useState<Ingredient[]>([{ name: "", pct: "" }]);
+  const [form, setForm] = useState(initialForm);
+
+  const [selectedSubTypes, setSelectedSubTypes] = useState<string[]>([]);
+  const [selectedSizeSystems, setSelectedSizeSystems] = useState<string[]>([]);
+  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [selectedColors, setSelectedColors] = useState<string[]>([]);
+  const [selectedPatterns, setSelectedPatterns] = useState<string[]>([]);
   const [selectedCerts, setSelectedCerts] = useState<string[]>([]);
-  const [selectedPackaging, setSelectedPackaging] = useState<string[]>([]);
-  const [images, setImages] = useState<string[]>([]);
-  const [form, setForm] = useState({
-    productName: "",
-    engName: "",
-    category: "",
-    volume: "",
-    moq: "",
-    unitPrice: "",
-    leadTime: "",
-    shelfLife: "",
-    skinType: "",
-    mainIngredient: "",
-    description: "",
-    usage: "",
-    oemAvailable: false,
-    sampleAvailable: false,
-    whiteLabel: false,
-  });
 
-  const update = (field: string, value: string | boolean) => setForm((p) => ({ ...p, [field]: value }));
+  const update = (field: string, value: string | boolean) =>
+    setForm((p) => ({ ...p, [field]: value }));
 
-  const addIngredient = () => setIngredients((p) => [...p, { name: "", pct: "" }]);
-  const removeIngredient = (i: number) => setIngredients((p) => p.filter((_, idx) => idx !== i));
-  const updateIngredient = (i: number, field: "name" | "pct", val: string) => {
-    setIngredients((p) => p.map((ing, idx) => idx === i ? { ...ing, [field]: val } : ing));
+  const toggleItem = (
+    list: string[],
+    setList: React.Dispatch<React.SetStateAction<string[]>>,
+    item: string
+  ) => setList((p) => (p.includes(item) ? p.filter((x) => x !== item) : [...p, item]));
+
+  const currentSubGroups = form.mainCategory ? subCategories[form.mainCategory] : {};
+  const currentSubTypes = form.subCategory ? currentSubGroups[form.subCategory] ?? [] : [];
+
+  const handleMainCategoryChange = (val: string) => {
+    update("mainCategory", val);
+    update("subCategory", "");
+    setSelectedSubTypes([]);
   };
 
-  const toggleCert = (c: string) => setSelectedCerts((p) => p.includes(c) ? p.filter(x => x !== c) : [...p, c]);
-  const togglePkg = (c: string) => setSelectedPackaging((p) => p.includes(c) ? p.filter(x => x !== c) : [...p, c]);
+  const handleSubCategoryChange = (val: string) => {
+    update("subCategory", val);
+    setSelectedSubTypes([]);
+  };
+
+  const resetAll = () => {
+    setForm(initialForm);
+    setSelectedSubTypes([]);
+    setSelectedSizeSystems([]);
+    setSelectedSizes([]);
+    setSelectedColors([]);
+    setSelectedPatterns([]);
+    setSelectedCerts([]);
+  };
 
   if (submitted) {
     return (
-      <div className="max-w-[640px] mx-auto px-4 py-16 text-center">
+      <div className="max-w-[580px] mx-auto px-4 py-16 text-center">
         <div className="bg-white border border-border rounded-lg p-10">
           <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-5">
             <CheckCircle size={36} className="text-green-500" />
@@ -56,11 +193,14 @@ export function SellerProductRegister() {
             셀러 페이지에서 등록 제품을 확인하실 수 있습니다.
           </p>
           <div className="flex justify-center gap-3">
-            <Link to="/seller" className="bg-primary hover:bg-primary/90 text-white px-6 py-2.5 rounded font-semibold text-sm transition-colors">
+            <Link
+              to="/seller"
+              className="bg-primary hover:bg-primary/90 text-white px-6 py-2.5 rounded font-semibold text-sm transition-colors"
+            >
               셀러 페이지로
             </Link>
             <button
-              onClick={() => { setSubmitted(false); setForm({ productName: "", engName: "", category: "", volume: "", moq: "", unitPrice: "", leadTime: "", shelfLife: "", skinType: "", mainIngredient: "", description: "", usage: "", oemAvailable: false, sampleAvailable: false, whiteLabel: false }); setIngredients([{ name: "", pct: "" }]); setSelectedCerts([]); setSelectedPackaging([]); }}
+              onClick={() => { resetAll(); setSubmitted(false); }}
               className="border border-border text-foreground hover:border-primary hover:text-primary px-6 py-2.5 rounded text-sm font-medium transition-colors"
             >
               추가 등록
@@ -72,79 +212,185 @@ export function SellerProductRegister() {
   }
 
   return (
-    <div className="max-w-[900px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
+    <div className="max-w-[900px] mx-auto px-4 py-8">
       {/* Header */}
-      <div className="bg-gradient-to-r from-[#1a2e1a] to-[#2d4a35] text-white rounded-lg p-6 mb-6">
+      <div className="bg-gradient-to-r from-[#1a1a2e] via-[#16213e] to-[#0f3460] text-white rounded-lg p-6 mb-6">
         <div className="flex items-center gap-3 mb-2">
-          <Package size={28} />
+          <Shirt size={26} />
           <h1 className="text-2xl font-bold">제품 등록</h1>
         </div>
-        <p className="text-white/80 text-sm">TradeKR 플랫폼에 K-Beauty 제품을 등록하세요. 전 세계 바이어에게 노출됩니다.</p>
+        <p className="text-white/75 text-sm">
+          TradeKR 플랫폼에 K-Fashion 제품을 등록하세요. 전 세계 바이어에게 노출됩니다.
+        </p>
       </div>
 
-      <Link to="/seller" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors mb-5">
+      <Link
+        to="/seller"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors mb-5"
+      >
         <ChevronLeft size={14} /> 셀러 페이지로
       </Link>
 
       <div className="space-y-5">
-        {/* 기본 정보 */}
+        {/* 기본 제품 정보 */}
         <div className="bg-white border border-border rounded-lg p-6">
-          <h2 className="text-base font-bold text-foreground mb-5 flex items-center gap-2">
-            <Package size={18} className="text-primary" /> 기본 제품 정보
-          </h2>
+          <SectionTitle icon={<Tag size={17} />}>기본 제품 정보</SectionTitle>
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-foreground mb-1.5">제품명 (한국어) <span className="text-red-500">*</span></label>
-              <input type="text" value={form.productName} onChange={(e) => update("productName", e.target.value)} placeholder="예: 히알루론산 에센스 50mL" className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors" />
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                제품명 (한국어) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.productName}
+                onChange={(e) => update("productName", e.target.value)}
+                placeholder="예: 오버사이즈 린넨 셔츠 블라우스"
+                className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">제품명 (영어)</label>
-              <input type="text" value={form.engName} onChange={(e) => update("engName", e.target.value)} placeholder="Hyaluronic Acid Essence 50mL" className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors" />
+              <input
+                type="text"
+                value={form.engName}
+                onChange={(e) => update("engName", e.target.value)}
+                placeholder="Oversized Linen Shirt Blouse"
+                className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">카테고리 <span className="text-red-500">*</span></label>
-              <select value={form.category} onChange={(e) => update("category", e.target.value)} className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors">
+              <label className="block text-sm font-medium text-foreground mb-1.5">브랜드명</label>
+              <input
+                type="text"
+                value={form.brand}
+                onChange={(e) => update("brand", e.target.value)}
+                placeholder="예: MUMU STUDIO"
+                className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">시즌</label>
+              <select
+                value={form.season}
+                onChange={(e) => update("season", e.target.value)}
+                className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+              >
                 <option value="">선택하세요</option>
-                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+                <option>SS (봄/여름)</option>
+                <option>FW (가을/겨울)</option>
+                <option>상시</option>
               </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">용량/중량 <span className="text-red-500">*</span></label>
-              <input type="text" value={form.volume} onChange={(e) => update("volume", e.target.value)} placeholder="예: 50mL, 30g" className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">최소 발주량 (MOQ) <span className="text-red-500">*</span></label>
-              <input type="text" value={form.moq} onChange={(e) => update("moq", e.target.value)} placeholder="예: 1,000개" className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">단가 (USD) <span className="text-red-500">*</span></label>
-              <input type="text" value={form.unitPrice} onChange={(e) => update("unitPrice", e.target.value)} placeholder="예: $2.5" className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">납기 (생산 소요일)</label>
-              <input type="text" value={form.leadTime} onChange={(e) => update("leadTime", e.target.value)} placeholder="예: 21일" className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">유통기한</label>
-              <input type="text" value={form.shelfLife} onChange={(e) => update("shelfLife", e.target.value)} placeholder="예: 36개월" className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">피부 타입</label>
-              <input type="text" value={form.skinType} onChange={(e) => update("skinType", e.target.value)} placeholder="예: 모든 피부, 민감성, 건성" className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors" />
             </div>
           </div>
         </div>
 
-        {/* 옵션 체크박스 */}
+        {/* 카테고리 */}
         <div className="bg-white border border-border rounded-lg p-6">
-          <h2 className="text-base font-bold text-foreground mb-4">공급 옵션</h2>
-          <div className="flex gap-6">
+          <SectionTitle icon={<LayoutGrid size={17} />}>카테고리</SectionTitle>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                대분류 <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={form.mainCategory}
+                onChange={(e) => handleMainCategoryChange(e.target.value)}
+                className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+              >
+                <option value="">선택하세요</option>
+                {Object.entries(mainCategoryLabels).map(([val, label]) => (
+                  <option key={val} value={val}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                중분류 <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={form.subCategory}
+                onChange={(e) => handleSubCategoryChange(e.target.value)}
+                disabled={!form.mainCategory}
+                className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors disabled:opacity-50"
+              >
+                <option value="">{form.mainCategory ? "선택하세요" : "대분류를 먼저 선택하세요"}</option>
+                {Object.keys(currentSubGroups).map((g) => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {currentSubTypes.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2">세부 유형 (복수 선택 가능)</p>
+              <div className="flex flex-wrap gap-2">
+                {currentSubTypes.map((item) => (
+                  <ToggleChip
+                    key={item}
+                    label={item}
+                    selected={selectedSubTypes.includes(item)}
+                    onToggle={() => toggleItem(selectedSubTypes, setSelectedSubTypes, item)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 거래 조건 */}
+        <div className="bg-white border border-border rounded-lg p-6">
+          <SectionTitle icon={<Store size={17} />}>거래 조건</SectionTitle>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                최소 발주량 (MOQ) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.moq}
+                onChange={(e) => update("moq", e.target.value)}
+                placeholder="예: 100벌"
+                className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                단가 <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.unitPrice}
+                onChange={(e) => update("unitPrice", e.target.value)}
+                placeholder="예: 10.000￦"
+                className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">재고 수량</label>
+              <input
+                type="text"
+                value={form.stock}
+                onChange={(e) => update("stock", e.target.value)}
+                placeholder="예: 500개 (즉시 출고 가능)"
+                className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 공급 옵션 */}
+        <div className="bg-white border border-border rounded-lg p-6">
+          <SectionTitle icon={<Settings size={17} />}>공급 옵션</SectionTitle>
+          <div className="flex gap-4">
             {[
               { field: "oemAvailable", label: "OEM/ODM 가능", desc: "바이어 브랜드로 생산 가능" },
               { field: "sampleAvailable", label: "샘플 제공 가능", desc: "본오더 전 샘플 발송" },
               { field: "whiteLabel", label: "화이트라벨 가능", desc: "라벨 커스터마이징" },
             ].map((opt) => (
-              <label key={opt.field} className="flex items-start gap-3 cursor-pointer p-4 border border-border rounded hover:border-primary transition-colors flex-1">
+              <label
+                key={opt.field}
+                className="flex items-start gap-3 cursor-pointer p-4 border border-border rounded hover:border-primary transition-colors flex-1"
+              >
                 <input
                   type="checkbox"
                   checked={form[opt.field as keyof typeof form] as boolean}
@@ -160,87 +406,163 @@ export function SellerProductRegister() {
           </div>
         </div>
 
-        {/* 인증 */}
+        {/* 사이즈 & 소재 */}
         <div className="bg-white border border-border rounded-lg p-6">
-          <h2 className="text-base font-bold text-foreground mb-4">보유 인증</h2>
-          <div className="grid grid-cols-4 gap-2">
-            {certifications.map((cert) => (
-              <button key={cert} type="button" onClick={() => toggleCert(cert)} className={`py-2 px-3 text-xs rounded border transition-colors text-left ${selectedCerts.includes(cert) ? "bg-primary text-white border-primary" : "border-border text-foreground hover:border-primary hover:text-primary"}`}>
-                {cert}
-              </button>
-            ))}
+          <SectionTitle icon={<Ruler size={17} />}>사이즈 & 소재</SectionTitle>
+          <div className="mb-4">
+            <p className="text-xs font-medium text-muted-foreground mb-2">사이즈 시스템</p>
+            <div className="flex flex-wrap gap-2">
+              {sizeSystems.map((item) => (
+                <ToggleChip
+                  key={item}
+                  label={item}
+                  selected={selectedSizeSystems.includes(item)}
+                  onToggle={() => toggleItem(selectedSizeSystems, setSelectedSizeSystems, item)}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="mb-4">
+            <p className="text-xs font-medium text-muted-foreground mb-2">제공 사이즈</p>
+            <div className="flex flex-wrap gap-2">
+              {sizeOptions.map((item) => (
+                <ToggleChip
+                  key={item}
+                  label={item}
+                  selected={selectedSizes.includes(item)}
+                  onToggle={() => toggleItem(selectedSizes, setSelectedSizes, item)}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                주요 소재 <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.mainMaterial}
+                onChange={(e) => update("mainMaterial", e.target.value)}
+                placeholder="예: 면 100%, 폴리에스터 60% + 레이온 40%"
+                className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">소재 인증</label>
+              <input
+                type="text"
+                value={form.materialCert}
+                onChange={(e) => update("materialCert", e.target.value)}
+                placeholder="예: OEKO-TEX Standard 100"
+                className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+              />
+            </div>
           </div>
         </div>
 
-        {/* 패키징 */}
+        {/* 색상 & 패턴 */}
         <div className="bg-white border border-border rounded-lg p-6">
-          <h2 className="text-base font-bold text-foreground mb-4">패키징 유형</h2>
-          <div className="grid grid-cols-4 gap-2">
-            {packagingTypes.map((pkg) => (
-              <button key={pkg} type="button" onClick={() => togglePkg(pkg)} className={`py-2 px-3 text-xs rounded border transition-colors ${selectedPackaging.includes(pkg) ? "bg-primary text-white border-primary" : "border-border text-foreground hover:border-primary hover:text-primary"}`}>
-                {pkg}
-              </button>
-            ))}
+          <SectionTitle icon={<Palette size={17} />}>색상 & 패턴</SectionTitle>
+          <div className="mb-4">
+            <p className="text-xs font-medium text-muted-foreground mb-2">주요 색상</p>
+            <div className="flex flex-wrap gap-2">
+              {colorOptions.map((item) => (
+                <ToggleChip
+                  key={item}
+                  label={item}
+                  selected={selectedColors.includes(item)}
+                  onToggle={() => toggleItem(selectedColors, setSelectedColors, item)}
+                />
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2">패턴</p>
+            <div className="flex flex-wrap gap-2">
+              {patternOptions.map((item) => (
+                <ToggleChip
+                  key={item}
+                  label={item}
+                  selected={selectedPatterns.includes(item)}
+                  onToggle={() => toggleItem(selectedPatterns, setSelectedPatterns, item)}
+                />
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* 주요 성분 */}
+        {/* 보유 인증 */}
         <div className="bg-white border border-border rounded-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-bold text-foreground">주요 성분</h2>
-            <button onClick={addIngredient} className="text-xs text-primary hover:underline flex items-center gap-1">
-              <Plus size={12} /> 성분 추가
-            </button>
-          </div>
-          <div className="space-y-2">
-            {ingredients.map((ing, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <input type="text" value={ing.name} onChange={(e) => updateIngredient(i, "name", e.target.value)} placeholder="성분명 (예: 히알루론산)" className="flex-1 border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary" />
-                <input type="text" value={ing.pct} onChange={(e) => updateIngredient(i, "pct", e.target.value)} placeholder="함량 %" className="w-24 border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary" />
-                {ingredients.length > 1 && (
-                  <button onClick={() => removeIngredient(i)} className="text-muted-foreground hover:text-red-500 transition-colors">
-                    <X size={14} />
-                  </button>
-                )}
+          <SectionTitle icon={<Award size={17} />}>보유 인증 / 컴플라이언스</SectionTitle>
+          <div className="space-y-4">
+            {certGroups.map((group) => (
+              <div key={group.label}>
+                <CertGroupLabel>{group.label}</CertGroupLabel>
+                <div className="flex flex-wrap gap-2">
+                  {group.items.map((item) => (
+                    <ToggleChip
+                      key={item}
+                      label={item}
+                      selected={selectedCerts.includes(item)}
+                      onToggle={() => toggleItem(selectedCerts, setSelectedCerts, item)}
+                    />
+                  ))}
+                </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* 설명 */}
+        {/* 제품 상세 설명 */}
         <div className="bg-white border border-border rounded-lg p-6">
-          <h2 className="text-base font-bold text-foreground mb-4">제품 상세 설명</h2>
+          <SectionTitle icon={<FileText size={17} />}>제품 상세 설명</SectionTitle>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">제품 특징 및 효능 <span className="text-red-500">*</span></label>
-              <textarea value={form.description} onChange={(e) => update("description", e.target.value)} rows={4} placeholder="제품의 주요 특징, 효능, 차별점 등을 기재하세요." className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary resize-none" />
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                제품 특징 및 스타일링 포인트 <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={form.description}
+                onChange={(e) => update("description", e.target.value)}
+                rows={4}
+                placeholder="제품의 주요 특징, 핏, 디자인 포인트, 타겟 고객층 등을 기재하세요."
+                className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary resize-none transition-colors"
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">사용 방법</label>
-              <textarea value={form.usage} onChange={(e) => update("usage", e.target.value)} rows={3} placeholder="사용 순서, 용량, 주의사항 등을 기재하세요." className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary resize-none" />
+              <label className="block text-sm font-medium text-foreground mb-1.5">세탁 / 관리 방법</label>
+              <textarea
+                value={form.careInstruction}
+                onChange={(e) => update("careInstruction", e.target.value)}
+                rows={2}
+                placeholder="예: 손세탁 권장, 30°C 이하 세탁, 드라이클리닝 가능"
+                className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary resize-none transition-colors"
+              />
             </div>
           </div>
         </div>
 
         {/* 이미지 업로드 */}
         <div className="bg-white border border-border rounded-lg p-6">
-          <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
-            <Upload size={18} className="text-primary" /> 제품 이미지 업로드
-          </h2>
+          <SectionTitle icon={<Image size={17} />}>제품 이미지 업로드</SectionTitle>
           <div className="bg-muted/30 border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary transition-colors cursor-pointer">
-            <Upload size={28} className="mx-auto text-muted-foreground mb-3" />
+            <CloudUpload size={28} className="mx-auto text-muted-foreground mb-3" />
             <p className="text-sm text-foreground font-medium mb-1">이미지를 드래그하거나 클릭하여 업로드</p>
-            <p className="text-xs text-muted-foreground">JPG, PNG, WEBP 지원 · 최대 10MB · 최대 6장</p>
+            <p className="text-xs text-muted-foreground">JPG, PNG, WEBP 지원 · 최대 10MB · 최대 8장</p>
           </div>
           <div className="flex items-start gap-2 mt-3 p-3 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
             <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-            첫 번째 이미지가 대표 이미지로 설정됩니다. 고화질 정사각형 이미지 권장 (1000×1000px 이상)
+            첫 번째 이미지가 대표 이미지로 설정됩니다. 착장 컷 + 플랫레이 컷 혼용 권장 (1000×1000px 이상)
           </div>
         </div>
 
-        {/* Submit */}
+        {/* 하단 버튼 */}
         <div className="flex items-center justify-between pb-4">
-          <Link to="/seller" className="border border-border text-foreground hover:border-primary hover:text-primary px-8 py-3 rounded text-sm font-medium transition-colors">
+          <Link
+            to="/seller"
+            className="border border-border text-foreground hover:border-primary hover:text-primary px-8 py-3 rounded text-sm font-medium transition-colors"
+          >
             취소
           </Link>
           <div className="flex gap-3">
@@ -251,7 +573,7 @@ export function SellerProductRegister() {
               onClick={() => setSubmitted(true)}
               className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded text-sm font-semibold transition-colors flex items-center gap-2"
             >
-              <Package size={16} /> 제품 등록 신청
+              <Shirt size={16} /> 제품 등록 신청
             </button>
           </div>
         </div>

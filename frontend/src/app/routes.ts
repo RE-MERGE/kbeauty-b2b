@@ -6,7 +6,6 @@ import { ShippingAgency } from "../pages/ShippingAgency";
 import { Suppliers } from "../pages/Suppliers";
 import { CustomsClearance } from "../pages/CustomsClearance";
 import { Support } from "../pages/Support";
-import { Login } from "../pages/Login";
 import { Cart } from "../pages/Cart";
 import { Orders } from "../pages/Orders";
 import { Admin } from "../pages/Admin";
@@ -29,6 +28,10 @@ import { SellerShippingQuote } from "../pages/SellerShippingQuote";
 import { BuyerShippingQuotes } from "../pages/BuyerShippingQuotes";
 import { AllProducts } from "../pages/AllProducts";
 import { RestrictedBusinessTypes } from "../pages/RestrictedBusinessTypes";
+import AuthLayout from "../pages/auth/_layout";
+import Login from "../pages/auth/Login";
+import Register from "../pages/auth/Register";
+import Buyer from "../pages/auth/Buyer";
 
 export const router = createBrowserRouter([
   {
@@ -42,7 +45,6 @@ export const router = createBrowserRouter([
       { path: "suppliers", Component: Suppliers },
       { path: "customs", Component: CustomsClearance },
       { path: "support", Component: Support },
-      { path: "auth", Component: Login },
       { path: "cart", Component: Cart },
       { path: "checkout", Component: Checkout },
       { path: "orders", Component: Orders },
@@ -64,6 +66,17 @@ export const router = createBrowserRouter([
       { path: "admin/inspection", Component: AdminInspection },
       { path: "admin/analytics", Component: AdminPayments },
       { path: "inspection", Component: BuyerInspection },
+      // 인증 관련 (Auth)
+
     ],
   },
+  {
+    path: "auth",
+    Component: AuthLayout,
+    children: [
+      { path: "login", Component: Login },
+      { path: "register", Component: Register},
+      { path: "register/buyer", Component: Buyer}
+    ]
+  }
 ]);

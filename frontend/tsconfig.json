@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"], // Map, Set 에러 해결
+    "module": "ESNext",
+    "moduleResolution": "bundler", // import 관련 오류 해결
+    "strict": true,
+    "jsx": "react-jsx",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": false, // 'type-only import' 에러 완화
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "types": ["node"] // __dirname 등 노드 환경 변수 인식
+  },
+  "include": ["src", "vite.config.ts"]
+}

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { Eye, EyeOff } from "lucide-react";
 
-export default function Login() {
+export function Login() {
     const [showPassword, setShowPassword] = useState(false);
     const [form, setForm] = useState({ email: "", password: "", remember: false });
 

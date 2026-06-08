@@ -158,7 +158,7 @@ export function Root() {
 
           {/* Right Actions */}
           <div className="flex items-center gap-5 flex-shrink-0 text-sm">
-            <Link to="/auth" className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors">
+            <Link to="/auth/login" className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors">
               <User size={20} />
               <span className="text-[11px]">로그인/가입</span>
             </Link>

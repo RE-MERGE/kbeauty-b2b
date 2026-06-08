@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router";
+<<<<<<< HEAD
 import { Search, Filter, MapPin, Plus, Factory, Layers, Zap, Clock, Award, TrendingUp, CheckCircle } from "lucide-react";
+=======
+import { Search, CheckCircle, Star, Filter, MapPin, Plus, Leaf, RefreshCw, Heart, Users, ShieldCheck, FileText } from "lucide-react";
+>>>>>>> branch 'main' of https://github.com/RE-MERGE/kbeauty-b2b
 
 type BadgeKey = "검증업체" | "OEM" | "ODM" | "소량생산" | "자체공장" | "10년+업력" | "재주문율높음" | "빠른출고";
 
@@ -82,9 +86,14 @@ export function Suppliers() {
           <div className="inline-block bg-primary text-xs font-mono px-2 py-1 rounded mb-4 tracking-wider uppercase">공급업체 디렉토리</div>
           <h1 className="text-4xl font-bold mb-3">K-Fashion 인증 공급업체 <span className="text-accent">2,400+</span></h1>
           <p className="text-white/70 mb-6">현장 실사 및 서류 검증을 완료한 신뢰할 수 있는 국내 의류 공급업체를 직접 탐색하세요.</p>
-          <Link to="/supplier-register" className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded font-semibold text-sm transition-colors">
-            <Plus size={16} /> 공급업체 등록 신청
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link to="/supplier-register" className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded font-semibold text-sm transition-colors">
+              <Plus size={16} /> 공급업체 등록 신청
+            </Link>
+            <Link to="/sourcing-request" className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/30 text-white px-5 py-2.5 rounded font-semibold text-sm transition-colors">
+              <FileText size={16} /> 소싱 요청
+            </Link>
+          </div>
         </div>
       </div>
 

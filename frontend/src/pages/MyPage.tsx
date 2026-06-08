@@ -353,7 +353,7 @@ export function MyPage() {
                 <span className="ml-auto bg-green-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">{receivedQuotes.length}</span>
               )}
               {tab.id === "shipping-quotes" && role === "buyer" && (
-                <span className="ml-auto bg-blue-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">{buyerShippingQuotesList.filter(q => q.status !== "선택 완료").length}</span>
+                <span className="ml-auto bg-blue-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">{buyerShippingQuotesList.filter(q => q.status !== ("선택 완료" as any)).length}</span>
               )}
               {tab.id === "sourcing" && role === "seller" && sellerSourcingRequests.filter(r => !r.quoteSent).length > 0 && (
                 <span className="ml-auto bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">{sellerSourcingRequests.filter(r => !r.quoteSent).length}</span>

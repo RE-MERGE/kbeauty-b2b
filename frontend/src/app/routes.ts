@@ -36,7 +36,8 @@ import Buyer from "../pages/auth/Buyer";
 import Payment from "../pages/auth/Payment";
 import { AdminUsers } from "../pages/AdminUsers";
 import { SellerQuoteWrite } from "../pages/seller/SellerQuoteWrite";
-
+import { BuyerOrderDetail } from "../pages/buyer/BuyerOrderDetail";
+import { SellerOrderDetail } from "../pages/seller/SellerOrderDetail";
 
 export const router = createBrowserRouter([
   {
@@ -70,7 +71,12 @@ export const router = createBrowserRouter([
       { path: "inspection", Component: BuyerInspection },
       // 인증 관련 (Auth)
 
-      { path: "/seller/sourcing/:requestId/quote", Component: SellerQuoteWrite}
+      { path: "/seller/sourcing/:requestId/quote", Component: SellerQuoteWrite},
+      { path: "buyer/orders/:id",  Component: BuyerOrderDetail },
+      { path: "/seller/orders/:id", Component: SellerOrderDetail},
+      // http://localhost:5173/seller/orders/ORD-2024-0841
+
+
     ],
   },
   {

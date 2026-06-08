@@ -17,35 +17,35 @@ type CartItem = {
 const initialItems: CartItem[] = [
   {
     id: 1,
-    name: "프리미엄 히알루론산 에센스 50mL",
-    supplier: "코스맥스(주)",
-    price: 16000,
+    name: "여성 베이직 오버핏 셔츠",
+    supplier: "라온어패럴",
+    price: 18900,
     currency: "₩",
-    moq: 1000,
-    quantity: 1000,
-    image: "https://images.unsplash.com/photo-1556228578-8c89e6adf883?w=80&h=80&fit=crop&auto=format",
+    moq: 50,
+    quantity: 50,
+    image: "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=80&h=80&fit=crop&auto=format",
     approved: true,
   },
   {
     id: 2,
-    name: "쿠션 파운데이션 SPF50+ PA+++ (15g)",
-    supplier: "에스트라(주)",
-    price: 20000,
+    name: "여성 와이드 슬랙스",
+    supplier: "모던클로젯",
+    price: 24500,
     currency: "₩",
-    moq: 500,
-    quantity: 500,
-    image: "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=80&h=80&fit=crop&auto=format",
+    moq: 30,
+    quantity: 30,
+    image: "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=80&h=80&fit=crop&auto=format",
     approved: true,
   },
   {
     id: 3,
-    name: "콜라겐 시트 마스크 25mL",
-    supplier: "메디힐(주)",
-    price: 3000,
+    name: "여성 봄 니트 가디건",
+    supplier: "데일리앤코",
+    price: 16200,
     currency: "₩",
-    moq: 5000,
-    quantity: 3000,
-    image: "https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?w=80&h=80&fit=crop&auto=format",
+    moq: 40,
+    quantity: 20,
+    image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=80&h=80&fit=crop&auto=format",
     approved: false,
   },
 ];
@@ -89,7 +89,10 @@ export function Cart() {
 
   const selectedItems = items.filter((i) => selected.includes(i.id));
   const subtotal = selectedItems.reduce((acc, i) => acc + i.price * i.quantity, 0);
-  const shippingEst = subtotal > 10000000 ? "견적 후 확정" : "₩500,000 (예상)";
+  const shippingEst = subtotal >= 1000000 ? "무료배송" : "3,000원";
+  const shippingFee = subtotal >= 1000000 || subtotal === 0 ? 0 : 3000;
+  const total = subtotal + shippingFee;
+
   const validIds = items.filter((i) => i.approved).map((i) => i.id);
   const allSelected = validIds.length > 0 && selected.length === validIds.length;
 
@@ -103,12 +106,12 @@ export function Cart() {
         <div className="text-center py-20">
           <Package size={48} className="mx-auto text-muted-foreground mb-4" />
           <div className="font-semibold text-foreground mb-2">장바구니가 비어 있습니다</div>
-          <div className="text-sm text-muted-foreground mb-6">K-Beauty 제품을 탐색하고 담아보세요</div>
+          <div className="text-sm text-muted-foreground mb-6">도매 의류 상품을 탐색하고 담아보세요</div>
           <Link
             to="/suppliers"
             className="bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded font-semibold text-sm transition-colors inline-block"
           >
-            제품 탐색하기
+            상품 탐색하기
           </Link>
         </div>
       ) : (
@@ -163,7 +166,7 @@ export function Cart() {
                           <div className="text-xs text-muted-foreground mt-0.5">{item.supplier}</div>
                           {!item.approved && (
                             <div className="flex items-center gap-1 mt-1 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-flex">
-                              <AlertCircle size={11} /> 승인 대기 중인 상품
+                              <AlertCircle size={11} /> 판매자 승인 대기 중인 상품
                             </div>
                           )}
                         </div>
@@ -182,14 +185,14 @@ export function Cart() {
                           {item.price.toLocaleString()}
                         </div>
                         <div className="text-xs text-muted-foreground font-mono">
-                          최소 주문: {item.moq.toLocaleString()}개
+                          최소 주문: {item.moq.toLocaleString()}장
                         </div>
                       </div>
 
                       <div className="flex items-center justify-between mt-3">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => updateQuantity(item.id, -100)}
+                            onClick={() => updateQuantity(item.id, -10)}
                             className="w-7 h-7 border border-border rounded flex items-center justify-center hover:border-primary hover:text-primary transition-colors"
                           >
                             <Minus size={12} />
@@ -200,13 +203,13 @@ export function Cart() {
                           </span>
 
                           <button
-                            onClick={() => updateQuantity(item.id, 100)}
+                            onClick={() => updateQuantity(item.id, 10)}
                             className="w-7 h-7 border border-border rounded flex items-center justify-center hover:border-primary hover:text-primary transition-colors"
                           >
                             <Plus size={12} />
                           </button>
 
-                          <span className="text-xs text-muted-foreground ml-1">개</span>
+                          <span className="text-xs text-muted-foreground ml-1">장</span>
                         </div>
 
                         <div className="font-bold text-foreground font-mono">
@@ -218,7 +221,7 @@ export function Cart() {
                       {moqShortfall && (
                         <div className="mt-2 text-xs text-amber-600 flex items-center gap-1">
                           <AlertCircle size={11} />
-                          MOQ 미충족 — 최소 {item.moq.toLocaleString()}개 이상 주문해야 합니다
+                          최소 주문 수량 미충족 — 최소 {item.moq.toLocaleString()}장 이상 주문해야 합니다
                         </div>
                       )}
                     </div>
@@ -239,13 +242,13 @@ export function Cart() {
                 </div>
 
                 <div className="flex justify-between text-muted-foreground">
-                  <span>물류·배송비 (예상)</span>
+                  <span>국내 배송비</span>
                   <span className="font-mono">{shippingEst}</span>
                 </div>
 
                 <div className="border-t border-border pt-3 flex justify-between font-bold text-foreground">
                   <span>결제 예정액</span>
-                  <span className="font-mono text-primary text-base">₩{subtotal.toLocaleString()}</span>
+                  <span className="font-mono text-primary text-base">₩{total.toLocaleString()}</span>
                 </div>
               </div>
 
@@ -275,7 +278,7 @@ export function Cart() {
 
             <div className="bg-secondary border border-primary/20 rounded p-4 text-xs text-muted-foreground leading-relaxed">
               <div className="font-semibold text-foreground mb-1.5">안전결제 안내</div>
-              주문 생성 후 에스크로 계좌에 결제가 보관됩니다. 상품 검수 및 배송 완료 확인 후 셀러에게 대금이 지급되어 안전합니다.
+              주문 생성 후 결제 대금은 안전하게 보관됩니다. 상품 출고 및 거래 완료 확인 후 판매자에게 정산됩니다.
             </div>
           </div>
         </div>

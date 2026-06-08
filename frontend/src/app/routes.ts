@@ -4,7 +4,7 @@ import { Home } from "../pages/Home";
 import { PurchaseAgency } from "../pages/PurchaseAgency";
 import { ShippingAgency } from "../pages/ShippingAgency";
 import { Suppliers } from "../pages/Suppliers";
-import { CustomsClearance } from "../pages/CustomsClearance";
+import { CustomsClearance } from "../pages/CustomsClearance"; 
 import { Support } from "../pages/Support";
 import { Cart } from "../pages/Cart";
 import { Orders } from "../pages/Orders";
@@ -32,6 +32,8 @@ import AuthLayout from "../pages/auth/_layout";
 import Login from "../pages/auth/Login";
 import Register from "../pages/auth/Register";
 import Buyer from "../pages/auth/Buyer";
+import { SellerQuoteWrite } from "../pages/seller/SellerQuoteWrite";
+
 
 export const router = createBrowserRouter([
   {
@@ -68,6 +70,7 @@ export const router = createBrowserRouter([
       { path: "inspection", Component: BuyerInspection },
       // 인증 관련 (Auth)
 
+      { path: "/seller/sourcing/:requestId/quote", Component: SellerQuoteWrite}
     ],
   },
   {

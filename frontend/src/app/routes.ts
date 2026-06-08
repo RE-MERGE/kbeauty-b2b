@@ -43,6 +43,7 @@ import {AdminUsers} from "../pages/AdminUsers";
 import { BuyerOrderDetail } from "../pages/buyer/BuyerOrderDetail";
 import { SellerOrderDetail } from "../pages/seller/SellerOrderDetail";
 import { SellerQuoteWrite } from "../pages/seller/SellerQuoteWrite";
+import {PartnerPlan} from "../pages/PartnerPlan";
 
 export const router = createBrowserRouter([
     {
@@ -79,7 +80,8 @@ export const router = createBrowserRouter([
             {path: "inspection", Component: BuyerInspection},
             { path: "/seller/sourcing/:requestId/quote", Component: SellerQuoteWrite},
             { path: "/buyer/orders/:id",  Component: BuyerOrderDetail },
-            { path: "/seller/orders/:id", Component: SellerOrderDetail}
+            { path: "/seller/orders/:id", Component: SellerOrderDetail},
+            {path: "/partner", Component: PartnerPlan}
         ],
     },
     {
@@ -107,4 +109,3 @@ export const router = createBrowserRouter([
         ]
     }
 ]);
-

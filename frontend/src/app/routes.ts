@@ -8,7 +8,7 @@ import {CustomsClearance} from "../pages/CustomsClearance";
 import {Support} from "../pages/Support";
 import {Cart} from "../pages/Cart";
 import {Orders} from "../pages/Orders";
-import {Admin} from "../pages/Admin";
+import {Admin, AdminLayout} from "../pages/Admin";
 import {Checkout} from "../pages/Checkout";
 import {MyPage} from "../pages/MyPage";
 import {ProductDetail} from "../pages/ProductDetail";
@@ -16,6 +16,7 @@ import {AdminDashboard} from "../pages/AdminDashboard";
 import {AdminSourcingRequests} from "../pages/AdminSourcingRequests";
 import {AdminShippingQuotes} from "../pages/AdminShippingQuotes";
 import {AdminInspection} from "../pages/AdminInspection";
+import {AdminAnalytics} from "../pages/AdminAnalytics";
 import {BuyerInspection} from "../pages/BuyerInspection";
 import {QuoteRequest} from "../pages/QuoteRequest";
 import {BuyerDashboard} from "../pages/BuyerDashboard";
@@ -23,7 +24,7 @@ import {SellerDashboard} from "../pages/SellerDashboard";
 import {SellerProductRegister} from "../pages/SellerProductRegister";
 import {OrderDetail} from "../pages/OrderDetail";
 import {SupplierRegister} from "../pages/SupplierRegister";
-import { SourcingRequest } from "../pages/SourcingRequest";
+import {SourcingRequest} from "../pages/SourcingRequest";
 import {SellerShippingQuote} from "../pages/SellerShippingQuote";
 import {BuyerShippingQuotes} from "../pages/BuyerShippingQuotes";
 import {AllProducts} from "../pages/AllProducts";
@@ -37,6 +38,7 @@ import {RegisterSeller} from "../pages/auth/Seller"
 import {RegisterSuccess} from "../pages/auth/Success";
 import {FindId} from "../pages/auth/FindId";
 import {FindPw} from "../pages/auth/FindPw";
+import {AdminUsers} from "../pages/AdminUsers";
 
 export const router = createBrowserRouter([
     {
@@ -73,7 +75,6 @@ export const router = createBrowserRouter([
             {path: "inspection", Component: BuyerInspection},
         ],
     },
-    // 인증 관련 (Auth)
     {
         path: "auth",
         Component: AuthLayout,
@@ -84,7 +85,18 @@ export const router = createBrowserRouter([
             {path: "register/seller", Component: RegisterSeller},
             {path: "register/success", Component: RegisterSuccess},
             {path: "find-id", Component: FindId},
-            {path: "find-pw", Component: FindPw}
+            {path: "find-pw", Component: FindPw},
+        ]
+    },
+    {
+        path: "admin",
+        Component: AdminLayout,
+        children: [
+            { index:true, Component: Admin},
+            { path: "dashboard", Component: AdminDashboard},
+            { path: "sourcing-requests", Component: AdminSourcingRequests},
+            { path: "users", Component: AdminUsers},
+            { path: "analytics", Component: AdminAnalytics }
         ]
     }
 ]);

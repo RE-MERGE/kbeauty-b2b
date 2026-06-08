@@ -21,7 +21,7 @@ export function AuthLayout() {
             <div className="max-w-[560px] mx-auto">
                 {/* Logo */}
                 <div className="text-center mb-8">
-                    <Link to="/" className="inline-block">
+                    <Link to="/auth/login" className="inline-block">
                         <div className="text-3xl font-bold">
                             <span className="text-primary">Style</span>
                             <span className="text-foreground">Hub</span>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router";
+import { Link } from "react-router";
 import {
   Package,
   Truck,
@@ -51,6 +51,8 @@ type Order = {
   quoteStatus: QuoteStatus;
   shippingSteps?: ShippingStep[];
   inspectionCompleted?: boolean;
+  cancelReason?: string;
+  cancelledAt?: string;
 };
 
 const statusConfig: Record<
@@ -126,8 +128,18 @@ const sampleOrders: Order[] = [
       { status: "견적서 수신", time: "2024.03.18 10:22", done: true },
       { status: "결제 완료", time: "2024.03.18 14:30", done: true },
       { status: "출고 준비", time: "2024.03.19 09:15", done: true },
-      { status: "배송 시작", time: "2024.03.20 11:40", location: "CJ대한통운", done: true },
-      { status: "검수 완료", time: "2024.03.21 14:30", location: "바이어 검수", done: true },
+      {
+        status: "배송 시작",
+        time: "2024.03.20 11:40",
+        location: "CJ대한통운",
+        done: true,
+      },
+      {
+        status: "검수 완료",
+        time: "2024.03.21 14:30",
+        location: "바이어 검수",
+        done: true,
+      },
       { status: "거래 확정 대기", time: "–", done: false },
     ],
   },
@@ -194,7 +206,9 @@ const sampleOrders: Order[] = [
     total: 675000,
     currency: "₩",
     trackingNo: null,
-    quoteStatus: "NONE",
+    quoteStatus: "SENT",
+    cancelReason: "내부 예산 변경으로 인해 주문을 진행하지 않기로 결정했습니다.",
+    cancelledAt: "2024.02.21 13:20",
   },
   {
     id: "ORD-2024-0788",
@@ -217,7 +231,7 @@ const sampleOrders: Order[] = [
   },
 ];
 
-const statusFilters: { value: string; label: string }[] = [
+const statusFilters = [
   { value: "ALL", label: "전체" },
   { value: "PENDING", label: "결제 대기" },
   { value: "CONFIRMED", label: "주문 확인" },
@@ -228,14 +242,13 @@ const statusFilters: { value: string; label: string }[] = [
 ];
 
 export function Orders() {
-  const navigate = useNavigate();
-
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [search, setSearch] = useState("");
 
   const [confirmTarget, setConfirmTarget] = useState<Order | null>(null);
   const [disputeTarget, setDisputeTarget] = useState<Order | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
 
   const filtered = sampleOrders.filter((o) => {
     const matchStatus = statusFilter === "ALL" || o.status === statusFilter;
@@ -493,7 +506,6 @@ export function Orders() {
 
                     {order.status === "PAID" && (
                       <>
-
                         <button
                           onClick={() => setConfirmTarget(order)}
                           className="bg-primary hover:bg-primary/90 text-white text-xs px-4 py-2 rounded font-semibold transition-colors"
@@ -508,6 +520,15 @@ export function Orders() {
                           이의 제기
                         </button>
                       </>
+                    )}
+
+                    {order.status === "CANCELLED" && (
+                      <button
+                        onClick={() => setCancelTarget(order)}
+                        className="border border-red-300 text-red-600 hover:bg-red-50 text-xs px-4 py-2 rounded font-medium transition-colors"
+                      >
+                        취소 사유 보기
+                      </button>
                     )}
 
                     <Link
@@ -663,6 +684,61 @@ export function Orders() {
                 접수하기
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {cancelTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
+            <button
+              onClick={() => setCancelTarget(null)}
+              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-4">
+              <XCircle size={26} className="text-red-600" />
+            </div>
+
+            <h3 className="text-lg font-bold text-foreground mb-2">
+              주문 취소 정보
+            </h3>
+
+            <div className="bg-secondary/60 border border-border rounded p-3 text-xs text-muted-foreground mb-4">
+              <div className="font-semibold text-foreground mb-1">
+                주문번호 {cancelTarget.id}
+              </div>
+              <div>
+                공급사 {cancelTarget.supplier} · 주문금액{" "}
+                {cancelTarget.currency}
+                {cancelTarget.total.toLocaleString()}
+              </div>
+            </div>
+
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+              <div className="text-sm font-semibold text-red-800">취소일시</div>
+              <div className="text-sm text-red-700 mt-1">
+                {cancelTarget.cancelledAt ?? "취소일시 정보 없음"}
+              </div>
+            </div>
+
+            <div className="mb-5">
+              <div className="text-sm font-semibold text-foreground mb-2">
+                취소 사유
+              </div>
+              <div className="text-sm text-muted-foreground leading-relaxed">
+                {cancelTarget.cancelReason ?? "취소 사유가 등록되지 않았습니다."}
+              </div>
+            </div>
+
+            <button
+              onClick={() => setCancelTarget(null)}
+              className="w-full bg-primary hover:bg-primary/90 text-white py-2.5 rounded text-sm font-semibold transition-colors"
+            >
+              확인
+            </button>
           </div>
         </div>
       )}

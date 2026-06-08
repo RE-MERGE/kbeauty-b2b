@@ -40,6 +40,10 @@ import {FindId} from "../pages/auth/FindId";
 import {FindPw} from "../pages/auth/FindPw";
 import {AdminUsers} from "../pages/AdminUsers";
 
+import { BuyerOrderDetail } from "../pages/buyer/BuyerOrderDetail";
+import { SellerOrderDetail } from "../pages/seller/SellerOrderDetail";
+import { SellerQuoteWrite } from "../pages/seller/SellerQuoteWrite";
+
 export const router = createBrowserRouter([
     {
         path: "/",
@@ -73,6 +77,9 @@ export const router = createBrowserRouter([
             {path: "admin/shipping-quotes", Component: AdminShippingQuotes},
             {path: "admin/inspection", Component: AdminInspection},
             {path: "inspection", Component: BuyerInspection},
+            { path: "/seller/sourcing/:requestId/quote", Component: SellerQuoteWrite},
+            { path: "/buyer/orders/:id",  Component: BuyerOrderDetail },
+            { path: "/seller/orders/:id", Component: SellerOrderDetail}
         ],
     },
     {
@@ -100,3 +107,4 @@ export const router = createBrowserRouter([
         ]
     }
 ]);
+

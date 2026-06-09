@@ -176,7 +176,7 @@ export function BuyerDashboard() {
               to="/buyer/inquiry/new"
               className="flex items-center gap-1.5 bg-[#7eb3f5] hover:bg-[#6aa2e8] text-[#1a2744] text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
             >
-              <MessageSquare size={15} /> 발주 문의
+              <MessageSquare size={15} /> 소싱 요청
             </Link>
             <button className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors">
               <Bell size={18} />
@@ -192,9 +192,9 @@ export function BuyerDashboard() {
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
           { to: "/buyer",           icon: <BarChart2 size={20}      className="text-blue-600"   />, bg: "bg-blue-50 group-hover:bg-blue-100",   label: "구매 현황",   sub: "매출·발주 통계"   },
-          { to: "/products",        icon: <Search size={20}         className="text-[#7eb3f5]"  />, bg: "bg-sky-50 group-hover:bg-sky-100",     label: "상품 탐색",   sub: "신상·카테고리 검색" },
+          { to: "/buyer/my-sourcing",        icon: <Search size={20}         className="text-[#7eb3f5]"  />, bg: "bg-sky-50 group-hover:bg-sky-100",     label: "소싱 요청 내역",   sub: "소싱 요청·확인" },
           { to: "/orders",          icon: <Truck size={20}          className="text-amber-600"  />, bg: "bg-amber-50 group-hover:bg-amber-100", label: "발주 내역",   sub: "주문·배송 현황"   },
-          { to: "/buyer/inquiry/new",icon: <FileText size={20}      className="text-green-600"  />, bg: "bg-green-50 group-hover:bg-green-100", label: "발주 문의",   sub: "견적 요청·확인"   },
+          { to: "../negotiations",icon: <FileText size={20}      className="text-green-600"  />, bg: "bg-green-50 group-hover:bg-green-100", label: "협의 내역",   sub: "협의 요청·확인"   },
         ].map((item) => (
           <Link
             key={item.to}

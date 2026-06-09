@@ -11,7 +11,7 @@ interface User {
   createdAt: string;
 }
 
-const INITIAL_USERS: User[] = [
+export const INITIAL_USERS: User[] = [
   { id: 'USR-001', name: '김바이어', email: 'buyer1@global.com', companyName: '(주)글로벌유통', role: 'BUYER/대표', status: 'ACTIVE', createdAt: '2026-01-15' },
   { id: 'USR-002', name: '이셀러', email: 'seller1@ecopack.com', companyName: '(주)에코팩', role: 'SELLER/대표', status: 'ACTIVE', createdAt: '2026-02-20' },
   { id: 'USR-003', name: '박그린', email: 'seller2@greenpack.com', companyName: '그린패키지', role: 'SELLER/직원', status: 'SUSPENDED', createdAt: '2026-03-11' },

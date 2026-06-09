@@ -1,7 +1,7 @@
 "use client";
 
 import React, { ReactElement, useState, useEffect } from "react";
-import { Link, useLocation } from "react-router"
+import { Link, useLocation, useNavigate } from "react-router"
 
 export interface NavItem {
   label: string;
@@ -35,7 +35,7 @@ export interface AdminHeaderProps {
 const DEFAULT_NAV: NavItem[] = [
   { label: "홈", href: "/admin", icon: "home" },
   { label: "사용자", href: "/admin/users", icon: "users" },
-  { label: "결제", href: "/admin/analytics", icon: "receipt" }, 
+  { label: "결제", href: "/admin/payments", icon: "receipt" }, 
   { label: "통계", href: "/admin/analytics", icon: "chart-bar" },
 ];
 
@@ -62,6 +62,7 @@ export default function AdminHeader({
   const [notifCount, setNotifCount] = useState(notificationCount);
   const [notifOpen, setNotifOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
 useEffect(() => {
   const es = new EventSource('/events');
@@ -116,7 +117,12 @@ useEffect(() => {
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
     onSearch?.(e.target.value);
-  };
+};
+const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  if (e.key === 'Enter' && searchQuery.trim()) {
+    navigate(`/admin/search?q=${encodeURIComponent(searchQuery.trim())}`);
+  }
+};
 
   return (
     <header style={styles.header}>
@@ -127,7 +133,7 @@ useEffect(() => {
           {logo ? logo : (
       <>
         <div style={styles.brandIcon}>
-          
+
         </div>
         <span style={styles.brandName}>{brandName}</span>
       </>
@@ -165,6 +171,7 @@ useEffect(() => {
             placeholder="검색..."
             value={searchQuery}
             onChange={handleSearchChange}
+            onKeyDown={handleSearchKeyDown}
             style={styles.searchInput}
             aria-label="검색"
           />

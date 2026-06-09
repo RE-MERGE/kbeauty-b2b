@@ -45,6 +45,7 @@ import { BuyerOrderDetail } from "../pages/buyer/BuyerOrderDetail";
 import { SellerOrderDetail } from "../pages/seller/SellerOrderDetail";
 import { SellerQuoteWrite } from "../pages/seller/SellerQuoteWrite";
 import {PartnerPlan} from "../pages/PartnerPlan";
+import { SearchPage } from "@/pages/admin/SearchPage";
 
 export const router = createBrowserRouter([
     {
@@ -79,7 +80,7 @@ export const router = createBrowserRouter([
             { path: "/seller/sourcing/:requestId/quote", Component: SellerQuoteWrite},
             { path: "/buyer/orders/:id",  Component: BuyerOrderDetail },
             { path: "/seller/orders/:id", Component: SellerOrderDetail},
-            {path: "/partner", Component: PartnerPlan}
+            {path: "/partner", Component: PartnerPlan},
         ],
     },
     {
@@ -104,7 +105,8 @@ export const router = createBrowserRouter([
             { path: "sourcing-requests", Component: AdminSourcingRequests},
             { path: "users", Component: AdminUsers},
             { path: "analytics", Component: AdminAnalytics },
-            {path: "shipping-quotes", Component: AdminShippingQuotes}
+            {path: "shipping-quotes", Component: AdminShippingQuotes},
+            {path: "search", Component: SearchPage }
         ]
     }
 ]);

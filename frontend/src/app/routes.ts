@@ -52,6 +52,7 @@ import { SearchPage } from "@/pages/admin/SearchPage";
 import { SellerContractSign } from "../pages/seller/SellerContractSign";
 import { BuyerContractSign } from "../pages/buyer/BuyerContractSign";
 import { Negotiations } from "../pages/Negotiations";
+import { Disputes } from "../pages/Disputes";
 
 
 export const router = createBrowserRouter([
@@ -92,7 +93,7 @@ export const router = createBrowserRouter([
             { path: "seller/orders/:orderId/contract-sign", Component: SellerContractSign },
             { path: "buyer/orders/:orderId/contract-sign", Component: BuyerContractSign },
             { path: "negotiations", Component: Negotiations },
-
+            { path: "disputes", Component: Disputes },
         ],
     },
     {

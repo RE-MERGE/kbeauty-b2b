@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import {
-  Package, FileText, TrendingUp, ShoppingBag, ArrowUp, ArrowDown,
+  Package, FileText, TrendingUp, ShoppingBag, ArrowUp,
   CheckCircle, Clock, Truck, AlertCircle, Plus, ChevronRight,
   BarChart2, Star, Bell, Settings, Eye, RotateCcw, Layers,
 } from "lucide-react";
@@ -158,7 +158,7 @@ export function SellerDashboard() {
                   to="/seller/products/new"
                   className="flex items-center gap-1.5 bg-[#C4956A] hover:bg-[#b3845a] text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
               >
-                <Plus size={15} /> 상품 등록
+                <Plus size={15} /> 소싱 요청
               </Link>
               <button className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors">
                 <Bell size={18} />
@@ -174,9 +174,9 @@ export function SellerDashboard() {
         <div className="grid grid-cols-4 gap-4 mb-6">
           {[
             { to: "/seller",               icon: <BarChart2 size={20} className="text-blue-600"   />, bg: "bg-blue-50 group-hover:bg-blue-100",   label: "판매 현황",  sub: "매출·주문 통계"    },
-            { to: "/seller/products/new",  icon: <Plus size={20}      className="text-[#C4956A]"  />, bg: "bg-rose-50 group-hover:bg-rose-100",   label: "상품 등록",  sub: "새 상품 업로드"    },
+            { to: "/seller/sourcing-requests",  icon: <Plus size={20}      className="text-[#C4956A]"  />, bg: "bg-rose-50 group-hover:bg-rose-100",   label: "소싱 요청 내역",  sub: "소싱 요청·확인"    },
             { to: "/orders",               icon: <Truck size={20}     className="text-amber-600"  />, bg: "bg-amber-50 group-hover:bg-amber-100", label: "발주 내역",  sub: "주문 처리 현황"    },
-            { to: "/seller/shipping-quote",icon: <FileText size={20}  className="text-green-600"  />, bg: "bg-green-50 group-hover:bg-green-100", label: "출고 처리",  sub: "운송장 등록·출고"  },
+            { to: "negotiations",icon: <FileText size={20}  className="text-green-600"  />, bg: "bg-green-50 group-hover:bg-green-100", label: "협의 내역",  sub: "협의 요청·확인"  },
           ].map((item) => (
               <Link
                   key={item.to}

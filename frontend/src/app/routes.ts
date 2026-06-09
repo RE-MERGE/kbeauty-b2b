@@ -46,6 +46,12 @@ import { SellerOrderDetail } from "../pages/seller/SellerOrderDetail";
 import { SellerQuoteWrite } from "../pages/seller/SellerQuoteWrite";
 import {PartnerPlan} from "../pages/PartnerPlan";
 
+// 변경
+import { SellerContractSign } from "../pages/seller/SellerContractSign";
+import { BuyerContractSign } from "../pages/buyer/BuyerContractSign";
+import { Negotiations } from "../pages/Negotiations";
+
+
 export const router = createBrowserRouter([
     {
         path: "/",
@@ -83,7 +89,11 @@ export const router = createBrowserRouter([
             { path: "/seller/sourcing/:requestId/quote", Component: SellerQuoteWrite},
             { path: "/buyer/orders/:id",  Component: BuyerOrderDetail },
             { path: "/seller/orders/:id", Component: SellerOrderDetail},
-            {path: "/partner", Component: PartnerPlan}
+            {path: "/partner", Component: PartnerPlan},
+            { path: "seller/orders/:orderId/contract-sign", Component: SellerContractSign },
+            { path: "buyer/orders/:orderId/contract-sign", Component: BuyerContractSign },
+            { path: "negotiations", Component: Negotiations },
+
         ],
     },
     {

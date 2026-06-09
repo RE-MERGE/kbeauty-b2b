@@ -39,13 +39,13 @@ import {RegisterSeller} from "../pages/auth/Seller"
 import {RegisterSuccess} from "../pages/auth/Success";
 import {FindId} from "../pages/auth/FindId";
 import {FindPw} from "../pages/auth/FindPw";
-import {CategoryStep} from "../pages/auth/Category"
 import {AdminUsers} from "../pages/AdminUsers";
 
-import {BuyerOrderDetail} from "../pages/buyer/BuyerOrderDetail";
-import {SellerOrderDetail} from "../pages/seller/SellerOrderDetail";
-import {SellerQuoteWrite} from "../pages/seller/SellerQuoteWrite";
+import { BuyerOrderDetail } from "../pages/buyer/BuyerOrderDetail";
+import { SellerOrderDetail } from "../pages/seller/SellerOrderDetail";
+import { SellerQuoteWrite } from "../pages/seller/SellerQuoteWrite";
 import {PartnerPlan} from "../pages/PartnerPlan";
+import { SearchPage } from "@/pages/admin/SearchPage";
 
 export const router = createBrowserRouter([
     {
@@ -58,8 +58,8 @@ export const router = createBrowserRouter([
             {path: "products", Component: AllProducts},
             {path: "suppliers", Component: Suppliers},
             {path: "sourcing-request", Component: SourcingRequest},
-            {path: "ready-requests", Component: ReadyRequestList},
-            {path: "customs", Component: CustomsClearance},
+			{path: "ready-requests", Component: ReadyRequestList},
+			{path: "customs", Component: CustomsClearance},
             {path: "support", Component: Support},
             {path: "cart", Component: Cart},
             {path: "checkout", Component: Checkout},
@@ -75,23 +75,18 @@ export const router = createBrowserRouter([
             {path: "seller", Component: SellerDashboard},
             {path: "seller/products/new", Component: SellerProductRegister},
             {path: "seller/shipping-quote", Component: SellerShippingQuote},
-            {path: "admin", Component: Admin},
-            {path: "admin/dashboard", Component: AdminDashboard},
-            {path: "admin/sourcing-requests", Component: AdminSourcingRequests},
-            {path: "admin/shipping-quotes", Component: AdminShippingQuotes},
             {path: "admin/inspection", Component: AdminInspection},
             {path: "inspection", Component: BuyerInspection},
-            {path: "/seller/sourcing/:requestId/quote", Component: SellerQuoteWrite},
-            {path: "/buyer/orders/:id", Component: BuyerOrderDetail},
-            {path: "/seller/orders/:id", Component: SellerOrderDetail},
-            {path: "/partner", Component: PartnerPlan}
+            { path: "/seller/sourcing/:requestId/quote", Component: SellerQuoteWrite},
+            { path: "/buyer/orders/:id",  Component: BuyerOrderDetail },
+            { path: "/seller/orders/:id", Component: SellerOrderDetail},
+            {path: "/partner", Component: PartnerPlan},
         ],
     },
     {
         path: "auth",
         Component: AuthLayout,
         children: [
-            {index: true, Component: Login},
             {path: "login", Component: Login},
             {path: "register", Component: Register},
             {path: "register/buyer", Component: RegisterBuyer},
@@ -99,18 +94,19 @@ export const router = createBrowserRouter([
             {path: "register/success", Component: RegisterSuccess},
             {path: "find-id", Component: FindId},
             {path: "find-pw", Component: FindPw},
-            {path: "category", Component: CategoryStep}
         ]
     },
     {
         path: "admin",
         Component: AdminLayout,
         children: [
-            {index: true, Component: Admin},
-            {path: "dashboard", Component: AdminDashboard},
-            {path: "sourcing-requests", Component: AdminSourcingRequests},
-            {path: "users", Component: AdminUsers},
-            {path: "analytics", Component: AdminAnalytics}
+            { index:true, Component: Admin},
+            { path: "dashboard", Component: AdminDashboard},
+            { path: "sourcing-requests", Component: AdminSourcingRequests},
+            { path: "users", Component: AdminUsers},
+            { path: "analytics", Component: AdminAnalytics },
+            {path: "shipping-quotes", Component: AdminShippingQuotes},
+            {path: "search", Component: SearchPage }
         ]
     }
 ]);

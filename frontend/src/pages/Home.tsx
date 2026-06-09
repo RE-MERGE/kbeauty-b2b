@@ -265,22 +265,19 @@ export function Home() {
           <div className="bg-white rounded border border-border p-4">
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">내 계정</div>
             <Link to="/auth" className="w-full bg-primary text-white text-sm font-semibold py-2 rounded hover:bg-primary/90 transition-colors mb-2 block text-center">파트너십 등록</Link>
+            <Link to="/auth?tab=signup&role=seller" className="block w-full text-center bg-accent hover:bg-accent/90 text-white text-xs font-semibold py-2 rounded transition-colors">셀러 등록하기</Link>
+         
           </div>
           <div className="bg-secondary rounded border border-primary/20 p-4">
             <div className="text-xs font-semibold text-primary uppercase tracking-wider mb-2 flex items-center gap-1">
               <TrendingUp size={12} /> 이번 주 인기
             </div>
-            {["여성 린넨 블라우스", "와이드 슬랙스", "플로럴 원피스", "오버핏 코트", "요가 레깅스"].map((item, i) => (
+            {["여성 린넨 블라우스", "와이드 슬랙스", "플로럴 원피스", "오버핏 코트", "요가 레깅스", "카와이다케쟈다메데스까", "비기 제1장 집 가버리기", "블랙 패턴 셔츠"].map((item, i) => (
               <div key={item} className="flex items-center gap-2 py-1.5 border-b border-primary/20 last:border-0 text-sm">
                 <span className={`font-mono text-[11px] font-bold w-4 ${i < 3 ? "text-primary" : "text-muted-foreground"}`}>{i + 1}</span>
                 <a href="#" className="hover:text-primary transition-colors">{item}</a>
               </div>
             ))}
-          </div>
-          <div className="bg-white rounded border border-border p-4">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">신규 셀러 혜택</div>
-            <p className="text-xs text-muted-foreground leading-relaxed mb-3">상품을 팔고 싶다면 셀러로 전환하세요!</p>
-            <Link to="/auth?tab=signup&role=seller" className="block w-full text-center bg-accent hover:bg-accent/90 text-white text-xs font-semibold py-2 rounded transition-colors">셀러 등록하기</Link>
           </div>
         </div>
       </div>

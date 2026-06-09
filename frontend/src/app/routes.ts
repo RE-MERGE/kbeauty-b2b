@@ -59,7 +59,7 @@ export const router = createBrowserRouter([
             {path: "products", Component: AllProducts},
             {path: "suppliers", Component: Suppliers},
             {path: "sourcing-request", Component: SourcingRequest},
-			{path: "buyer/sourcing-requests", Component: SellerRequestList},
+			{path: "seller/sourcing-requests", Component: SellerRequestList},
 			{path: "customs", Component: CustomsClearance},
             {path: "support", Component: Support},
             {path: "cart", Component: Cart},

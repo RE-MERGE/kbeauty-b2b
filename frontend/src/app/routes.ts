@@ -30,7 +30,7 @@ import {SellerShippingQuote} from "../pages/SellerShippingQuote";
 import {BuyerShippingQuotes} from "../pages/BuyerShippingQuotes";
 import {AllProducts} from "../pages/AllProducts";
 import {RestrictedBusinessTypes} from "../pages/RestrictedBusinessTypes";
-// Auth 인증 관련
+// 인증
 import {AuthLayout} from "../pages/auth/layout";
 import {Login} from "../pages/auth/Login";
 import {Register} from "../pages/auth/Register";
@@ -96,6 +96,7 @@ export const router = createBrowserRouter([
         ],
     },
     {
+        // 인증
         path: "auth",
         Component: AuthLayout,
         children: [
@@ -105,8 +106,8 @@ export const router = createBrowserRouter([
             {path: "register/seller", Component: RegisterSeller},
             {path: "register/success", Component: RegisterSuccess},
             {path: "find-id", Component: FindId},
-            {path: "find-pw", Component: FindPw},
-        ]
+            {path: "find-pw", Component: FindPw}
+            ]
     },
     {
         path: "admin",

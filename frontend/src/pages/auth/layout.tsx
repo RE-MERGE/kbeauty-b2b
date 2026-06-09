@@ -18,7 +18,7 @@ export function AuthLayout() {
 
     return (
         <div className="max-w-[1280px] mx-auto px-4 py-12">
-            <div className="max-w-[560px] mx-auto">
+            <div className="max-w-[750px] mx-auto">
                 {/* Logo */}
                 <div className="text-center mb-8">
                     <Link to="/auth/login" className="inline-block">

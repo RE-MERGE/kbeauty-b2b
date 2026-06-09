@@ -16,17 +16,19 @@ import {
   X,
   Settings,
   ShieldAlert,
+  Star
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
+import {BuyerDashboard} from "@/pages/BuyerDashboard";
 
-const navLinks = [
-  { label: "홈", path: "/" },
-  { label: "전체상품", path: "/products" },
-  { label: "공급업체", path: "/suppliers" },
-  { label: "주문관리", path: "/orders" },
-  { label: "고객센터", path: "/support" },
-  { label: "🔒 관리자", path: "/admin" },
-];
+// const navLinks = [
+//   { label: "홈", path: "/" },
+//   { label: "전체상품", path: "/products" },
+//   { label: "공급업체", path: "/suppliers" },
+//   { label: "주문관리", path: "/orders" },
+//   { label: "고객센터", path: "/support" },
+//   { label: "🔒 관리자", path: "/admin" },
+// ];
 
 const hotKeywords = ["여성 린넨 블라우스", "와이드 슬랙스", "플로럴 원피스", "오버핏 자켓", "스포츠 레깅스"];
 
@@ -123,41 +125,41 @@ export function Root() {
   return (
     <div className="min-h-screen bg-background font-[Inter,sans-serif] flex flex-col">
       {/* Top Utility Bar */}
-      <div className="bg-[#1a1a1a] text-white text-xs py-1.5 flex-shrink-0">
-        <div className="max-w-[1280px] mx-auto px-4 flex items-center justify-between">
-          <div className="flex items-center gap-4 text-[#aaaaaa]">
-            <span className="flex items-center gap-1">
-              <Phone size={11} />
-              1588-0000
-            </span>
-            <span className="flex items-center gap-1">
-              <Mail size={11} />
-              support@stylehub.co.kr
-            </span>
-            <span className="flex items-center gap-1">
-              <Clock size={11} />
-              평일 09:00–18:00
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link to="/supplier-register" className="hover:text-accent transition-colors">셀러 등록</Link>
-            <span className="text-[#444]">|</span>
-            <Link to="/restricted-businesses" className="hover:text-accent transition-colors">가입 불가 업태/업종</Link>
-            <span className="text-[#444]">|</span>
-            <Link to="/auth?tab=signup" className="hover:text-accent transition-colors">회원가입</Link>
-          </div>
-        </div>
-      </div>
+      {/*<div className="bg-[#1a1a1a] text-white text-xs py-1.5 flex-shrink-0">*/}
+      {/*  <div className="max-w-[1280px] mx-auto px-4 flex items-center justify-between">*/}
+      {/*    <div className="flex items-center gap-4 text-[#aaaaaa]">*/}
+      {/*      <span className="flex items-center gap-1">*/}
+      {/*        <Phone size={11} />*/}
+      {/*        1588-0000*/}
+      {/*      </span>*/}
+      {/*      <span className="flex items-center gap-1">*/}
+      {/*        <Mail size={11} />*/}
+      {/*        support@stylehub.co.kr*/}
+      {/*      </span>*/}
+      {/*      <span className="flex items-center gap-1">*/}
+      {/*        <Clock size={11} />*/}
+      {/*        평일 09:00–18:00*/}
+      {/*      </span>*/}
+      {/*    </div>*/}
+      {/*    <div className="flex items-center gap-4">*/}
+      {/*      <Link to="/supplier-register" className="hover:text-accent transition-colors">셀러 등록</Link>*/}
+      {/*      <span className="text-[#444]">|</span>*/}
+      {/*      <Link to="/restricted-businesses" className="hover:text-accent transition-colors">가입 불가 업태/업종</Link>*/}
+      {/*      <span className="text-[#444]">|</span>*/}
+      {/*      <Link to="/auth?tab=signup" className="hover:text-accent transition-colors">회원가입</Link>*/}
+      {/*    </div>*/}
+      {/*  </div>*/}
+      {/*</div>*/}
 
       {/* Main Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-50 flex-shrink-0">
-        <div className="max-w-[1280px] mx-auto px-4 py-3 flex items-center gap-6">
+      <header className="bg-white shadow-sm sticky top-0 z-50 flex-shrink-0 py-4">
+        <div className="max-w-[1280px] mx-auto px-4 py-3 flex justify-between">
           {/* Logo */}
           <Link to="/" className="flex-shrink-0">
-            <div className="text-2xl font-bold tracking-tight">
+            <div className="text-4xl font-bold tracking-tight py-1">
               <span className="text-primary">Style</span>
               <span className="text-foreground">Hub</span>
-              <div className="text-[9px] font-normal text-muted-foreground tracking-widest uppercase -mt-1">
+              <div className="text-[11px] font-normal text-muted-foreground tracking-widest uppercase mt-1">
                 국내 패션 B2B 도매 플랫폼
               </div>
             </div>
@@ -197,124 +199,133 @@ export function Root() {
           </div>
 
           {/* Right Actions */}
-          <div className="flex items-center gap-5 flex-shrink-0 text-sm">
-            <Link to="/auth/login" className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors">
-              <User size={20} />
-              <span className="text-[11px]">로그인/가입</span>
-            </Link>
-            <Link to="/mypage" className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors">
-              <Settings size={20} />
-              <span className="text-[11px]">마이페이지</span>
-            </Link>
+          <div className="flex items-center gap-5.5 flex-shrink-0 text-sm">
+          {/* 알림 */}
             <div className="relative" ref={notifRef}>
               <button
-                onClick={() => setNotifOpen((v) => !v)}
-                className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors relative"
+                  onClick={() => setNotifOpen((v) => !v)}
+                  className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors relative"
               >
-                <Bell size={20} />
+                <Bell size={25} />
                 <span className="text-[11px]">알림</span>
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
+                    <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
                     {unreadCount}
                   </span>
                 )}
               </button>
 
               {notifOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-border rounded-lg shadow-xl z-50">
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                    <span className="font-semibold text-foreground text-sm">알림</span>
-                    <div className="flex items-center gap-3">
-                      {unreadCount > 0 && (
-                        <button
-                          onClick={() => setReadIds(notifications.map((n) => n.id))}
-                          className="text-xs text-primary hover:underline"
-                        >
-                          모두 읽음
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-border rounded-lg shadow-xl z-50">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                      <span className="font-semibold text-foreground text-sm">알림</span>
+                      <div className="flex items-center gap-3">
+                        {unreadCount > 0 && (
+                            <button
+                                onClick={() => setReadIds(notifications.map((n) => n.id))}
+                                className="text-xs text-primary hover:underline"
+                            >
+                              모두 읽음
+                            </button>
+                        )}
+                        <button onClick={() => setNotifOpen(false)} className="text-muted-foreground hover:text-foreground">
+                          <X size={14} />
                         </button>
-                      )}
-                      <button onClick={() => setNotifOpen(false)} className="text-muted-foreground hover:text-foreground">
-                        <X size={14} />
-                      </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="divide-y divide-border">
-                    {notifications.map((n) => {
-                      const Icon = n.icon;
-                      const isUnread = n.unread && !readIds.includes(n.id);
-                      return (
-                        <button
-                          key={n.id}
-                          onClick={() => setReadIds((prev) => [...new Set([...prev, n.id])])}
-                          className={`w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors ${isUnread ? "bg-primary/5" : ""}`}
-                        >
-                          <div className={`mt-0.5 flex-shrink-0 ${n.color}`}>
-                            <Icon size={16} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2">
+                    <div className="divide-y divide-border">
+                      {notifications.map((n) => {
+                        const Icon = n.icon;
+                        const isUnread = n.unread && !readIds.includes(n.id);
+                        return (
+                            <button
+                                key={n.id}
+                                onClick={() => setReadIds((prev) => [...new Set([...prev, n.id])])}
+                                className={`w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors ${isUnread ? "bg-primary/5" : ""}`}
+                            >
+                              <div className={`mt-0.5 flex-shrink-0 ${n.color}`}>
+                                <Icon size={16} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2">
                               <span className={`text-sm font-medium ${isUnread ? "text-foreground" : "text-muted-foreground"}`}>
                                 {n.title}
                               </span>
-                              {isUnread && <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{n.desc}</p>
-                            <span className="text-[11px] text-muted-foreground mt-1 block">{n.time}</span>
-                          </div>
-                        </button>
-                      );
-                    })}
+                                  {isUnread && <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{n.desc}</p>
+                                <span className="text-[11px] text-muted-foreground mt-1 block">{n.time}</span>
+                              </div>
+                            </button>
+                        );
+                      })}
+                    </div>
+                    <div className="px-4 py-2.5 border-t border-border">
+                      <Link
+                          to="/orders"
+                          onClick={() => setNotifOpen(false)}
+                          className="text-xs text-primary hover:underline font-medium"
+                      >
+                        주문내역에서 전체 보기 →
+                      </Link>
+                    </div>
                   </div>
-                  <div className="px-4 py-2.5 border-t border-border">
-                    <Link
-                      to="/orders"
-                      onClick={() => setNotifOpen(false)}
-                      className="text-xs text-primary hover:underline font-medium"
-                    >
-                      주문내역에서 전체 보기 →
-                    </Link>
-                  </div>
-                </div>
               )}
             </div>
-            <Link to="/orders" className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors">
-              <ClipboardList size={20} />
-              <span className="text-[11px]">주문내역</span>
-            </Link>
+
+            {/* 즐겨찾기 */}
             <Link to="/cart" className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors relative">
-              <ShoppingCart size={20} />
+              <Star size={25} />
+              <span className="text-[11px]">즐겨찾기</span>
+            </Link>
+
+            {/* 장바구니 */}
+            <Link to="/cart" className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors relative">
+              <ShoppingCart size={25} />
               <span className="text-[11px]">장바구니</span>
               <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
                 3
               </span>
             </Link>
+
+            {/* 대시보드 */}
+            <Link to="/buyer" className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors">
+              <ClipboardList size={25} />
+              <span className="text-[11px]">대시보드</span>
+            </Link>
+
+            {/* 마이 페이지 */}
+            <Link to="/mypage" className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors">
+              <User size={25} />
+              <span className="text-[11px]">이름</span>
+            </Link>
           </div>
         </div>
 
         {/* Category Nav */}
-        <div className="border-t border-border bg-white">
-          <div className="max-w-[1280px] mx-auto px-4 flex items-center">
-            {navLinks.map((link) => {
-              const isActive =
-                link.path === "/"
-                  ? location.pathname === "/"
-                  : location.pathname.startsWith(link.path);
-              return (
-                <Link
-                  key={link.path}
-                  to={link.path}
-                  className={`px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${
-                    isActive
-                      ? "text-primary border-b-2 border-primary"
-                      : "text-foreground hover:text-primary"
-                  }`}
-                >
-                  {link.label}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
+        {/*<div className="border-t border-border bg-white">*/}
+        {/*  <div className="max-w-[1280px] mx-auto px-4 flex items-center">*/}
+        {/*    {navLinks.map((link) => {*/}
+        {/*      const isActive =*/}
+        {/*        link.path === "/"*/}
+        {/*          ? location.pathname === "/"*/}
+        {/*          : location.pathname.startsWith(link.path);*/}
+        {/*      return (*/}
+        {/*        <Link*/}
+        {/*          key={link.path}*/}
+        {/*          to={link.path}*/}
+        {/*          className={`px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${*/}
+        {/*            isActive*/}
+        {/*              ? "text-primary border-b-2 border-primary"*/}
+        {/*              : "text-foreground hover:text-primary"*/}
+        {/*          }`}*/}
+        {/*        >*/}
+        {/*          {link.label}*/}
+        {/*        </Link>*/}
+        {/*      );*/}
+        {/*    })}*/}
+        {/*  </div>*/}
+        {/*</div>*/}
       </header>
 
       {/* Page Content */}

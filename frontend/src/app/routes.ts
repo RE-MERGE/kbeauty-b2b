@@ -25,7 +25,7 @@ import {SellerProductRegister} from "../pages/SellerProductRegister";
 import {OrderDetail} from "../pages/OrderDetail";
 import {SupplierRegister} from "../pages/SupplierRegister";
 import {SourcingRequest} from "../pages/SourcingRequest";
-import {ReadyRequestList} from "../pages/ReadyRequestList";
+import {SellerRequestList} from "../pages/seller/SellerRequestList";
 import {SellerShippingQuote} from "../pages/SellerShippingQuote";
 import {BuyerShippingQuotes} from "../pages/BuyerShippingQuotes";
 import {AllProducts} from "../pages/AllProducts";
@@ -42,10 +42,17 @@ import {FindPw} from "../pages/auth/FindPw";
 import {AdminUsers} from "../pages/AdminUsers";
 
 import { BuyerOrderDetail } from "../pages/buyer/BuyerOrderDetail";
+import { BuyerSourcingList } from "../pages/buyer/BuyerSourcingList";
 import { SellerOrderDetail } from "../pages/seller/SellerOrderDetail";
 import { SellerQuoteWrite } from "../pages/seller/SellerQuoteWrite";
 import {PartnerPlan} from "../pages/PartnerPlan";
 import { SearchPage } from "@/pages/admin/SearchPage";
+
+// 변경
+import { SellerContractSign } from "../pages/seller/SellerContractSign";
+import { BuyerContractSign } from "../pages/buyer/BuyerContractSign";
+import { Negotiations } from "../pages/Negotiations";
+
 
 export const router = createBrowserRouter([
     {
@@ -58,7 +65,7 @@ export const router = createBrowserRouter([
             {path: "products", Component: AllProducts},
             {path: "suppliers", Component: Suppliers},
             {path: "sourcing-request", Component: SourcingRequest},
-			{path: "ready-requests", Component: ReadyRequestList},
+			{path: "seller/sourcing-requests", Component: SellerRequestList},
 			{path: "customs", Component: CustomsClearance},
             {path: "support", Component: Support},
             {path: "cart", Component: Cart},
@@ -72,7 +79,8 @@ export const router = createBrowserRouter([
             {path: "quote-request", Component: QuoteRequest},
             {path: "buyer", Component: BuyerDashboard},
             {path: "buyer/shipping-quotes", Component: BuyerShippingQuotes},
-            {path: "seller", Component: SellerDashboard},
+			{path: "buyer/my-sourcing", Component: BuyerSourcingList },
+			{path: "seller", Component: SellerDashboard},
             {path: "seller/products/new", Component: SellerProductRegister},
             {path: "seller/shipping-quote", Component: SellerShippingQuote},
             {path: "admin/inspection", Component: AdminInspection},
@@ -81,6 +89,10 @@ export const router = createBrowserRouter([
             { path: "/buyer/orders/:id",  Component: BuyerOrderDetail },
             { path: "/seller/orders/:id", Component: SellerOrderDetail},
             {path: "/partner", Component: PartnerPlan},
+            { path: "seller/orders/:orderId/contract-sign", Component: SellerContractSign },
+            { path: "buyer/orders/:orderId/contract-sign", Component: BuyerContractSign },
+            { path: "negotiations", Component: Negotiations },
+
         ],
     },
     {

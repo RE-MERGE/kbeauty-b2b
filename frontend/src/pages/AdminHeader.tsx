@@ -124,6 +124,17 @@ const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
   }
 };
 
+const handleLogout = async () => {
+  try {
+    const response = await fetch('/admin/logout', { method: 'POST' });
+  } catch (error) {
+    console.error('로그아웃 실패:', error);
+  } finally {
+    navigate('/auth/login', { replace: true });
+    onUserMenuClick?.();
+  }
+};
+
   return (
     <header style={styles.header}>
       {/* Left — Brand + Nav */}
@@ -262,10 +273,7 @@ const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
       </div>
       <div style={styles.userDropdownDivider} />
       <button
-        onClick={() => {
-          // 로그아웃 로직 연결
-          onUserMenuClick?.();
-        }}
+        onClick={handleLogout}
         style={styles.logoutBtn}
       >
         <LogoutIcon />

@@ -30,6 +30,8 @@ import {SellerShippingQuote} from "../pages/SellerShippingQuote";
 import {BuyerShippingQuotes} from "../pages/BuyerShippingQuotes";
 import {AllProducts} from "../pages/AllProducts";
 import {RestrictedBusinessTypes} from "../pages/RestrictedBusinessTypes";
+import Settlements from "@/pages/admin/Settlements";
+import AdminSupport from "@/pages/admin/AdminSupport";
 // 인증
 import {AuthLayout} from "../pages/auth/layout";
 import {Login} from "../pages/auth/Login";
@@ -118,8 +120,10 @@ export const router = createBrowserRouter([
             { path: "sourcing-requests", Component: AdminSourcingRequests},
             { path: "users", Component: AdminUsers},
             { path: "analytics", Component: AdminAnalytics },
-            {path: "shipping-quotes", Component: AdminShippingQuotes},
-            {path: "search", Component: SearchPage }
+            { path: "shipping-quotes", Component: AdminShippingQuotes},
+            { path: "search", Component: SearchPage },
+            { path: "settlements", Component: Settlements },
+            { path: "adminsupport", Component: AdminSupport },
         ]
     }
 ]);

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { DollarSign, Users, ShoppingBag, TrendingUp, Shield, Calendar, ArrowUp, ArrowDown, FileText, Truck, LayoutDashboard, ChevronRight } from "lucide-react";
+import { DollarSign, Users, ShoppingBag, TrendingUp, Shield, Calendar, ArrowUp, ArrowDown, FileText, Truck, LayoutDashboard, ChevronRight, CreditCard, MessageCircleQuestion } from "lucide-react";
 import AdminHeader from "./AdminHeader";
 import { Outlet } from "react-router";
+import { CashReceiptType } from "@portone/browser-sdk/v2";
 
 const paymentStats = [
   { month: "2024-03", total: 142500, count: 32, avgOrder: 4453 },
@@ -76,38 +77,85 @@ export function Admin() {
 
 
       {/* Quick Nav */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <Link to="/admin/dashboard" className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-primary hover:shadow-md transition-all group">
-          <div className="bg-blue-50 p-3 rounded-lg group-hover:bg-blue-100 transition-colors">
-            <LayoutDashboard size={22} className="text-blue-600" />
-          </div>
-          <div className="flex-1">
-            <div className="font-semibold text-foreground">대시보드</div>
-            <div className="text-xs text-muted-foreground">통계 및 현황 분석</div>
-          </div>
-          <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
-        </Link>
-        <Link to="/admin/sourcing-requests" className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-primary hover:shadow-md transition-all group">
-          <div className="bg-green-50 p-3 rounded-lg group-hover:bg-green-100 transition-colors">
-            <FileText size={22} className="text-green-600" />
-          </div>
-          <div className="flex-1">
-            <div className="font-semibold text-foreground">소싱 요청서 관리</div>
-            <div className="text-xs text-muted-foreground">바이어 소싱 요청 처리</div>
-          </div>
-          <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
-        </Link>
-        <Link to="/admin/shipping-quotes" className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-primary hover:shadow-md transition-all group">
-          <div className="bg-orange-50 p-3 rounded-lg group-hover:bg-orange-100 transition-colors">
-            <Truck size={22} className="text-orange-600" />
-          </div>
-          <div className="flex-1">
-            <div className="font-semibold text-foreground">운임 견적 관리</div>
-            <div className="text-xs text-muted-foreground">운임 견적 요청 처리</div>
-          </div>
-          <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
-        </Link>
-      </div>
+      <div>
+    {/* 첫 번째 줄 */}
+    <div className="grid grid-cols-3 gap-4 mb-6">
+      {/* 1. 대시보드 */}
+      <Link to="/admin/dashboard" className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-primary hover:shadow-md transition-all group">
+        <div className="bg-blue-50 p-3 rounded-lg group-hover:bg-blue-100 transition-colors">
+          <LayoutDashboard size={22} className="text-blue-600" />
+        </div>
+        <div className="flex-1">
+          <div className="font-semibold text-foreground">대시보드</div>
+          <div className="text-xs text-muted-foreground">통계 및 현황 분석</div>
+        </div>
+        <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
+      </Link>
+
+      {/* 2. 소싱 요청서 관리 */}
+      <Link to="/admin/sourcing-requests" className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-primary hover:shadow-md transition-all group">
+        <div className="bg-green-50 p-3 rounded-lg group-hover:bg-green-100 transition-colors">
+          <FileText size={22} className="text-green-600" />
+        </div>
+        <div className="flex-1">
+          <div className="font-semibold text-foreground">소싱 요청서 관리</div>
+          <div className="text-xs text-muted-foreground">바이어 소싱 요청 처리</div>
+        </div>
+        <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
+      </Link>
+
+      {/* 3. 결제 및 정산 관리 */}
+      <Link to="/admin/settlements" className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-primary hover:shadow-md transition-all group">
+        <div className="bg-orange-50 p-3 rounded-lg group-hover:bg-orange-100 transition-colors">
+          <CreditCard size={22} className="text-orange-600" />
+        </div>
+        <div className="flex-1">
+          <div className="font-semibold text-foreground">결제 및 정산 관리</div>
+          <div className="text-xs text-muted-foreground">대금 및 수수료 처리</div>
+        </div>
+        <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
+      </Link>
+    </div>
+
+      {/* 두 번째 줄 */}
+    <div className="grid grid-cols-3 gap-4 mb-6">
+      {/* 4. 회원 / 업체 관리 */}
+      <Link to="/admin/users" className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-primary hover:shadow-md transition-all group">
+        <div className="bg-purple-50 p-3 rounded-lg group-hover:bg-purple-100 transition-colors">
+          <Users size={22} className="text-purple-600" />
+        </div>
+        <div className="flex-1">
+          <div className="font-semibold text-foreground">회원 / 업체 관리</div>
+          <div className="text-xs text-muted-foreground">전체 회원 조회 및 관리</div>
+        </div>
+        <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
+      </Link>
+
+      {/* 5. 필요한 경우 여기에 카드 추가 */}
+      <Link to="/admin/adminsupport" className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-primary hover:shadow-md transition-all group">
+        <div className="bg-pink-50 p-3 rounded-lg group-hover:bg-pink-100 transition-colors">
+          <MessageCircleQuestion size={22} className="text-pink-600" />
+        </div>
+        <div className="flex-1">
+          <div className="font-semibold text-foreground">고객 지원</div>
+          <div className="text-xs text-muted-foreground">고객 지원 센터 및 문의 접수</div>
+        </div>
+        <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
+      </Link>
+      {/* 6. 필요한 경우 여기에 카드 추가 */}
+      <Link to="/admin/analytics" className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-primary hover:shadow-md transition-all group">
+        <div className="bg-blue-50 p-3 rounded-lg group-hover:bg-blue-100 transition-colors">
+          <Calendar size={22} className="text-blue-600" />
+        </div>
+        <div className="flex-1">
+          <div className="font-semibold text-foreground">통계 관리</div>
+          <div className="text-xs text-muted-foreground">월별 고객사 통계 관리</div>
+        </div>
+        <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
+      </Link>
+    </div>
+  </div>
+
 
       {/* Key Metrics */}
       <div className="grid grid-cols-4 gap-4 mb-6">

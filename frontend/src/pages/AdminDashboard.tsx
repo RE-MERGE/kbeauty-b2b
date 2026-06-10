@@ -12,10 +12,10 @@ export function AdminDashboard() {
       stats: { label: "신규 요청", value: "3건" },
     },
     {
-      title: "운임 견적 요청 관리",
-      description: "바이어가 제출한 배송 운임 견적 요청을 조회하고 처리합니다",
+      title: "결제 및 정산 관리",
+      description: "결제대금 정산 및 수수료를 조회하고 처리합니다",
       icon: <Truck size={32} />,
-      path: "/admin/shipping-quotes",
+      path: "/admin/settlemts",
       color: "from-green-600 to-green-700",
       stats: { label: "신규 요청", value: "2건" },
     },

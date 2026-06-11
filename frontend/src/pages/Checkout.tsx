@@ -4,7 +4,7 @@ import {
   Package, MapPin, CreditCard, FileText, ArrowLeft,
   CheckCircle, X, ShoppingBag, PenLine, AlertCircle,
 } from "lucide-react";
-import { loadTossPayments } from "@tosspayments/tosspayments-sdk";
+// import { loadTossPayments } from "@tosspayments/tosspayments-sdk";
 
 // ── 더미 주문 데이터 ──────────────────────────────────────────────────
 const READY_ITEMS = [

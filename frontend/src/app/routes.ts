@@ -58,6 +58,9 @@ import { BuyerContractSign } from "../pages/buyer/BuyerContractSign";
 import { Negotiations } from "../pages/Negotiations";
 import { Disputes } from "../pages/Disputes";
 
+// 견적 상세보기
+import { QuoteDetail } from "../pages/quote/QuoteDetail";
+
 import Settlements from "@/pages/admin/Settlements";
 import AdminSupport from "@/pages/admin/AdminSupport";
 
@@ -113,6 +116,8 @@ export const router = createBrowserRouter([
         { path: "negotiations", Component: Negotiations },
         { path: "disputes", Component: Disputes },
         { path: "partner", Component: PartnerPlan },
+        //import { QuoteDetail } from "../pages/quote/QuoteDetail";
+        { path: "quote/quoted-detail", Component: QuoteDetail },
     ],
 },
     {

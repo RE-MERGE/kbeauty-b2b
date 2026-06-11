@@ -104,7 +104,7 @@ export function Checkout() {
       console.error("토스페이먼츠 결제창 호출 에러:", error);
       alert("결제창을 여는 중 에러가 발생했습니다.");
     }
-  }; // <-- 괄호 꼬여있던 부분 명확히 마감처리 완료
+  }; 
 
   return (
     <div className="max-w-[1280px] mx-auto px-4 py-8">

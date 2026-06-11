@@ -21,6 +21,7 @@ export const INITIAL_USERS: User[] = [
 export const AdminUsers: React.FC = () => {
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchFilter, setSearchFilter] = useState<"all" | "name" | "company" | "email">("all");
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 10;
@@ -157,18 +158,46 @@ export const AdminUsers: React.FC = () => {
           
           {/* 필터 및 검색 바 */}
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200/60 mb-4 flex flex-col md:flex-row gap-3 shrink-0">
-            <div className="flex-1 relative">
-              <input
-                type="text"
-                placeholder={activeSubCategory === 'ALL' ? "이름, 이메일, 혹은 회사명으로 검색..." : "대기 중인 이름, 회사명 검색..."}
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full pl-4 pr-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 text-sm transition-all placeholder-slate-400"
-              />
-            </div>
+            {/* <div className="flex items-center gap-2 w-full max-w-xl"> */}
+    
+    {/* 검색 조건 선택 Select 박스 */}
+    <select
+      value={searchFilter}
+      onChange={(e) => {
+        setSearchFilter(e.target.value as any);
+        setSearchTerm(""); 
+        setCurrentPage(1);
+      }}
+      className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 text-sm transition-all text-slate-700 font-medium cursor-pointer"
+    >
+      <option value="all">전체</option>
+      <option value="name">이름</option>
+      <option value="company">회사명</option>
+      <option value="email">이메일</option>
+    </select>
+
+    {/* 검색어 입력 인풋 */}
+    <div className="flex-1 relative">
+      <input
+        type="text"
+        placeholder={
+          searchFilter === "all"
+            ? "통합 검색..."
+            : searchFilter === "name"
+            ? "이름으로 검색..."
+            : searchFilter === "company"
+            ? "회사명으로 검색..."
+            : "이메일 주소 검색..."
+        }
+        value={searchTerm}
+        onChange={(e) => {
+          setSearchTerm(e.target.value);
+          setCurrentPage(1);
+        }}
+        className="w-full pl-4 pr-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 text-sm transition-all placeholder-slate-400"
+      />
+    </div>
+  {/* </div> */}
             <div className="w-full md:w-52">
               <select
                 value={roleFilter}
@@ -188,7 +217,6 @@ export const AdminUsers: React.FC = () => {
                   <option value="BUYER/직원">바이어 / 직원</option>
                   <option value="SELLER/대표">셀러 / 대표</option>
                   <option value="SELLER/직원">셀러 / 직원</option>
-                  <option value="ADMIN">관리자(ADMIN)</option>
                 </optgroup>
               </select>
             </div>

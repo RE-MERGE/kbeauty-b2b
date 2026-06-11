@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, UserPlus } from 'lucide-react';
+import { Users, UserPlus, UserX } from 'lucide-react';
 
 interface User {
   id: string;
@@ -27,7 +27,7 @@ export const AdminUsers: React.FC = () => {
   const PAGE_SIZE = 10;
 
   // 💡 왼쪽 사이드바용 상태 카테고리 추가 ('ALL': 전체, 'REQUEST': 등록요청)
-  const [activeSubCategory, setActiveSubCategory] = useState<'ALL' | 'REQUEST'>('ALL');
+  const [activeSubCategory, setActiveSubCategory] = useState<'ALL' | 'REQUEST' | 'SUSPENDED'>('ALL');
 
   // 계정 상태 변경 및 가입 승인 토글 액션
   const handleToggleStatus = (userId: string) => {
@@ -50,6 +50,9 @@ export const AdminUsers: React.FC = () => {
     // 1. 왼쪽 사이드바 검증 (등록 요청일 경우 PENDING 상태만)
     if (activeSubCategory === 'REQUEST' && user.status !== 'PENDING') {
       return false;
+    }
+    if (activeSubCategory === 'SUSPENDED' && user.status !== 'SUSPENDED') {
+    return false;
     }
 
     // 2. 검색 조건 검증
@@ -93,6 +96,7 @@ export const AdminUsers: React.FC = () => {
 
   // 대기 승인 카운트 집계
   const pendingCount = users.filter(u => u.status === 'PENDING').length;
+  const suspendedCount = users.filter(u => u.status === 'SUSPENDED').length;
 
   return (
     <div className="w-full h-screen bg-slate-50 text-slate-700 flex flex-col overflow-hidden font-sans antialiased">
@@ -151,6 +155,31 @@ export const AdminUsers: React.FC = () => {
               </span>
             )}
           </button>
+          
+          <button 
+          onClick={() => {
+            setActiveSubCategory('SUSPENDED');
+            setCurrentPage(1);
+          }}
+          className={`w-full flex items-center justify-between px-4 py-3 text-sm font-semibold rounded-lg transition-all ${
+            activeSubCategory === 'SUSPENDED' 
+              ? 'bg-indigo-50 text-indigo-600 shadow-sm shadow-indigo-100/50' 
+              : 'text-slate-600 hover:bg-slate-50/80'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <UserX size={18} />
+            계정 정지 사용자
+          </div>
+          {/* 버그 수정: pendingCount 대신 상단에서 선언한 suspendedCount를 매핑하여 정지 유저 수 노출 */}
+          {suspendedCount > 0 && (
+            <span className={`px-2 py-0.5 rounded-full text-2xs font-bold transition-colors ${
+              activeSubCategory === 'SUSPENDED' ? 'bg-indigo-600 text-white' : 'bg-rose-500 text-white'
+            }`}>
+              {suspendedCount}
+            </span>
+          )}
+        </button>
         </div>
 
         {/* [오른쪽 칸] 데이터 필터링 & 메인 테이블 보드 */}

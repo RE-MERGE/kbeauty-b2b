@@ -55,6 +55,27 @@ export const AdminUsers: React.FC = () => {
     return false;
     }
 
+    if (searchTerm) {
+    const targetTerm = searchTerm.toLowerCase();
+    
+    if (searchFilter === 'name') {
+      return user.name.toLowerCase().includes(targetTerm);
+    }
+    if (searchFilter === 'company') {
+      return user.companyName.toLowerCase().includes(targetTerm);
+    }
+    if (searchFilter === 'email') {
+      return user.email.toLowerCase().includes(targetTerm);
+    }
+    if (searchFilter === 'all') { // 통합 검색일 때
+      return (
+        user.name.toLowerCase().includes(targetTerm) ||
+        user.companyName.toLowerCase().includes(targetTerm) ||
+        user.email.toLowerCase().includes(targetTerm)
+      );
+    }
+  }
+
     // 2. 검색 조건 검증
     const matchesSearch = 
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

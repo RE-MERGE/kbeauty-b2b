@@ -17,8 +17,7 @@ import { AdminDashboard } from "../pages/AdminDashboard";
 import { AdminSourcingRequests } from "../pages/AdminSourcingRequests";
 import { AdminShippingQuotes } from "../pages/AdminShippingQuotes";
 import { AdminAnalytics } from "../pages/AdminAnalytics";
-import { BuyerInspection } from "../pages/BuyerInspection";
-import { QuoteRequest } from "../pages/QuoteRequest";
+
 import { BuyerDashboard } from "../pages/buyer/BuyerDashboard";
 import { SellerDashboard } from "../pages/seller/SellerDashboard";
 import { SellerProductRegister } from "../pages/SellerProductRegister";

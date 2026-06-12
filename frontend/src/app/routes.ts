@@ -13,7 +13,7 @@ import { Orders } from "../pages/Orders";
 import { Admin, AdminLayout } from "../pages/Admin";
 import { Checkout } from "../pages/Checkout";
 import { MyPage } from "../pages/MyPage";
-import { ProductDetail } from "../pages/ProductDetail";
+import { ProductDetail } from "../pages/prodect/ProductDetail";
 import { AdminDashboard } from "../pages/AdminDashboard";
 import { AdminSourcingRequests } from "../pages/AdminSourcingRequests";
 import { AdminShippingQuotes } from "../pages/AdminShippingQuotes";
@@ -30,7 +30,7 @@ import { SourcingRequest } from "../pages/SourcingRequest";
 import { SellerRequestList } from "../pages/seller/SellerRequestList";
 import { SellerShippingQuote } from "../pages/SellerShippingQuote";
 import { BuyerShippingQuotes } from "../pages/BuyerShippingQuotes";
-import { AllProducts } from "../pages/AllProducts";
+import { AllProducts } from "../pages/prodect/AllProducts";
 import { RestrictedBusinessTypes } from "../pages/RestrictedBusinessTypes";
 
 import { AuthLayout } from "../pages/auth/layout";
@@ -51,7 +51,8 @@ import { SellerOrderDetail } from "../pages/seller/SellerOrderDetail";
 import { SellerQuoteWrite } from "../pages/seller/SellerQuoteWrite";
 import { PartnerPlan } from "../pages/PartnerPlan";
 import { SearchPage } from "@/pages/admin/SearchPage";
-import { Wishlist } from "../pages/Wishlist"; //좋아요 페이지 추가
+import {Wishlist} from "../pages/prodect/Wishlist"; 
+
 
 import {SellerProductManage} from "../pages/seller/SellerProductManage"; // 판매자 상품 관리 페이지 추가
 import { SellerContractSign } from "../pages/seller/SellerContractSign";

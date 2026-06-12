@@ -26,15 +26,39 @@ const MAIN_CATS = Object.keys(CATEGORY_MAP);
 
 type SourcingType = "READY" | "CUSTOM";
 
-// ── placeholder 상수 ──────────────────────────────────────────────────
-const READY_DETAIL_PLACEHOLDER = `[형식에 맞춰 작성해 주세요]
-
-* 컬러 / 사이즈 / 수량: (예: 블랙 / S / 10장)
-* 컬러 / 사이즈 / 수량: (예: 블랙 / M / 20장)
-* 컬러 / 사이즈 / 수량: (예: 화이트 / L / 10장)`;
-
 const CUSTOM_DETAIL_PLACEHOLDER = `파일 외에 강조하고 싶은 사항을 자유롭게 적어주세요.
 (예: 3페이지 컬러 샘플은 블랙을 우선 진행 부탁드립니다)`;
+
+// ── 옵션 타입 ─────────────────────────────────────────────────────────
+interface ReadyOptionRow {
+  id: string;
+  option1: string;       // 예: 블랙, 린넨, 버킷백 블랙
+  option2: string;       // 예: M, 베이지, "" (선택)
+  quantity: string;
+  sampleQuantity: string; // needSample=Y일 때만 사용
+}
+
+interface CustomOptionRow {
+  id: string;
+  optionName: string;    // 예: 소재 A, 패턴1
+  quantity: string;
+  sampleQuantity: string; // needSample=Y일 때만 사용
+}
+
+const makeReadyOption = (): ReadyOptionRow => ({
+  id: crypto.randomUUID(),
+  option1: "",
+  option2: "",
+  quantity: "",
+  sampleQuantity: "",
+});
+
+const makeCustomOption = (): CustomOptionRow => ({
+  id: crypto.randomUUID(),
+  optionName: "",
+  quantity: "",
+  sampleQuantity: "",
+});
 
 // ── 타입 ──────────────────────────────────────────────────────────────
 interface SourcingItem {
@@ -42,37 +66,54 @@ interface SourcingItem {
   type: SourcingType;
   // 공통
   productName: string;
-  quantity: string;
   deliveryDate: string;
-  expiryDate: string;   // 소싱 요청 유효기간
-  detail: string;
+  expiryDate: string;
+  needSample: "Y" | "N" | "";
   // READY 전용
-  unitPrice: string;
-  refImageFile: File | null;
-  // CUSTOM 전용
+  brandName: string;
   mainCategory: string;
   subCategory: string;
+  unitPrice: string;
+  readyOptions: ReadyOptionRow[];
+  refImageFile: File | null;
+  // CUSTOM 전용
   totalBudget: string;
+  customOptions: CustomOptionRow[];
+  detail: string;
   workFiles: File[];
-  needSample: "Y" | "N" | "";
 }
 
 const makeItem = (): SourcingItem => ({
   id: crypto.randomUUID(),
   type: "READY",
   productName: "",
-  quantity: "",
   deliveryDate: "",
   expiryDate: "",
-  detail: "",
-  unitPrice: "",
-  refImageFile: null,
+  needSample: "",
+  brandName: "",
   mainCategory: "",
   subCategory: "",
+  unitPrice: "",
+  readyOptions: [makeReadyOption()],
+  refImageFile: null,
   totalBudget: "",
+  customOptions: [makeCustomOption()],
+  detail: "",
   workFiles: [],
-  needSample: "",
 });
+
+// ── 수량 합산 헬퍼 ────────────────────────────────────────────────────
+const sumReadyQty = (rows: ReadyOptionRow[]) =>
+  rows.reduce((acc, r) => acc + (parseInt(r.quantity) || 0), 0);
+
+const sumReadySampleQty = (rows: ReadyOptionRow[]) =>
+  rows.reduce((acc, r) => acc + (parseInt(r.sampleQuantity) || 0), 0);
+
+const sumCustomQty = (rows: CustomOptionRow[]) =>
+  rows.reduce((acc, r) => acc + (parseInt(r.quantity) || 0), 0);
+
+const sumCustomSampleQty = (rows: CustomOptionRow[]) =>
+  rows.reduce((acc, r) => acc + (parseInt(r.sampleQuantity) || 0), 0);
 
 // ── 카드 컴포넌트 ─────────────────────────────────────────────────────
 function SourcingCard({
@@ -90,10 +131,11 @@ function SourcingCard({
 
   const inputCls = "w-full border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary transition-colors bg-white";
 
-  const field = (label: string, required: boolean, children: React.ReactNode) => (
+  const field = (label: string, required: boolean, children: React.ReactNode, sub?: string) => (
     <div>
       <label className="block text-sm font-medium text-foreground mb-1.5">
         {label} {required && <span className="text-primary">*</span>}
+        {sub && <span className="text-muted-foreground font-normal text-xs ml-1">{sub}</span>}
       </label>
       {children}
     </div>
@@ -109,8 +151,38 @@ function SourcingCard({
     onChange(item.id, "workFiles", (item.workFiles ?? []).filter((_, i) => i !== idx));
   };
 
-  // 기성품 세부 요구사항 글자 수 체크 (경고 기준)
-  const isDetailTooShort = item.type === "READY" && item.detail.trim().length > 0 && item.detail.trim().length < 20;
+  // ── READY 옵션 핸들러 ──
+  const addReadyOption = () =>
+    onChange(item.id, "readyOptions", [...item.readyOptions, makeReadyOption()]);
+
+  const removeReadyOption = (rid: string) =>
+    onChange(item.id, "readyOptions", item.readyOptions.filter((r) => r.id !== rid));
+
+  const updateReadyOption = (rid: string, key: keyof ReadyOptionRow, val: string) =>
+    onChange(
+      item.id,
+      "readyOptions",
+      item.readyOptions.map((r) => r.id === rid ? { ...r, [key]: val } : r),
+    );
+
+  // ── CUSTOM 옵션 핸들러 ──
+  const addCustomOption = () =>
+    onChange(item.id, "customOptions", [...item.customOptions, makeCustomOption()]);
+
+  const removeCustomOption = (cid: string) =>
+    onChange(item.id, "customOptions", item.customOptions.filter((r) => r.id !== cid));
+
+  const updateCustomOption = (cid: string, key: keyof CustomOptionRow, val: string) =>
+    onChange(
+      item.id,
+      "customOptions",
+      item.customOptions.map((r) => r.id === cid ? { ...r, [key]: val } : r),
+    );
+
+  const totalReadyQty = sumReadyQty(item.readyOptions);
+  const totalReadySampleQty = sumReadySampleQty(item.readyOptions);
+  const totalCustomQty = sumCustomQty(item.customOptions);
+  const totalCustomSampleQty = sumCustomSampleQty(item.customOptions);
 
   return (
     <div className="bg-white border border-border rounded-lg overflow-hidden">
@@ -132,9 +204,9 @@ function SourcingCard({
         )}
       </div>
 
-      <div className="p-5 space-y-4">
+      <div className="p-5 space-y-5">
 
-        {/* 타입 라디오 */}
+        {/* 소싱 유형 */}
         <div>
           <label className="block text-sm font-medium text-foreground mb-2">소싱 유형 <span className="text-primary">*</span></label>
           <div className="flex gap-3">
@@ -161,7 +233,7 @@ function SourcingCard({
           </div>
         </div>
 
-        {/* ── 공통 필드 ── */}
+        {/* 상품명 */}
         {field("상품명", true,
           <input
             value={item.productName}
@@ -171,62 +243,21 @@ function SourcingCard({
           />
         )}
 
-        {/* 세부 요구사항 - 타입별 placeholder 분기 */}
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1.5">
-            세부 요구사항 {item.type === "READY" && <span className="text-primary">*</span>}
-            {item.type === "CUSTOM" && <span className="text-muted-foreground font-normal text-xs"> (선택)</span>}
-          </label>
-          <textarea
-            value={item.detail}
-            onChange={(e) => onChange(item.id, "detail", e.target.value)}
-            rows={item.type === "READY" ? 5 : 3}
-            placeholder={item.type === "READY" ? READY_DETAIL_PLACEHOLDER : CUSTOM_DETAIL_PLACEHOLDER}
-            className={`${inputCls} resize-none`}
-          />
-          {/* 기성품 경고 문구 */}
-          {item.type === "READY" && (
-            <p className={`text-xs mt-1.5 ${isDetailTooShort ? "text-red-500" : "text-muted-foreground"}`}>
-              ⚠️ 컬러·사이즈·수량을 형식에 맞게 기재하지 않으면 매칭 정확도가 낮아질 수 있습니다.
-            </p>
-          )}
-        </div>
-
-        <div className="grid grid-cols-3 gap-4">
-          {field("희망 수량", true,
-            <div className="relative">
-              <input
-                value={item.quantity}
-                onChange={(e) => onChange(item.id, "quantity", e.target.value)}
-                placeholder="예: 200"
-                type="number"
-                min="1"
-                className={`${inputCls} pr-8`}
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">벌</span>
-            </div>
-          )}
-          {field("희망 납기일", false,
-            <input
-              value={item.deliveryDate}
-              onChange={(e) => onChange(item.id, "deliveryDate", e.target.value)}
-              type="date"
-              className={inputCls}
-            />
-          )}
-          {field("요청 유효기간", false,
-            <input
-              value={item.expiryDate}
-              onChange={(e) => onChange(item.id, "expiryDate", e.target.value)}
-              type="date"
-              className={inputCls}
-            />
-          )}
-        </div>
-
         {/* ── READY 전용 필드 ── */}
         {item.type === "READY" && (
           <>
+            {/* 브랜드명 */}
+            {field("브랜드명", false,
+              <input
+                value={item.brandName}
+                onChange={(e) => onChange(item.id, "brandName", e.target.value)}
+                placeholder="예: 빈폴, 자체 브랜드 등 (없으면 비워두세요)"
+                className={inputCls}
+              />,
+              "(선택)"
+            )}
+
+            {/* 카테고리 */}
             <div className="grid grid-cols-2 gap-4">
               {field("대카테고리", true,
                 <select
@@ -254,18 +285,141 @@ function SourcingCard({
               )}
             </div>
 
+            {/* 희망 단가 */}
             {field("희망 단가", true,
               <div className="relative">
                 <input
                   value={item.unitPrice}
                   onChange={(e) => onChange(item.id, "unitPrice", e.target.value)}
                   placeholder="예: 15,000"
+                  type="number"
+                  min="0"
                   className={`${inputCls} pr-8`}
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
               </div>
             )}
 
+            {/* 샘플 필요 여부 */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                샘플 필요 여부 <span className="text-primary">*</span>
+              </label>
+              <div className="flex gap-3">
+                {(["Y", "N"] as const).map((v) => (
+                  <label
+                    key={v}
+                    className={`flex-1 flex items-center justify-center gap-2 border rounded py-2.5 cursor-pointer text-sm font-medium transition-colors ${
+                      item.needSample === v
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-border text-muted-foreground hover:border-primary/50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name={`sample-${item.id}`}
+                      value={v}
+                      checked={item.needSample === v}
+                      onChange={() => onChange(item.id, "needSample", v)}
+                      className="accent-primary"
+                    />
+                    {v === "Y" ? "필요" : "불필요"}
+                  </label>
+                ))}
+              </div>
+              {item.needSample === "Y" && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  샘플비는 바이어 부담이며 환불되지 않습니다.
+                </p>
+              )}
+            </div>
+
+            {/* 옵션별 수량 테이블 */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-foreground">
+                  옵션별 수량 <span className="text-primary">*</span>
+                </label>
+                {totalReadyQty > 0 && (
+                  <span className="text-xs text-muted-foreground flex gap-3">
+                    <span>총 <strong className="text-foreground">{totalReadyQty.toLocaleString()}</strong>개</span>
+                    {item.needSample === "Y" && totalReadySampleQty > 0 && (
+                      <span className="text-primary">샘플 <strong>{totalReadySampleQty.toLocaleString()}</strong>개</span>
+                    )}
+                  </span>
+                )}
+              </div>
+
+              {/* 헤더 */}
+              <div className={`grid gap-2 mb-1.5 px-1 ${item.needSample === "Y" ? "grid-cols-[1fr_1fr_90px_90px_32px]" : "grid-cols-[1fr_1fr_100px_32px]"}`}>
+                <span className="text-xs text-muted-foreground">옵션1 <span className="text-primary">*</span><span className="font-normal"> (예: 블랙, 린넨)</span></span>
+                <span className="text-xs text-muted-foreground">옵션2 <span className="font-normal">(예: M, XL)</span></span>
+                <span className="text-xs text-muted-foreground">수량 <span className="text-primary">*</span></span>
+                {item.needSample === "Y" && (
+                  <span className="text-xs text-muted-foreground">샘플 수량</span>
+                )}
+                <span />
+              </div>
+
+              <div className="space-y-2">
+                {item.readyOptions.map((row) => (
+                  <div key={row.id} className={`grid gap-2 items-center ${item.needSample === "Y" ? "grid-cols-[1fr_1fr_90px_90px_32px]" : "grid-cols-[1fr_1fr_100px_32px]"}`}>
+                    <input
+                      value={row.option1}
+                      onChange={(e) => updateReadyOption(row.id, "option1", e.target.value)}
+                      placeholder="블랙"
+                      className={inputCls}
+                    />
+                    <input
+                      value={row.option2}
+                      onChange={(e) => updateReadyOption(row.id, "option2", e.target.value)}
+                      placeholder="M (선택)"
+                      className={inputCls}
+                    />
+                    <div className="relative">
+                      <input
+                        value={row.quantity}
+                        onChange={(e) => updateReadyOption(row.id, "quantity", e.target.value)}
+                        placeholder="0"
+                        type="number"
+                        min="0"
+                        className={`${inputCls} pr-6`}
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">개</span>
+                    </div>
+                    {item.needSample === "Y" && (
+                      <div className="relative">
+                        <input
+                          value={row.sampleQuantity}
+                          onChange={(e) => updateReadyOption(row.id, "sampleQuantity", e.target.value)}
+                          placeholder="0"
+                          type="number"
+                          min="0"
+                          className={`${inputCls} pr-6`}
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">개</span>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => removeReadyOption(row.id)}
+                      disabled={item.readyOptions.length === 1}
+                      className="flex items-center justify-center w-8 h-8 text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={addReadyOption}
+                className="mt-2 w-full border border-dashed border-border hover:border-primary text-muted-foreground hover:text-primary rounded py-2 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Plus size={13} /> 옵션 추가
+              </button>
+            </div>
+
+            {/* 참고 이미지 */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
                 참고 이미지 <span className="text-muted-foreground font-normal text-xs">(선택 · PDF/이미지)</span>
@@ -301,6 +455,7 @@ function SourcingCard({
         {/* ── CUSTOM 전용 필드 ── */}
         {item.type === "CUSTOM" && (
           <>
+            {/* 카테고리 */}
             <div className="grid grid-cols-2 gap-4">
               {field("대카테고리", true,
                 <select
@@ -328,24 +483,146 @@ function SourcingCard({
               )}
             </div>
 
+            {/* 전체 예산 */}
             {field("전체 예산", true,
               <div className="relative">
                 <input
                   value={item.totalBudget}
                   onChange={(e) => onChange(item.id, "totalBudget", e.target.value)}
                   placeholder="예: 3,000,000"
+                  type="number"
+                  min="0"
                   className={`${inputCls} pr-8`}
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
               </div>
             )}
 
-            {/* 작업지시서 - 필수 */}
+            {/* 샘플 필요 여부 */}
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                샘플 필요 여부 <span className="text-primary">*</span>
+              </label>
+              <div className="flex gap-3">
+                {(["Y", "N"] as const).map((v) => (
+                  <label
+                    key={v}
+                    className={`flex-1 flex items-center justify-center gap-2 border rounded py-2.5 cursor-pointer text-sm font-medium transition-colors ${
+                      item.needSample === v
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-border text-muted-foreground hover:border-primary/50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name={`sample-${item.id}`}
+                      value={v}
+                      checked={item.needSample === v}
+                      onChange={() => onChange(item.id, "needSample", v)}
+                      className="accent-primary"
+                    />
+                    {v === "Y" ? "필요" : "불필요"}
+                  </label>
+                ))}
+              </div>
+              {item.needSample === "Y" && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  샘플비는 바이어 부담이며 환불되지 않습니다.
+                </p>
+              )}
+            </div>
+
+            {/* 옵션별 수량 테이블 */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-foreground">
+                  옵션별 수량
+                  <span className="text-muted-foreground font-normal text-xs ml-1">(선택)</span>
+                </label>
+                {totalCustomQty > 0 && (
+                  <span className="text-xs text-muted-foreground flex gap-3">
+                    <span>총 <strong className="text-foreground">{totalCustomQty.toLocaleString()}</strong>개</span>
+                    {item.needSample === "Y" && totalCustomSampleQty > 0 && (
+                      <span className="text-primary">샘플 <strong>{totalCustomSampleQty.toLocaleString()}</strong>개</span>
+                    )}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mb-2">
+                작업지시서에 포함된 경우 생략 가능합니다.
+              </p>
+
+              {/* 헤더 */}
+              <div className={`grid gap-2 mb-1.5 px-1 ${item.needSample === "Y" ? "grid-cols-[1fr_100px_100px_32px]" : "grid-cols-[1fr_120px_32px]"}`}>
+                <span className="text-xs text-muted-foreground">옵션명 <span className="font-normal">(예: 소재 A, 패턴1)</span></span>
+                <span className="text-xs text-muted-foreground">수량</span>
+                {item.needSample === "Y" && (
+                  <span className="text-xs text-muted-foreground">샘플 수량</span>
+                )}
+                <span />
+              </div>
+
+              <div className="space-y-2">
+                {item.customOptions.map((row) => (
+                  <div key={row.id} className={`grid gap-2 items-center ${item.needSample === "Y" ? "grid-cols-[1fr_100px_100px_32px]" : "grid-cols-[1fr_120px_32px]"}`}>
+                    <input
+                      value={row.optionName}
+                      onChange={(e) => updateCustomOption(row.id, "optionName", e.target.value)}
+                      placeholder="예: 소재 A"
+                      className={inputCls}
+                    />
+                    <div className="relative">
+                      <input
+                        value={row.quantity}
+                        onChange={(e) => updateCustomOption(row.id, "quantity", e.target.value)}
+                        placeholder="0"
+                        type="number"
+                        min="0"
+                        className={`${inputCls} pr-6`}
+                      />
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">개</span>
+                    </div>
+                    {item.needSample === "Y" && (
+                      <div className="relative">
+                        <input
+                          value={row.sampleQuantity}
+                          onChange={(e) => updateCustomOption(row.id, "sampleQuantity", e.target.value)}
+                          placeholder="0"
+                          type="number"
+                          min="0"
+                          className={`${inputCls} pr-6`}
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">개</span>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => removeCustomOption(row.id)}
+                      disabled={item.customOptions.length === 1}
+                      className="flex items-center justify-center w-8 h-8 text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={addCustomOption}
+                className="mt-2 w-full border border-dashed border-border hover:border-primary text-muted-foreground hover:text-primary rounded py-2 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Plus size={13} /> 옵션 추가
+              </button>
+            </div>
+
+            {/* 작업지시서 */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1.5">
                 작업지시서 및 참고 파일 <span className="text-primary">*</span>
                 <span className="text-muted-foreground font-normal text-xs ml-1">(PDF/이미지 · 다중 첨부 가능)</span>
               </label>
+              <p className="text-xs text-muted-foreground mb-2">
+                희망 소재·원단, 라벨/택 요구사항은 작업지시서에 포함해 주세요.
+              </p>
               <input
                 ref={workRef}
                 type="file"
@@ -383,35 +660,42 @@ function SourcingCard({
               )}
             </div>
 
+            {/* 세부 요구사항 */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                샘플 제작 필요 여부 <span className="text-primary">*</span>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                세부 요구사항 <span className="text-muted-foreground font-normal text-xs">(선택)</span>
               </label>
-              <div className="flex gap-3">
-                {(["Y", "N"] as const).map((v) => (
-                  <label
-                    key={v}
-                    className={`flex-1 flex items-center justify-center gap-2 border rounded py-2.5 cursor-pointer text-sm font-medium transition-colors ${
-                      item.needSample === v
-                        ? "border-primary bg-primary/5 text-primary"
-                        : "border-border text-muted-foreground hover:border-primary/50"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name={`sample-${item.id}`}
-                      value={v}
-                      checked={item.needSample === v}
-                      onChange={() => onChange(item.id, "needSample", v)}
-                      className="accent-primary"
-                    />
-                    {v === "Y" ? "필요" : "불필요"}
-                  </label>
-                ))}
-              </div>
+              <textarea
+                value={item.detail}
+                onChange={(e) => onChange(item.id, "detail", e.target.value)}
+                rows={3}
+                placeholder={CUSTOM_DETAIL_PLACEHOLDER}
+                className={`${inputCls} resize-none`}
+              />
             </div>
           </>
         )}
+
+        {/* ── 공통 하단 필드 ── */}
+        <div className="grid grid-cols-2 gap-4">
+          {field("희망 납기일", false,
+            <input
+              value={item.deliveryDate}
+              onChange={(e) => onChange(item.id, "deliveryDate", e.target.value)}
+              type="date"
+              className={inputCls}
+            />
+          )}
+          {field("요청 유효기간", false,
+            <input
+              value={item.expiryDate}
+              onChange={(e) => onChange(item.id, "expiryDate", e.target.value)}
+              type="date"
+              className={inputCls}
+            />
+          )}
+        </div>
+
       </div>
     </div>
   );
@@ -419,16 +703,37 @@ function SourcingCard({
 
 // ── 유효성 검사 ───────────────────────────────────────────────────────
 const isItemValid = (item: SourcingItem): boolean => {
-  const commonOk = !!(item.productName && item.quantity);
-  if (item.type === "READY")
-    return commonOk && !!(item.detail.trim() && item.unitPrice && item.mainCategory && item.subCategory);
-  if (item.type === "CUSTOM")
-    return commonOk && !!(item.mainCategory && item.subCategory && item.totalBudget && item.needSample && item.workFiles.length > 0);
+  if (item.type === "READY") {
+    const hasOptions = item.readyOptions.some((r) => r.option1.trim() && r.quantity);
+    return !!(
+      item.productName &&
+      item.mainCategory &&
+      item.subCategory &&
+      item.unitPrice &&
+      hasOptions &&
+      item.needSample
+    );
+  }
+  if (item.type === "CUSTOM") {
+    return !!(
+      item.productName &&
+      item.mainCategory &&
+      item.subCategory &&
+      item.totalBudget &&
+      item.workFiles.length > 0 &&
+      item.needSample
+    );
+  }
   return false;
 };
 
+// ── 총 수량 계산 헬퍼 (완료 화면용) ──────────────────────────────────
+const getTotalQty = (item: SourcingItem): number => {
+  if (item.type === "READY") return sumReadyQty(item.readyOptions);
+  return sumCustomQty(item.customOptions);
+};
+
 // ── 메인 페이지 ───────────────────────────────────────────────────────
-// 재요청 시 넘어오는 state 타입
 interface PrefillState {
   prefillItem?: Omit<SourcingItem, "id" | "refImageFile" | "workFiles">;
   isRerequest?: boolean;
@@ -488,7 +793,7 @@ export function SourcingRequest() {
             <div key={item.id} className="flex gap-3 text-muted-foreground">
               <span className="text-primary font-mono">{i + 1}.</span>
               <span>
-                {item.productName} · {item.type === "READY" ? "사입" : "주문제작"} · {Number(item.quantity).toLocaleString()}벌
+                {item.productName} · {item.type === "READY" ? "기성품" : "주문제작"} · {getTotalQty(item).toLocaleString()}개
               </span>
             </div>
           ))}
@@ -527,7 +832,7 @@ export function SourcingRequest() {
         원하는 상품을 상세히 입력하면 스타일허브 소싱팀이 최적의 공급업체를 매칭해 드립니다.
       </p>
 
-      {/* hidden 필드 안내 (dev 확인용) */}
+      {/* dev 확인용 */}
       <div className="bg-secondary border border-border rounded px-4 py-3 text-xs text-muted-foreground mb-6 flex gap-6">
         <span>바이어 ID: <strong className="text-foreground font-mono">{DUMMY_BUYER.buyerId}</strong></span>
         <span>사업자번호: <strong className="text-foreground font-mono">{DUMMY_BUYER.businessNumber}</strong></span>

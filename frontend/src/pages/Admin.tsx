@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { DollarSign, Users, ShoppingBag, TrendingUp, Shield, Calendar, ArrowUp, ArrowDown, FileText, Truck, LayoutDashboard, ChevronRight, CreditCard, MessageCircleQuestion } from "lucide-react";
+import { DollarSign, Users, ShoppingBag, TrendingUp, Calendar, ArrowUp, ArrowDown, FileText, ChevronRight, CreditCard, MessageCircleQuestion } from "lucide-react";
 import AdminHeader from "./AdminHeader";
 import { Outlet } from "react-router";
-import { CashReceiptType } from "@portone/browser-sdk/v2";
 
 const paymentStats = [
   { month: "2024-03", total: 142500, count: 32, avgOrder: 4453 },
@@ -25,29 +24,16 @@ const userStats = {
   sellers: { total: 142, thisMonth: 4, verified: 98, growth: -3 },
 };
 
-const topBuyers = [
-  { name: "글로벌뷰티㈜", country: "🇺🇸 미국", orders: 48, total: 284000 },
-  { name: "KBeauty USA Inc", country: "🇺🇸 미국", orders: 36, total: 198000 },
-  { name: "뷰티월드", country: "🇯🇵 일본", orders: 32, total: 156000 },
-  { name: "코스메틱홀딩스", country: "🇦🇺 호주", orders: 28, total: 142000 },
-];
-
-const topSellers = [
-  { name: "코스맥스㈜", category: "OEM/ODM", orders: 128, total: 842000 },
-  { name: "한국콜마㈜", category: "기능성화장품", orders: 98, total: 624000 },
-  { name: "메디힐㈜", category: "마스크팩", orders: 84, total: 512000 },
-  { name: "에스트라㈜", category: "메이크업", orders: 62, total: 384000 },
-];
-
 export function AdminLayout() {
   return (
-    <>
+    <div className="min-h-screen bg-slate-50/50">
       <AdminHeader
-        /*brandName="KBeauty Admin"*/
         logo={
-          <div className="text-2xl font-bold tracking-tight">
-            <span className="text-primary">Style</span>
-            <span className="text-foreground">Hub</span>
+          <div className="text-xl font-bold tracking-tight flex items-center gap-1">
+            <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Style</span>
+            <span className="text-slate-900">Hub</span>
+            <span></span>
+            {/* <span className="text-xs font-semibold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded ml-1.5">Admin</span> */}
           </div>
         }
         user={{ name: "Admin", initials: "AM", role: "관리자" }}
@@ -57,8 +43,10 @@ export function AdminLayout() {
         onSettingsClick={() => console.log("설정 열기")}
         onUserMenuClick={() => console.log("유저 메뉴 열기")}
       />
-      <Outlet/>
-      </>
+      <main className="animate-fade-in">
+        <Outlet />
+      </main>
+    </div>
   );
 }
 
@@ -69,234 +57,167 @@ export function Admin() {
   const totalOrders = paymentStats.reduce((a, s) => a + s.count, 0);
   const avgOrderValue = totalRevenue / totalOrders;
 
+  // 퀵 링크 아이템 데이터화 (유지보수 용이)
+  const quickLinks = [
+    { to: "/admin/sourcing-requests", title: "소싱 요청서 관리", desc: "바이어 소싱 요청 처리", icon: FileText, color: "text-emerald-600", bg: "bg-emerald-50 group-hover:bg-emerald-100" },
+    { to: "/admin/settlements", title: "결제 및 정산 관리", desc: "대금 및 수수료 처리", icon: CreditCard, color: "text-amber-600", bg: "bg-amber-50 group-hover:bg-amber-100" },
+    { to: "/admin/users", title: "회원 / 업체 관리", desc: "전체 회원 조회 및 관리", icon: Users, color: "text-indigo-600", bg: "bg-indigo-50 group-hover:bg-indigo-100" },
+    { to: "/admin/adminsupport", title: "고객 지원", desc: "고객 지원 센터 및 문의 접수", icon: MessageCircleQuestion, color: "text-rose-600", bg: "bg-rose-50 group-hover:bg-rose-100" },
+    { to: "/admin/analytics", title: "통계 관리", desc: "월별 고객사 통계 분석", icon: Calendar, color: "text-blue-600", bg: "bg-blue-50 group-hover:bg-blue-100" },
+  ];
+
   return (
-    <div className="max-w-[1280px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
-      {/* Admin Header */}
+    <div className="max-w-[1280px] mx-auto px-6 py-10 space-y-10 font-sans antialiased selection:bg-indigo-100">
       
-      <div className="grid grid-cols-3 gap-4 mb-6"/>
-
-
-      {/* Quick Nav */}
-      <div>
-    {/* 첫 번째 줄 */}
-    <div className="grid grid-cols-3 gap-4 mb-6">
-      {/* 1. 대시보드 */}
-      {/* <Link to="/admin/dashboard" className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-primary hover:shadow-md transition-all group">
-        <div className="bg-blue-50 p-3 rounded-lg group-hover:bg-blue-100 transition-colors">
-          <LayoutDashboard size={22} className="text-blue-600" />
-        </div>
-        <div className="flex-1">
-          <div className="font-semibold text-foreground">대시보드</div>
-          <div className="text-xs text-muted-foreground">통계 및 현황 분석</div>
-        </div>
-        <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
-      </Link> */}
-
-      {/* 2. 소싱 요청서 관리 */}
-      <Link to="/admin/sourcing-requests" className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-primary hover:shadow-md transition-all group">
-        <div className="bg-green-50 p-3 rounded-lg group-hover:bg-green-100 transition-colors">
-          <FileText size={22} className="text-green-600" />
-        </div>
-        <div className="flex-1">
-          <div className="font-semibold text-foreground">소싱 요청서 관리</div>
-          <div className="text-xs text-muted-foreground">바이어 소싱 요청 처리</div>
-        </div>
-        <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
-      </Link>
-
-      {/* 3. 결제 및 정산 관리 */}
-      <Link to="/admin/settlements" className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-primary hover:shadow-md transition-all group">
-        <div className="bg-orange-50 p-3 rounded-lg group-hover:bg-orange-100 transition-colors">
-          <CreditCard size={22} className="text-orange-600" />
-        </div>
-        <div className="flex-1">
-          <div className="font-semibold text-foreground">결제 및 정산 관리</div>
-          <div className="text-xs text-muted-foreground">대금 및 수수료 처리</div>
-        </div>
-        <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
-      </Link>
-      
-      {/* 4. 회원 / 업체 관리 */}
-      <Link to="/admin/users" className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-primary hover:shadow-md transition-all group">
-        <div className="bg-purple-50 p-3 rounded-lg group-hover:bg-purple-100 transition-colors">
-          <Users size={22} className="text-purple-600" />
-        </div>
-        <div className="flex-1">
-          <div className="font-semibold text-foreground">회원 / 업체 관리</div>
-          <div className="text-xs text-muted-foreground">전체 회원 조회 및 관리</div>
-        </div>
-        <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
-      </Link>
-    </div>
-
-      {/* 두 번째 줄 */}
-    <div className="grid grid-cols-3 gap-4 mb-6">
-
-      {/* 5. 필요한 경우 여기에 카드 추가 */}
-      <Link to="/admin/adminsupport" className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-primary hover:shadow-md transition-all group">
-        <div className="bg-pink-50 p-3 rounded-lg group-hover:bg-pink-100 transition-colors">
-          <MessageCircleQuestion size={22} className="text-pink-600" />
-        </div>
-        <div className="flex-1">
-          <div className="font-semibold text-foreground">고객 지원</div>
-          <div className="text-xs text-muted-foreground">고객 지원 센터 및 문의 접수</div>
-        </div>
-        <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
-      </Link>
-      {/* 6. 필요한 경우 여기에 카드 추가 */}
-      <Link to="/admin/analytics" className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-primary hover:shadow-md transition-all group">
-        <div className="bg-blue-50 p-3 rounded-lg group-hover:bg-blue-100 transition-colors">
-          <Calendar size={22} className="text-blue-600" />
-        </div>
-        <div className="flex-1">
-          <div className="font-semibold text-foreground">통계 관리</div>
-          <div className="text-xs text-muted-foreground">월별 고객사 통계 관리</div>
-        </div>
-        <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors" />
-      </Link>
-    </div>
-  </div>
-
-
-      {/* Key Metrics */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-white border border-border rounded-lg p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="bg-green-50 p-2.5 rounded">
-              <DollarSign size={20} className="text-green-600" />
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wide">총 결제액 (3개월)</div>
-              <div className="text-2xl font-bold text-foreground font-mono">${totalRevenue.toLocaleString()}</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-1 text-xs text-green-600">
-            <ArrowUp size={12} /> +8.2% vs 이전 3개월
-          </div>
-        </div>
-
-        <div className="bg-white border border-border rounded-lg p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="bg-blue-50 p-2.5 rounded">
-              <ShoppingBag size={20} className="text-blue-600" />
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wide">총 주문 건수</div>
-              <div className="text-2xl font-bold text-foreground font-mono">{totalOrders}</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-1 text-xs text-blue-600">
-            <ArrowUp size={12} /> +5.4% vs 이전 3개월
-          </div>
-        </div>
-
-        <div className="bg-white border border-border rounded-lg p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="bg-purple-50 p-2.5 rounded">
-              <Users size={20} className="text-purple-600" />
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wide">총 바이어</div>
-              <div className="text-2xl font-bold text-foreground font-mono">{userStats.buyers.total}</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-1 text-xs text-purple-600">
-            <ArrowUp size={12} /> +{userStats.buyers.growth}명 (이번 달)
-          </div>
-        </div>
-
-        <div className="bg-white border border-border rounded-lg p-5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="bg-orange-50 p-2.5 rounded">
-              <TrendingUp size={20} className="text-orange-600" />
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wide">평균 주문액</div>
-              <div className="text-2xl font-bold text-foreground font-mono">${avgOrderValue.toFixed(0)}</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-1 text-xs text-green-600">
-            <ArrowUp size={12} /> +2.8% vs 이전 3개월
-          </div>
-        </div>
+      {/* 1. 타이틀 섹션 */}
+      <div className="flex flex-col gap-1">
+        {/* <h1 className="text-2xl font-bold tracking-tight text-slate-900">종합 현황 대시보드</h1>
+        <p className="text-sm text-slate-500">StyleHub 플랫폼의 실시간 핵심 지표 및 관리 메뉴입니다.</p> */}
       </div>
 
-      <div className="grid grid-cols-[1fr_400px] gap-6 mb-6">
-        {/* Payment History */}
-        <div className="bg-white border border-border rounded-lg overflow-hidden">
-          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-            <h2 className="font-bold text-foreground flex items-center gap-2">
-              <DollarSign size={18} className="text-primary" />
-              최근 결제 내역
-            </h2>
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="text-xs border border-border rounded px-2 py-1 outline-none"
+      {/* 2. 모던 Quick Nav (그리드 최적화) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {quickLinks.map((link) => {
+          const Icon = link.icon;
+          return (
+            <Link 
+              key={link.to} 
+              to={link.to} 
+              className="bg-white border border-slate-200/80 rounded-xl p-4 flex items-center justify-between shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200 group"
             >
-              <option value="3months">최근 3개월</option>
-              <option value="6months">최근 6개월</option>
-              <option value="1year">최근 1년</option>
-            </select>
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className={`${link.bg} p-2.5 rounded-lg transition-colors duration-200 flex-shrink-0`}>
+                  <Icon size={20} className={link.color} />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold text-sm text-slate-800 tracking-tight">{link.title}</div>
+                  <div className="text-xs text-slate-400 truncate mt-0.5">{link.desc}</div>
+                </div>
+              </div>
+              <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all duration-200 flex-shrink-0" />
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* 3. Key Metrics (트렌디한 카드 디자인) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {[
+          { title: "총 결제액 (3개월)", value: `$${totalRevenue.toLocaleString()}`, trend: "+8.2% vs 이전 3개월", up: true, icon: DollarSign, color: "text-emerald-600", bg: "bg-emerald-50" },
+          { title: "총 주문 건수", value: `${totalOrders}건`, trend: "+5.4% vs 이전 3개월", up: true, icon: ShoppingBag, color: "text-blue-600", bg: "bg-blue-50" },
+          { title: "총 바이어", value: `${userStats.buyers.total}명`, trend: `+${userStats.buyers.growth}명 (이번 달)`, up: true, icon: Users, color: "text-indigo-600", bg: "bg-indigo-50" },
+          { title: "평균 주문액", value: `$${avgOrderValue.toFixed(0)}`, trend: "+2.8% vs 이전 3개월", up: true, icon: TrendingUp, color: "text-amber-600", bg: "bg-amber-50" },
+        ].map((metric, i) => {
+          const Icon = metric.icon;
+          return (
+            <div key={i} className="bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow duration-200">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">{metric.title}</span>
+                  <div className="text-2xl font-bold text-slate-900 font-mono tracking-tight">{metric.value}</div>
+                </div>
+                <div className={`${metric.bg} p-2 rounded-lg`}>
+                  <Icon size={20} className={metric.color} />
+                </div>
+              </div>
+              <div className="mt-4 pt-3.5 border-t border-slate-50 flex items-center gap-1.5 text-xs font-medium text-emerald-600">
+                <ArrowUp size={14} /> <span>{metric.trend}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 4. 이원화 레이아웃 (테이블 & 진행 바) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* 최근 결제 내역 */}
+        <div className="lg:col-span-2 bg-white border border-slate-200/70 rounded-xl shadow-sm overflow-hidden flex flex-col justify-between">
+          <div>
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <h2 className="font-bold text-slate-800 flex items-center gap-2 tracking-tight">
+                <DollarSign size={18} className="text-blue-600" />
+                최근 결제 내역
+              </h2>
+              <select
+                value={selectedPeriod}
+                onChange={(e) => setSelectedPeriod(e.target.value)}
+                className="text-xs bg-white font-medium border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-600 outline-none hover:border-slate-300 transition-colors cursor-pointer shadow-sm"
+              >
+                <option value="3months">최근 3개월</option>
+                <option value="6months">최근 6개월</option>
+                <option value="1year">최근 1년</option>
+              </select>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50/30 text-slate-400 text-xs font-semibold border-b border-slate-100">
+                    <th className="px-5 py-3.5 text-left">주문번호</th>
+                    <th className="px-3 py-3.5 text-left">날짜</th>
+                    <th className="px-3 py-3.5 text-left">바이어 / 셀러</th>
+                    <th className="px-3 py-3.5 text-right">금액</th>
+                    <th className="px-5 py-3.5 text-center">상태</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {recentPayments.map((p) => (
+                    <tr key={p.id} className="hover:bg-slate-50/40 transition-colors group">
+                      <td className="px-5 py-3.5 font-mono text-xs text-slate-500 font-medium">{p.id}</td>
+                      <td className="px-3 py-3.5 text-slate-400 text-xs font-mono">{p.date}</td>
+                      <td className="px-3 py-3.5">
+                        <div className="flex flex-col">
+                          <span className="font-medium text-slate-800 text-[13px]">{p.buyer}</span>
+                          <span className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                            <span className="w-1 h-1 rounded-full bg-slate-300"/>{p.seller}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3.5 text-right font-mono font-bold text-slate-800">${p.amount.toLocaleString()}</td>
+                      <td className="px-5 py-3.5 text-center">
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md inline-block ${
+                          p.status === "완료" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
+                          p.status === "대기" ? "bg-amber-50 text-amber-700 border border-amber-100" :
+                          "bg-rose-50 text-rose-700 border border-rose-100"
+                        }`}>
+                          {p.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted text-muted-foreground text-xs uppercase tracking-wide">
-                <th className="px-5 py-3 text-left font-medium">주문번호</th>
-                <th className="px-3 py-3 text-left font-medium">날짜</th>
-                <th className="px-3 py-3 text-left font-medium">바이어</th>
-                <th className="px-3 py-3 text-left font-medium">셀러</th>
-                <th className="px-3 py-3 text-right font-medium">금액</th>
-                <th className="px-3 py-3 text-center font-medium">상태</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentPayments.map((p) => (
-                <tr key={p.id} className="border-t border-border hover:bg-muted/30 transition-colors">
-                  <td className="px-5 py-3 font-mono text-xs text-foreground">{p.id}</td>
-                  <td className="px-3 py-3 text-muted-foreground text-xs font-mono">{p.date}</td>
-                  <td className="px-3 py-3 text-foreground">{p.buyer}</td>
-                  <td className="px-3 py-3 text-foreground">{p.seller}</td>
-                  <td className="px-3 py-3 text-right font-mono font-bold text-foreground">${p.amount.toLocaleString()}</td>
-                  <td className="px-3 py-3 text-center">
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
-                      p.status === "완료" ? "bg-green-50 text-green-700 border border-green-200" :
-                      p.status === "대기" ? "bg-amber-50 text-amber-700 border border-amber-200" :
-                      "bg-red-50 text-red-700 border border-red-200"
-                    }`}>
-                      {p.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/20 text-center">
+            <button className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors">전체 내역 보기</button>
+          </div>
         </div>
 
-        {/* Monthly Stats */}
-        <div className="bg-white border border-border rounded-lg overflow-hidden">
-          <div className="px-5 py-4 border-b border-border">
-            <h2 className="font-bold text-foreground flex items-center gap-2">
-              <Calendar size={18} className="text-primary" />
+        {/* 월별 결제 통계 */}
+        <div className="bg-white border border-slate-200/70 rounded-xl shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+            <h2 className="font-bold text-slate-800 flex items-center gap-2 tracking-tight">
+              <Calendar size={18} className="text-blue-600" />
               월별 결제 통계
             </h2>
           </div>
-          <div className="p-5 space-y-4">
+          <div className="p-5 space-y-5.5">
             {paymentStats.map((stat) => (
-              <div key={stat.month}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-mono text-muted-foreground">{stat.month}</span>
-                  <span className="text-sm font-bold font-mono text-foreground">${stat.total.toLocaleString()}</span>
+              <div key={stat.month} className="group">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold font-mono text-slate-400 group-hover:text-slate-600 transition-colors">{stat.month}</span>
+                  <span className="text-sm font-bold font-mono text-slate-800">${stat.total.toLocaleString()}</span>
                 </div>
-                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-slate-100 rounded-full h-2">
                   <div
-                    className="bg-primary h-full rounded-full transition-all"
+                    className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full transition-all duration-500 shadow-sm"
                     style={{ width: `${(stat.total / 160000) * 100}%` }}
                   />
                 </div>
-                <div className="flex items-center justify-between mt-1 text-xs text-muted-foreground">
-                  <span>{stat.count}건</span>
-                  <span>평균 ${stat.avgOrder.toLocaleString()}</span>
+                <div className="flex items-center justify-between mt-1.5 text-xs text-slate-400 font-medium">
+                  <span>{stat.count}건의 주문</span>
+                  <span className="text-xs">건당 평균 ${stat.avgOrder.toLocaleString()}</span>
                 </div>
               </div>
             ))}
@@ -304,110 +225,71 @@ export function Admin() {
         </div>
       </div>
 
-      {/* User Statistics */}
-      <div className="grid grid-cols-2 gap-6 mb-6">
-        {/* Buyer Stats */}
-        <div className="bg-white border border-border rounded-lg overflow-hidden">
-          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-            <h2 className="font-bold text-foreground flex items-center gap-2">
-              <Users size={18} className="text-purple-600" />
+      {/* 5. User Statistics (바이어/셀러 현황 사이드바 대체 및 카드 통합) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* 바이어 현황 */}
+        <div className="bg-white border border-slate-200/70 rounded-xl shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-indigo-50/10">
+            <h2 className="font-bold text-slate-800 flex items-center gap-2 tracking-tight">
+              <Users size={18} className="text-indigo-600" />
               바이어 현황
             </h2>
-            <div className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded border border-purple-200">
-              총 {userStats.buyers.total}명
+            <div className="text-xs font-bold bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-lg border border-indigo-100 shadow-sm">
+              총 {userStats.buyers.total}명 누적
             </div>
           </div>
           <div className="p-5">
-            <div className="grid grid-cols-3 gap-4 mb-5">
-              <div className="text-center">
-                <div className="text-xs text-muted-foreground mb-1">이번 달 신규</div>
-                <div className="text-2xl font-bold text-purple-600 font-mono">+{userStats.buyers.thisMonth}</div>
+            <div className="grid grid-cols-3 gap-2 bg-slate-50/60 p-3.5 rounded-xl border border-slate-100 text-center">
+              <div>
+                <div className="text-[11px] font-medium text-slate-400 mb-1">이번 달 신규</div>
+                <div className="text-xl font-bold text-indigo-600 font-mono">+{userStats.buyers.thisMonth}</div>
               </div>
-              <div className="text-center border-x border-border">
-                <div className="text-xs text-muted-foreground mb-1">활성 바이어</div>
-                <div className="text-2xl font-bold text-foreground font-mono">{userStats.buyers.active}</div>
+              <div className="border-x border-slate-200/60">
+                <div className="text-[11px] font-medium text-slate-400 mb-1">활성 바이어</div>
+                <div className="text-xl font-bold text-slate-800 font-mono">{userStats.buyers.active}</div>
               </div>
-              <div className="text-center">
-                <div className="text-xs text-muted-foreground mb-1">증감률</div>
-                <div className="text-2xl font-bold text-green-600 font-mono flex items-center justify-center gap-1">
-                  <ArrowUp size={18} />+{userStats.buyers.growth}%
+              <div>
+                <div className="text-[11px] font-medium text-slate-400 mb-1">전월비 증감</div>
+                <div className="text-xl font-bold text-emerald-600 font-mono flex items-center justify-center gap-0.5">
+                  <ArrowUp size={14} />{userStats.buyers.growth}%
                 </div>
               </div>
             </div>
-            {/* <div className="border-t border-border pt-4">
-              <h3 className="text-xs font-semibold text-foreground mb-3 uppercase tracking-wide">TOP 바이어</h3>
-              <div className="space-y-2">
-                {topBuyers.map((buyer, i) => (
-                  <div key={buyer.name} className="flex items-center gap-3 text-sm">
-                    <div className="w-6 h-6 rounded bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {i + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-foreground truncate">{buyer.name}</div>
-                      <div className="text-xs text-muted-foreground">{buyer.country}</div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className="font-mono text-xs text-muted-foreground">{buyer.orders}건</div>
-                      <div className="font-mono text-xs font-bold text-foreground">${(buyer.total / 1000).toFixed(0)}K</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div> */}
           </div>
         </div>
 
-        {/* Seller Stats */}
-        <div className="bg-white border border-border rounded-lg overflow-hidden">
-          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-            <h2 className="font-bold text-foreground flex items-center gap-2">
-              <ShoppingBag size={18} className="text-orange-600" />
-              셀러 현황
+        {/* 셀러 현황 */}
+        <div className="bg-white border border-slate-200/70 rounded-xl shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-amber-50/10">
+            <h2 className="font-bold text-slate-800 flex items-center gap-2 tracking-tight">
+              <ShoppingBag size={18} className="text-amber-600" />
+              셀러 파트너 현황
             </h2>
-            <div className="text-xs bg-orange-50 text-orange-700 px-2 py-1 rounded border border-orange-200">
-              총 {userStats.sellers.total}개사
+            <div className="text-xs font-bold bg-amber-50 text-amber-700 px-2.5 py-1 rounded-lg border border-amber-100 shadow-sm">
+              총 {userStats.sellers.total}개사 입점
             </div>
           </div>
           <div className="p-5">
-            <div className="grid grid-cols-3 gap-4 mb-5">
-              <div className="text-center">
-                <div className="text-xs text-muted-foreground mb-1">이번 달 신규</div>
-                <div className="text-2xl font-bold text-orange-600 font-mono">+{userStats.sellers.thisMonth}</div>
+            <div className="grid grid-cols-3 gap-2 bg-slate-50/60 p-3.5 rounded-xl border border-slate-100 text-center">
+              <div>
+                <div className="text-[11px] font-medium text-slate-400 mb-1">이번 달 신규</div>
+                <div className="text-xl font-bold text-amber-600 font-mono">+{userStats.sellers.thisMonth}</div>
               </div>
-              <div className="text-center border-x border-border">
-                <div className="text-xs text-muted-foreground mb-1">인증 셀러</div>
-                <div className="text-2xl font-bold text-foreground font-mono">{userStats.sellers.verified}</div>
+              <div className="border-x border-slate-200/60">
+                <div className="text-[11px] font-medium text-slate-400 mb-1">인증 파트너</div>
+                <div className="text-xl font-bold text-slate-800 font-mono">{userStats.sellers.verified}</div>
               </div>
-              <div className="text-center">
-                <div className="text-xs text-muted-foreground mb-1">증감률</div>
-                <div className="text-2xl font-bold text-red-600 font-mono flex items-center justify-center gap-1">
-                  <ArrowDown size={18} />{userStats.sellers.growth}%
+              <div>
+                <div className="text-[11px] font-medium text-slate-400 mb-1">전월비 증감</div>
+                <div className="text-xl font-bold text-rose-600 font-mono flex items-center justify-center gap-0.5">
+                  <ArrowDown size={14} />{userStats.sellers.growth}%
                 </div>
               </div>
             </div>
-            {/* <div className="border-t border-border pt-4">
-              <h3 className="text-xs font-semibold text-foreground mb-3 uppercase tracking-wide">TOP 셀러</h3>
-              <div className="space-y-2">
-                {topSellers.map((seller, i) => (
-                  <div key={seller.name} className="flex items-center gap-3 text-sm">
-                    <div className="w-6 h-6 rounded bg-orange-100 text-orange-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {i + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-foreground truncate">{seller.name}</div>
-                      <div className="text-xs text-muted-foreground">{seller.category}</div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className="font-mono text-xs text-muted-foreground">{seller.orders}건</div>
-                      <div className="font-mono text-xs font-bold text-foreground">${(seller.total / 1000).toFixed(0)}K</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div> */}
           </div>
         </div>
       </div>
+
     </div>
   );
 }

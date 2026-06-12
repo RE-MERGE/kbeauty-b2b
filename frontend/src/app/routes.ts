@@ -3,8 +3,7 @@ import { createBrowserRouter } from "react-router";
 
 import { Root } from "./Root";
 import { Home } from "../pages/Home";
-import { PurchaseAgency } from "../pages/PurchaseAgency";
-import { ShippingAgency } from "../pages/ShippingAgency";
+
 import { Suppliers } from "../pages/Suppliers";
 import { CustomsClearance } from "../pages/CustomsClearance";
 import { Support } from "../pages/Support";
@@ -17,10 +16,8 @@ import { ProductDetail } from "../pages/prodect/ProductDetail";
 import { AdminDashboard } from "../pages/AdminDashboard";
 import { AdminSourcingRequests } from "../pages/AdminSourcingRequests";
 import { AdminShippingQuotes } from "../pages/AdminShippingQuotes";
-import { AdminInspection } from "../pages/AdminInspection";
 import { AdminAnalytics } from "../pages/AdminAnalytics";
-import { BuyerInspection } from "../pages/BuyerInspection";
-import { QuoteRequest } from "../pages/QuoteRequest";
+
 import { BuyerDashboard } from "../pages/buyer/BuyerDashboard";
 import { SellerDashboard } from "../pages/seller/SellerDashboard";
 import { SellerProductRegister } from "../pages/SellerProductRegister";
@@ -28,7 +25,7 @@ import { OrderDetail } from "../pages/OrderDetail";
 import { SupplierRegister } from "../pages/SupplierRegister";
 import { SourcingRequest } from "../pages/SourcingRequest";
 import { SellerRequestList } from "../pages/seller/SellerRequestList";
-import { SellerShippingQuote } from "../pages/SellerShippingQuote";
+
 import { BuyerShippingQuotes } from "../pages/BuyerShippingQuotes";
 import { AllProducts } from "../pages/prodect/AllProducts";
 import { RestrictedBusinessTypes } from "../pages/RestrictedBusinessTypes";
@@ -73,13 +70,11 @@ export const router = createBrowserRouter([
     Component: Root,
     children: [
         { index: true, Component: Home },
-        { path: "purchase-agency", Component: PurchaseAgency },
-        { path: "shipping-agency", Component: ShippingAgency },
         { path: "products", Component: AllProducts },
-        { path: "suppliers", Component: Suppliers },
+        { path: "suppliers", Component: Suppliers }, //삭제
         { path: "sourcing-request", Component: SourcingRequest },
         { path: "seller/sourcing-requests", Component: SellerRequestList },
-        { path: "customs", Component: CustomsClearance },
+        { path: "customs", Component: CustomsClearance }, //삭제
         { path: "support", Component: Support },
         { path: "cart", Component: Cart },
         { path: "checkout", Component: Checkout },
@@ -93,11 +88,11 @@ export const router = createBrowserRouter([
         { path: "product/:id", Component: ProductDetail },
         { path: "supplier-register", Component: SupplierRegister },
         { path: "restricted-businesses", Component: RestrictedBusinessTypes },
-        { path: "quote-request", Component: QuoteRequest },
+
         { path: "mypage", Component: MyPage },
         { path: "employee-management", Component: EmployeeManagement},
 
-        { path: "buyer/shipping-quotes", Component: BuyerShippingQuotes },
+        { path: "buyer/shipping-quotes", Component: BuyerShippingQuotes }, 
         { path: "buyer/my-sourcing", Component: BuyerSourcingList },
 		{ path: "buyer/sourcing-detail", Component: BuyerSourcingDetail},
         { path: "buyer/orders/:id", Component: BuyerOrderDetail },
@@ -105,7 +100,6 @@ export const router = createBrowserRouter([
         { path: "buyer", Component: BuyerDashboard },
 
         { path: "seller/products/new", Component: SellerProductRegister },
-        { path: "seller/shipping-quote", Component: SellerShippingQuote },
         { path: "seller/sourcing/:requestId/quote", Component: SellerQuoteWrite },
         { path: "seller/orders/:id", Component: SellerOrderDetail },
         { path: "seller/orders/:orderId/contract-sign", Component: SellerContractSign },
@@ -113,8 +107,6 @@ export const router = createBrowserRouter([
 		{ path: "wishlist", Component: Wishlist }, //좋아요 페이지 추가
 		{ path: "seller/products", Component: SellerProductManage }, // 판매자 상품 관리 페이지 추
 
-        { path: "inspection", Component: BuyerInspection },
-        { path: "admin/inspection", Component: AdminInspection },
         
         { path: "negotiations", Component: Negotiations },
         { path: "disputes", Component: Disputes },

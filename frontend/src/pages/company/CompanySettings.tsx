@@ -4,7 +4,7 @@ import {
   X, Search, Crown, Ban, Building2, Globe, Camera, Lock,
   Upload, ShieldCheck, Users, Save, MapPin,
 } from "lucide-react";
-import { AddressManagement } from "@/app/components/ui/AddressManagement";
+import { AddressManagement } from "@/pages/company/AddressManagement";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

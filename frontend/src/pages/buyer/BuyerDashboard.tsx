@@ -1,519 +1,813 @@
-import React, { useState } from "react";
-import {Link, useNavigate} from "react-router";
+import { Link, useNavigate } from "react-router";
 import {
-  Search, FileText, ShoppingBag, Clock, Truck, AlertCircle, Heart,
-  ChevronRight, BarChart2, Bell, Settings, Eye,
-  Star, MapPin, MessageSquare,
-  RefreshCcw, ThumbsUp, MessageSquareWarning
+  FileText, MessageSquare, CreditCard, Truck,
+  CheckSquare, ChevronRight, AlertCircle, Clock,
+  ArrowRight, Package, Plus, ShoppingBag, Bell, Settings,
+  Scale, Timer,
 } from "lucide-react";
+import { useState } from "react";
 
-// ────────────────────────────────────────────────
-// 더미 데이터
-// ────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-const purchaseStats = [
-  { month: "2024-03", total: 4820000, count: 38, avgOrder: 126842 },
-  { month: "2024-02", total: 3960000, count: 31, avgOrder: 127741 },
-  { month: "2024-01", total: 5240000, count: 42, avgOrder: 124761 },
-  { month: "2023-12", total: 3130000, count: 26, avgOrder: 120384 },
-];
+interface SourcingRequestItem {
+  id: string;
+  productName: string;
+  qty: string;
+  budget: string;
+  category: string;
+  requestedAt: string;
+  expiresAt: string;
+  daysUntilExpiry: number; // 양수: 남은 날, 음수: 초과
+  bidCount: number;
+  status: "PENDING" | "QUOTE_RECEIVED";
+}
 
-const myOrders = [
-  { id: "FBZ-2024-0841", date: "2024.03.21", seller: "르솔레이유",    product: "플리츠 미디 스커트",        qty: "M×3 L×4",  amount: 252000, status: "배송중",  tracking: "CJ123456789KR" },
-  { id: "FBZ-2024-0838", date: "2024.03.20", seller: "모아패션",      product: "오버핏 린넨 블라우스",      qty: "S×2 M×5",  amount: 297000, status: "발주확정", tracking: null },
-  { id: "FBZ-2024-0820", date: "2024.03.18", seller: "르솔레이유",    product: "와이드 하이웨이스트 슬랙스", qty: "M×6 L×2",  amount: 384000, status: "배송완료", tracking: "CJ987654321KR" },
-  { id: "FBZ-2024-0807", date: "2024.03.15", seller: "트렌드메이커",  product: "프릴넥 플로럴 원피스",      qty: "FREE×10",  amount: 590000, status: "발주확정", tracking: null },
-  { id: "FBZ-2024-0791", date: "2024.03.12", seller: "모아패션",      product: "크롭 후드 집업",            qty: "S×1 M×2",  amount: 135000, status: "취소",    tracking: null },
-];
+interface QuoteItem {
+  id: string;
+  productName: string;
+  sellerName: string;
+  qty: string;
+  unitPrice: string;
+  total: string;
+  receivedAt: string;
+  expiresAt: string;
+  isUrgent: boolean;
+}
 
-const sentInquiries = [
+interface NegotiationItem {
+  id: string;
+  productName: string;
+  sellerName: string;
+  qty: string;
+  lastMessage: string;
+  lastMessageAt: string;
+  hasNewMessage: boolean;
+}
+
+interface PaymentItem {
+  id: string;
+  productName: string;
+  sellerName: string;
+  qty: string;
+  amount: number;
+  confirmedAt: string;
+}
+
+interface ShippingItem {
+  id: string;
+  productName: string;
+  sellerName: string;
+  qty: string;
+  trackingNo: string | null;
+  carrier: string | null;
+  shippedAt: string;
+  estimatedAt: string;
+  isDelayed: boolean; // estimatedAt 지난 건
+}
+
+interface ReceiptItem {
+  id: string;
+  productName: string;
+  sellerName: string;
+  qty: string;
+  deliveredAt: string;
+  daysElapsed: number;
+}
+
+interface DisputeItem {
+  id: string;
+  productName: string;
+  sellerName: string;
+  reason: string;
+  status: "PENDING_ANSWER" | "IN_REVIEW" | "RESOLVED";
+  createdAt: string;
+}
+
+// ── Mock data ─────────────────────────────────────────────────────────────────
+
+const SOURCING_REQUESTS: SourcingRequestItem[] = [
   {
-    id: "INQ-2024-0124",
-    date: "2024.03.21",
-    seller: "르솔레이유",
-    style: "오피스룩 재킷",
-    qty: "200장",
-    budget: "₩5,000,000~₩7,000,000",
-    status: "답변대기",
-    hasReply: false,
+    id: "SRC-2024-0130", productName: "여름 린넨 반팔셔츠", qty: "300벌",
+    budget: "₩5,000,000~", category: "셔츠/블라우스",
+    requestedAt: "2024.03.21", expiresAt: "2024.03.28",
+    daysUntilExpiry: 2, bidCount: 3, status: "QUOTE_RECEIVED",
   },
   {
-    id: "INQ-2024-0118",
-    date: "2024.03.18",
-    seller: "트렌드메이커",
-    style: "니트 가디건 3컬러",
-    qty: "150장",
-    budget: "₩3,000,000~₩4,000,000",
-    status: "견적수신",
-    hasReply: true,
-    quote: { unitPrice: "₩22,000", total: "₩3,300,000", receivedAt: "2024.03.19", statusLabel: "검토중" },
+    id: "SRC-2024-0128", productName: "와이드 코튼 팬츠", qty: "200벌",
+    budget: "₩4,000,000~", category: "슬랙스",
+    requestedAt: "2024.03.20", expiresAt: "2024.03.27",
+    daysUntilExpiry: 7, bidCount: 0, status: "PENDING",
   },
   {
-    id: "INQ-2024-0112",
-    date: "2024.03.15",
-    seller: "모아패션",
-    style: "와이드 팬츠 봄 신상 2종",
-    qty: "300장",
-    budget: "₩9,000,000~",
-    status: "계약완료",
-    hasReply: true,
+    id: "SRC-2024-0125", productName: "크롭 반팔 니트 3색", qty: "150벌",
+    budget: "₩3,500,000~", category: "니트/스웨터",
+    requestedAt: "2024.03.19", expiresAt: "2024.03.26",
+    daysUntilExpiry: 1, bidCount: 1, status: "QUOTE_RECEIVED",
   },
 ];
 
-const favoriteSellers = [
-  { name: "르솔레이유",    region: "동대문",  category: "여성복",   rating: 4.9, orders: 28, badge: "인증 브랜드" },
-  { name: "모아패션",      region: "동대문",  category: "여성복",   rating: 4.7, orders: 22, badge: null },
-  { name: "트렌드메이커",  region: "남대문",  category: "캐주얼",   rating: 4.5, orders: 14, badge: "신규 셀러" },
-  { name: "케이스타일",    region: "동대문",  category: "액세서리", rating: 4.8, orders: 9,  badge: null },
+const QUOTES: QuoteItem[] = [
+  {
+    id: "BID-2024-0048", productName: "린넨 오버핏 셔츠", sellerName: "셀러 A",
+    qty: "200벌", unitPrice: "₩22,000", total: "₩4,400,000",
+    receivedAt: "2024.03.21", expiresAt: "2024.03.25", isUrgent: true,
+  },
+  {
+    id: "BID-2024-0047", productName: "와이드 데님 팬츠", sellerName: "셀러 B",
+    qty: "150벌", unitPrice: "₩35,000", total: "₩5,250,000",
+    receivedAt: "2024.03.20", expiresAt: "2024.03.28", isUrgent: false,
+  },
+  {
+    id: "BID-2024-0046", productName: "크롭 후드 집업", sellerName: "셀러 C",
+    qty: "300벌", unitPrice: "₩18,500", total: "₩5,550,000",
+    receivedAt: "2024.03.19", expiresAt: "2024.03.29", isUrgent: false,
+  },
+  {
+    id: "BID-2024-0045", productName: "플리츠 미디 스커트", sellerName: "셀러 A",
+    qty: "100벌", unitPrice: "₩28,000", total: "₩2,800,000",
+    receivedAt: "2024.03.18", expiresAt: "2024.03.30", isUrgent: false,
+  },
+  {
+    id: "BID-2024-0044", productName: "오버핏 니트 가디건", sellerName: "셀러 D",
+    qty: "250벌", unitPrice: "₩42,000", total: "₩10,500,000",
+    receivedAt: "2024.03.17", expiresAt: "2024.03.31", isUrgent: false,
+  },
 ];
 
-// ────────────────────────────────────────────────
-// 뱃지 헬퍼
-// ────────────────────────────────────────────────
+const NEGOTIATIONS: NegotiationItem[] = [
+  {
+    id: "NEG-2024-0031", productName: "청바지 봄 신상 2종", sellerName: "르솔레이유",
+    qty: "400벌", lastMessage: "납기일 조정 가능한지 확인 부탁드립니다.",
+    lastMessageAt: "방금 전", hasNewMessage: true,
+  },
+  {
+    id: "NEG-2024-0030", productName: "프릴넥 플로럴 원피스", sellerName: "모아패션",
+    qty: "200벌", lastMessage: "색상 옵션 중 아이보리 추가 가능합니다.",
+    lastMessageAt: "1시간 전", hasNewMessage: true,
+  },
+  {
+    id: "NEG-2024-0029", productName: "스트라이프 셔츠", sellerName: "트렌드메이커",
+    qty: "300벌", lastMessage: "포장 단위 변경 건 검토 중입니다.",
+    lastMessageAt: "어제", hasNewMessage: false,
+  },
+];
 
-function OrderBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    발주확정:  "bg-blue-50 text-blue-700 border-blue-200",
-    배송중:    "bg-amber-50 text-amber-700 border-amber-200",
-    배송완료:  "bg-green-50 text-green-700 border-green-200",
-    취소:      "bg-red-50 text-red-700 border-red-200",
+const PAYMENTS: PaymentItem[] = [
+  {
+    id: "ORD-2024-0841", productName: "크롭 후드 집업", sellerName: "스포츠웨어",
+    qty: "300벌", amount: 5550000, confirmedAt: "2024.03.21",
+  },
+  {
+    id: "ORD-2024-0839", productName: "하이웨이스트 슬랙스", sellerName: "트렌드메이커",
+    qty: "180벌", amount: 4320000, confirmedAt: "2024.03.20",
+  },
+];
+
+const SHIPPINGS: ShippingItem[] = [
+  {
+    id: "ORD-2024-0820", productName: "린넨 오버핏 셔츠", sellerName: "르솔레이유",
+    qty: "200벌", trackingNo: "CJ123456789KR", carrier: "CJ대한통운",
+    shippedAt: "2024.03.21", estimatedAt: "2024.03.23", isDelayed: false,
+  },
+  {
+    id: "ORD-2024-0815", productName: "오버핏 니트 가디건", sellerName: "모아패션",
+    qty: "250벌", trackingNo: "LO987654321KR", carrier: "롯데택배",
+    shippedAt: "2024.03.20", estimatedAt: "2024.03.22", isDelayed: true,
+  },
+  {
+    id: "ORD-2024-0810", productName: "와이드 데님 팬츠", sellerName: "진스타일",
+    qty: "150벌", trackingNo: null, carrier: null,
+    shippedAt: "2024.03.19", estimatedAt: "2024.03.24", isDelayed: false,
+  },
+];
+
+const RECEIPTS: ReceiptItem[] = [
+  {
+    id: "ORD-2024-0798", productName: "크롭 반팔 티셔츠", sellerName: "케이스타일",
+    qty: "500벌", deliveredAt: "2024.03.19", daysElapsed: 5,
+  },
+  {
+    id: "ORD-2024-0795", productName: "폴로 카라 니트", sellerName: "르솔레이유",
+    qty: "120벌", deliveredAt: "2024.03.18", daysElapsed: 3,
+  },
+];
+
+const DISPUTES: DisputeItem[] = [
+  {
+    id: "ORD-2024-0798", productName: "크롭 반팔 티셔츠", sellerName: "케이스타일",
+    reason: "불량품 포함 (30벌)", status: "PENDING_ANSWER", createdAt: "2024.03.20",
+  },
+];
+
+// ── Counts ────────────────────────────────────────────────────────────────────
+
+const COUNTS = {
+  sourcing:     SOURCING_REQUESTS.length,
+  quotes:       QUOTES.length,
+  negotiations: NEGOTIATIONS.length,
+  payments:     PAYMENTS.length,
+  receipts:     RECEIPTS.length,
+  disputes:     DISPUTES.length,
+  urgentSourcing: SOURCING_REQUESTS.filter((r) => r.daysUntilExpiry <= 2).length,
+  urgentReceipts: RECEIPTS.filter((r) => r.daysElapsed >= 5).length,
+  total: SOURCING_REQUESTS.length + QUOTES.length + NEGOTIATIONS.length +
+      PAYMENTS.length + RECEIPTS.length + DISPUTES.length,
+};
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+const ACCENT = "#3a7fd5";
+
+function Badge({ children, variant = "default" }: {
+  children: React.ReactNode;
+  variant?: "default" | "urgent" | "new" | "info" | "muted" | "success";
+}) {
+  const cls: Record<string, string> = {
+    default: "bg-muted text-muted-foreground border-border",
+    urgent:  "bg-red-50 text-red-700 border-red-200",
+    new:     "bg-blue-50 text-blue-700 border-blue-200",
+    info:    "bg-amber-50 text-amber-700 border-amber-200",
+    muted:   "bg-muted/60 text-muted-foreground border-border",
+    success: "bg-emerald-50 text-emerald-700 border-emerald-200",
   };
   return (
-    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${map[status] ?? "bg-muted text-muted-foreground border-border"}`}>
-      {status}
+      <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded border ${cls[variant]}`}>
+      {children}
     </span>
   );
 }
 
-function InquiryBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    답변대기:  "bg-rose-50 text-rose-700 border-rose-200",
-    견적수신:  "bg-blue-50 text-blue-700 border-blue-200",
-    계약완료:  "bg-green-50 text-green-700 border-green-200",
-  };
+function SectionHeader({
+                         icon, title, count, href, accent,
+                       }: {
+  icon: React.ReactNode; title: string; count: number;
+  href: string; accent?: string;
+}) {
   return (
-    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded border ${map[status] ?? "bg-muted text-muted-foreground border-border"}`}>
-      {status}
-    </span>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-2">
+          <span style={accent ? { color: accent } : {}}>{icon}</span>
+          <span className="text-sm font-bold text-foreground">{title}</span>
+          <span className="text-xs font-bold text-white px-1.5 py-0.5 rounded-full"
+                style={{ background: accent ?? "#6b7280" }}>
+          {count}
+        </span>
+        </div>
+        <Link
+            to={href}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          전체 보기 <ChevronRight size={12} />
+        </Link>
+      </div>
   );
 }
 
-function SellerBadge({ badge }: { badge: string | null }) {
-  if (!badge) return null;
-  const map: Record<string, string> = {
-    "인증 브랜드": "bg-[#C4956A]/10 text-[#C4956A] border-[#C4956A]/30",
-    "신규 셀러":   "bg-blue-50 text-blue-600 border-blue-200",
-  };
+function EmptyRow({ message }: { message: string }) {
   return (
-    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${map[badge] ?? "bg-muted text-muted-foreground border-border"}`}>
-      {badge}
-    </span>
+      <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
+        {message}
+      </div>
   );
 }
 
-// ────────────────────────────────────────────────
-// 탭 타입
-// ────────────────────────────────────────────────
+// ── Alert Banner ──────────────────────────────────────────────────────────────
 
-type Tab = "overview" | "orders" | "inquiries" | "sellers" | "negotiations";
+function AlertBanner() {
+  const alerts: string[] = [];
+  if (COUNTS.urgentReceipts > 0)
+    alerts.push(`수령 확인 ${COUNTS.urgentReceipts}건 (D+5 이상, 자동 확정 임박)`);
+  if (COUNTS.urgentSourcing > 0)
+    alerts.push(`견적 만료 임박 ${COUNTS.urgentSourcing}건`);
+  if (COUNTS.disputes > 0)
+    alerts.push(`이의제기 답변 필요 ${COUNTS.disputes}건`);
 
-// ────────────────────────────────────────────────
-// 컴포넌트
-// ────────────────────────────────────────────────
+  if (alerts.length === 0) return null;
+
+  return (
+      <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-5">
+        <AlertCircle size={15} className="text-red-500 shrink-0" />
+        <p className="text-sm font-semibold text-red-700">
+          🔴 {alerts.join(" · ")}
+        </p>
+      </div>
+  );
+}
+
+// ── Stat Cards ────────────────────────────────────────────────────────────────
+
+function StatCards() {
+  const cards = [
+    {
+      label: "소싱 요청", count: COUNTS.sourcing,
+      icon: <Plus size={16} />,
+      href: "/buyer/sourcing",
+      urgent: COUNTS.urgentSourcing,
+      urgentLabel: "만료 임박",
+    },
+    {
+      label: "견적 수신", count: COUNTS.quotes,
+      icon: <FileText size={16} />,
+      href: "/buyer/quotes?status=RECEIVED",
+      urgent: QUOTES.filter((q) => q.isUrgent).length,
+      urgentLabel: "만료 임박",
+    },
+    {
+      label: "협의 진행", count: COUNTS.negotiations,
+      icon: <MessageSquare size={16} />,
+      href: "/buyer/negotiations",
+      urgent: NEGOTIATIONS.filter((n) => n.hasNewMessage).length,
+      urgentLabel: "미확인 메시지",
+    },
+    {
+      label: "결제 대기", count: COUNTS.payments,
+      icon: <CreditCard size={16} />,
+      href: "/buyer/orders?status=PAYMENT_PENDING",
+      urgent: 0, urgentLabel: "",
+    },
+    {
+      label: "수령 확인", count: COUNTS.receipts,
+      icon: <CheckSquare size={16} />,
+      href: "/buyer/orders?status=DELIVERED",
+      urgent: COUNTS.urgentReceipts,
+      urgentLabel: "자동확정 임박",
+    },
+  ];
+
+  return (
+      <div className="grid grid-cols-5 gap-3 mb-6">
+        {cards.map((c) => (
+            <Link
+                key={c.label}
+                to={c.href}
+                className="bg-white border border-border rounded-xl px-4 py-4 hover:border-[#3a7fd5]/50 hover:shadow-sm transition-all group"
+            >
+              <div className="flex items-start justify-between mb-3">
+            <span className="text-muted-foreground group-hover:text-[#3a7fd5] transition-colors">
+              {c.icon}
+            </span>
+                <ArrowRight size={12} className="text-muted-foreground/30 group-hover:text-[#3a7fd5] transition-colors mt-0.5" />
+              </div>
+              <p className="text-2xl font-black text-foreground mb-0.5">{c.count}</p>
+              <p className="text-xs text-muted-foreground font-medium">{c.label}</p>
+              {c.urgent > 0 && (
+                  <p className="text-[10px] font-bold text-red-500 mt-1.5 flex items-center gap-1">
+                    <AlertCircle size={10} /> {c.urgentLabel} {c.urgent}건
+                  </p>
+              )}
+            </Link>
+        ))}
+      </div>
+  );
+}
+
+// ── Panel: 수령 확인 (full-width, 긴급) ──────────────────────────────────────
+
+function ReceiptPanel() {
+  return (
+      <div className="bg-white border-2 border-amber-300 rounded-xl overflow-hidden mb-5">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-amber-200 bg-amber-50/60">
+          <div className="flex items-center gap-2">
+            <CheckSquare size={15} className="text-amber-600" />
+            <span className="text-sm font-bold text-amber-800">수령 확인 필요</span>
+            <span className="text-xs font-bold text-white bg-amber-500 px-1.5 py-0.5 rounded-full">
+            {COUNTS.receipts}
+          </span>
+            <span className="text-[11px] text-amber-600 font-medium ml-1">· 구매 확정 후 셀러에게 대금이 정산됩니다</span>
+          </div>
+          <Link
+              to="/buyer/orders?status=DELIVERED"
+              className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 transition-colors font-medium"
+          >
+            전체 보기 <ChevronRight size={12} />
+          </Link>
+        </div>
+        <div className="divide-y divide-border">
+          {RECEIPTS.map((r) => {
+            const isAutoConfirmRisk = r.daysElapsed >= 5;
+            return (
+                <div key={r.id} className="flex items-center gap-4 px-4 py-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-sm font-semibold text-foreground truncate">{r.productName}</p>
+                      {isAutoConfirmRisk && <Badge variant="urgent">자동확정 임박</Badge>}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">{r.sellerName} · {r.qty}</p>
+                    <p className={`text-[10px] font-bold mt-1 flex items-center gap-1 ${isAutoConfirmRisk ? "text-red-600" : "text-amber-600"}`}>
+                      <Timer size={9} />
+                      도착 후 D+{r.daysElapsed}
+                      {isAutoConfirmRisk && " · D+7 자동 확정까지 얼마 안 남았습니다"}
+                    </p>
+                  </div>
+                  <Link
+                      to={`/buyer/orders/${r.id}/confirm`}
+                      className={`shrink-0 flex items-center gap-1.5 text-xs font-bold px-4 py-2 rounded-lg transition-colors whitespace-nowrap text-white ${isAutoConfirmRisk ? "bg-red-500 hover:bg-red-600" : "bg-amber-500 hover:bg-amber-600"}`}
+                  >
+                    <CheckSquare size={12} /> 구매 확정
+                  </Link>
+                </div>
+            );
+          })}
+        </div>
+      </div>
+  );
+}
+
+// ── Panel: 소싱 요청 ──────────────────────────────────────────────────────────
+
+function SourcingPanel() {
+  return (
+      <div className="bg-white border border-border rounded-xl overflow-hidden">
+        <SectionHeader
+            icon={<Plus size={15} />}
+            title="소싱 요청 중"
+            count={COUNTS.sourcing}
+            href="/buyer/sourcing"
+            accent={ACCENT}
+        />
+        {SOURCING_REQUESTS.length === 0 ? (
+            <EmptyRow message="진행 중인 소싱 요청이 없습니다." />
+        ) : (
+            <div className="divide-y divide-border">
+              {SOURCING_REQUESTS.slice(0, 5).map((r) => {
+                const isExpiringSoon = r.daysUntilExpiry <= 2;
+                return (
+                    <Link
+                        key={r.id}
+                        to={`/buyer/sourcing/${r.id}`}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-muted/[0.04] transition-colors group"
+                    >
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${
+                          isExpiringSoon ? "bg-red-400" :
+                              r.status === "QUOTE_RECEIVED" ? "bg-emerald-400" : "bg-muted-foreground/20"
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="text-sm font-semibold text-foreground truncate">{r.productName}</p>
+                          {isExpiringSoon && <Badge variant="urgent">만료 D-{r.daysUntilExpiry}</Badge>}
+                          {!isExpiringSoon && r.status === "QUOTE_RECEIVED" && (
+                              <Badge variant="new">견적 {r.bidCount}건</Badge>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          {r.category} · {r.qty} · {r.budget}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className={`text-[10px] font-semibold ${isExpiringSoon ? "text-red-500" : "text-muted-foreground"}`}>
+                          마감 {r.expiresAt}
+                        </p>
+                        {r.status === "PENDING" && !isExpiringSoon && (
+                            <p className="text-[10px] text-muted-foreground/50 mt-0.5">견적 대기 중</p>
+                        )}
+                      </div>
+                      <ChevronRight size={13} className="text-muted-foreground/30 group-hover:text-foreground shrink-0 transition-colors" />
+                    </Link>
+                );
+              })}
+            </div>
+        )}
+      </div>
+  );
+}
+
+// ── Panel: 견적 수신 ──────────────────────────────────────────────────────────
+
+function QuotePanel() {
+  return (
+      <div className="bg-white border border-border rounded-xl overflow-hidden">
+        <SectionHeader
+            icon={<FileText size={15} />}
+            title="견적 수신"
+            count={COUNTS.quotes}
+            href="/buyer/quotes?status=RECEIVED"
+            accent={ACCENT}
+        />
+        {QUOTES.length === 0 ? (
+            <EmptyRow message="수신된 견적이 없습니다." />
+        ) : (
+            <div className="divide-y divide-border">
+              {QUOTES.slice(0, 5).map((q) => (
+                  <Link
+                      key={q.id}
+                      to={`/buyer/quotes/${q.id}`}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-muted/[0.04] transition-colors group"
+                  >
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${q.isUrgent ? "bg-red-400" : "bg-[#3a7fd5]/40"}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="text-sm font-semibold text-foreground truncate">{q.productName}</p>
+                        {q.isUrgent && <Badge variant="urgent">만료 임박</Badge>}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        {q.sellerName} · {q.qty} · {q.total}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-bold text-foreground">{q.unitPrice}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">유효 {q.expiresAt}까지</p>
+                    </div>
+                    <ChevronRight size={13} className="text-muted-foreground/30 group-hover:text-foreground shrink-0 transition-colors" />
+                  </Link>
+              ))}
+            </div>
+        )}
+      </div>
+  );
+}
+
+// ── Panel: 협의 진행 ──────────────────────────────────────────────────────────
+
+function NegotiationPanel() {
+  return (
+      <div className="bg-white border border-border rounded-xl overflow-hidden">
+        <SectionHeader
+            icon={<MessageSquare size={15} />}
+            title="협의 진행"
+            count={COUNTS.negotiations}
+            href="/buyer/negotiations"
+            accent={ACCENT}
+        />
+        {NEGOTIATIONS.length === 0 ? (
+            <EmptyRow message="진행 중인 협의가 없습니다." />
+        ) : (
+            <div className="divide-y divide-border">
+              {NEGOTIATIONS.slice(0, 5).map((n) => (
+                  <Link
+                      key={n.id}
+                      to={`/buyer/negotiations/${n.id}`}
+                      className="flex items-start gap-3 px-4 py-3 hover:bg-muted/[0.04] transition-colors group"
+                  >
+                    <div className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${n.hasNewMessage ? "bg-[#3a7fd5]" : "bg-muted-foreground/20"}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="text-sm font-semibold text-foreground truncate">{n.productName}</p>
+                        {n.hasNewMessage && <Badge variant="new">NEW</Badge>}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mb-1">{n.sellerName} · {n.qty}</p>
+                      <p className="text-[11px] text-muted-foreground/70 truncate">"{n.lastMessage}"</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-[10px] text-muted-foreground whitespace-nowrap">{n.lastMessageAt}</p>
+                      <ChevronRight size={13} className="text-muted-foreground/30 group-hover:text-foreground ml-auto mt-2 transition-colors" />
+                    </div>
+                  </Link>
+              ))}
+            </div>
+        )}
+      </div>
+  );
+}
+
+// ── Panel: 결제 대기 ──────────────────────────────────────────────────────────
+
+function PaymentPanel() {
+  return (
+      <div className="bg-white border border-border rounded-xl overflow-hidden">
+        <SectionHeader
+            icon={<CreditCard size={15} />}
+            title="결제 대기"
+            count={COUNTS.payments}
+            href="/buyer/orders?status=PAYMENT_PENDING"
+            accent={ACCENT}
+        />
+        {PAYMENTS.length === 0 ? (
+            <EmptyRow message="결제 대기 중인 주문이 없습니다." />
+        ) : (
+            <div className="divide-y divide-border">
+              {PAYMENTS.slice(0, 5).map((p) => (
+                  <Link
+                      key={p.id}
+                      to={`/buyer/orders/${p.id}`}
+                      className="flex items-center gap-3 px-4 py-3.5 hover:bg-muted/[0.04] transition-colors group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate mb-0.5">{p.productName}</p>
+                      <p className="text-[11px] text-muted-foreground">{p.sellerName} · {p.qty}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-black text-foreground">₩{p.amount.toLocaleString()}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">확정 {p.confirmedAt}</p>
+                    </div>
+                    <ChevronRight size={13} className="text-muted-foreground/30 group-hover:text-foreground shrink-0 transition-colors" />
+                  </Link>
+              ))}
+            </div>
+        )}
+      </div>
+  );
+}
+
+// ── Panel: 배송 중 ────────────────────────────────────────────────────────────
+
+function ShippingPanel() {
+  return (
+      <div className="bg-white border border-border rounded-xl overflow-hidden">
+        <SectionHeader
+            icon={<Truck size={15} />}
+            title="배송 중"
+            count={SHIPPINGS.length}
+            href="/buyer/orders?status=SHIPPING"
+            accent={ACCENT}
+        />
+        {SHIPPINGS.length === 0 ? (
+            <EmptyRow message="배송 중인 주문이 없습니다." />
+        ) : (
+            <div className="divide-y divide-border">
+              {SHIPPINGS.slice(0, 5).map((s) => (
+                  <Link
+                      key={s.id}
+                      to={`/buyer/orders/${s.id}`}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-muted/[0.04] transition-colors group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="text-sm font-semibold text-foreground truncate">{s.productName}</p>
+                        {s.isDelayed && <Badge variant="urgent">배송 지연</Badge>}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{s.sellerName} · {s.qty}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {s.trackingNo ? (
+                          <>
+                            <p className="text-[11px] font-semibold text-[#3a7fd5]">{s.carrier}</p>
+                            <p className={`text-[10px] font-mono mt-0.5 ${s.isDelayed ? "text-red-500" : "text-muted-foreground"}`}>
+                              {s.isDelayed ? "⚠ 도착 예정일 초과" : s.trackingNo}
+                            </p>
+                          </>
+                      ) : (
+                          <Badge variant="info">송장 등록 전</Badge>
+                      )}
+                    </div>
+                    <ChevronRight size={13} className="text-muted-foreground/30 group-hover:text-foreground shrink-0 transition-colors" />
+                  </Link>
+              ))}
+            </div>
+        )}
+      </div>
+  );
+}
+
+// ── Panel: 이의제기 ───────────────────────────────────────────────────────────
+
+const DISPUTE_STATUS_LABEL: Record<DisputeItem["status"], string> = {
+  PENDING_ANSWER: "답변 필요",
+  IN_REVIEW:      "검토 중",
+  RESOLVED:       "해결됨",
+};
+
+function DisputePanel() {
+  if (COUNTS.disputes === 0) return null;
+  return (
+      <div className="bg-white border border-red-200 rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-red-100 bg-red-50/40">
+          <div className="flex items-center gap-2">
+            <Scale size={15} className="text-red-500" />
+            <span className="text-sm font-bold text-red-800">이의제기</span>
+            <span className="text-xs font-bold text-white bg-red-500 px-1.5 py-0.5 rounded-full">
+            {COUNTS.disputes}
+          </span>
+          </div>
+          <Link
+              to="/buyer/disputes"
+              className="flex items-center gap-1 text-xs text-red-600 hover:text-red-800 transition-colors"
+          >
+            전체 보기 <ChevronRight size={12} />
+          </Link>
+        </div>
+        <div className="divide-y divide-border">
+          {DISPUTES.map((d) => (
+              <Link
+                  key={d.id}
+                  to={`/buyer/disputes/${d.id}`}
+                  className="flex items-center gap-3 px-4 py-3.5 hover:bg-red-50/30 transition-colors group"
+              >
+                <AlertCircle size={14} className="text-red-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="text-sm font-semibold text-foreground truncate">{d.productName}</p>
+                    {d.status === "PENDING_ANSWER" && <Badge variant="urgent">{DISPUTE_STATUS_LABEL[d.status]}</Badge>}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">{d.sellerName} · {d.reason}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] text-muted-foreground">{d.createdAt}</p>
+                  <p className="text-[10px] text-red-500 font-semibold mt-0.5">{d.id}</p>
+                </div>
+                <ChevronRight size={13} className="text-muted-foreground/30 group-hover:text-foreground shrink-0 transition-colors" />
+              </Link>
+          ))}
+        </div>
+        <div className="px-4 py-2.5 bg-red-50/40 border-t border-red-100">
+          <p className="text-[11px] text-red-700 flex items-center gap-1.5">
+            <AlertCircle size={11} className="shrink-0" />
+            이의제기 처리 중 에스크로 자금이 보류됩니다.
+          </p>
+        </div>
+      </div>
+  );
+}
+
+// ── Main Export ───────────────────────────────────────────────────────────────
+
+type UserRole = "buyer" | "seller";
+// business_role: "BUYER" | "SELLER" | "BOTH" — BOTH인 경우에만 전환 버튼 노출
+type BusinessRole = "BUYER" | "SELLER" | "BOTH";
 
 export function BuyerDashboard() {
-  const [tab, setTab] = useState<Tab>("overview");
-  const [selectedPeriod, setSelectedPeriod] = useState("3months");
-  const [role] = useState<UserRole>("buyer");
-  const [, setActiveTab] = useState<Tab>("orders");
   const navigate = useNavigate();
-
-  const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: "overview",  label: "개요",       icon: <BarChart2 size={15} /> },
-    { key: "orders",    label: "소싱 요청 내역",  icon: <FileText size={15} /> },
-    { key: "inquiries", label: "발주 내역",  icon: <Truck size={15} /> },
-    { key: "sellers",   label: "협의 내역", icon: <Heart size={15} /> },
-    { key: "negotiations",   label: "이의제기", icon: <MessageSquareWarning size={15} /> },
-  ];
-  type UserRole = "buyer" | "seller";
+  const businessRole: BusinessRole = "BOTH"; // DB에서 가져올 값
+  const [role] = useState<UserRole>("buyer");
+  const now = new Date().toLocaleDateString("ko-KR", {
+    year: "numeric", month: "long", day: "numeric", weekday: "short",
+  });
 
   return (
-    <div className="max-w-[1280px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
-
-      {/* ── 헤더 ── */}
-      <div className="bg-gradient-to-r from-[#1a2744] to-[#243460] text-white rounded-lg p-6 mb-6 shadow-lg">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <ShoppingBag size={24} className="text-[#7eb3f5]" />
-              <h1 className="text-2xl font-bold">바이어 대시보드</h1>
-              <span className="text-xs bg-[#7eb3f5]/20 text-[#7eb3f5] border border-[#7eb3f5]/40 px-2 py-0.5 rounded font-medium">인증 바이어</span>
-            </div>
-            <p className="text-blue-200/60 text-sm">스타일위크㈜ — 국내 여성복 B2B 구매 현황</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-                onClick={() => { setActiveTab("orders"); navigate("/buyer") }}
-                className={`px-5 py-2 rounded text-sm font-semibold transition-colors flex items-center gap-2 ${role === "buyer" ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              <ShoppingBag size={15} /> 바이어
-            </button>
-            <button
-                onClick={() => { setActiveTab("orders"); navigate("/seller");}}
-                className={`px-5 py-2 rounded text-sm font-semibold transition-colors flex items-center gap-2 ${role === "seller" ? "bg-[#2d4a35] text-white" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              <Star size={15} /> 셀러
-            </button>
-            <Link
-              to="../sourcing-request" // TODO 경로 재설정
-              className="flex items-center gap-1.5 bg-[#7eb3f5] hover:bg-[#6aa2e8] text-[#1a2744] text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-            >
-              <MessageSquare size={15} /> 소싱 요청
-            </Link>
-            <button className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors">
-              <Bell size={18} />
-            </button>
-            <Link
-                to="/employee-management"
-                className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors"
-            >
-              <Settings size={18} />
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* ── 퀵 네비 ── */}
-      <div className="grid grid-cols-5 gap-4 mb-6">
-        {[
-          { to: "/buyer",           icon: <BarChart2 size={20}      className="text-blue-600"   />, bg: "bg-blue-50 group-hover:bg-blue-100",   label: "구매 현황",   sub: "매출·발주 통계"   },
-          { to: "/buyer/my-sourcing",        icon: <FileText size={20}         className="text-[#7eb3f5]"  />, bg: "bg-sky-50 group-hover:bg-sky-100",     label: "소싱 접수 내역",   sub: "소싱 접수·확인" },
-          { to: "/orders",          icon: <Truck size={20}          className="text-amber-600"  />, bg: "bg-amber-50 group-hover:bg-amber-100", label: "발주 내역",   sub: "주문·배송 현황"   },
-          { to: "../negotiations",icon: <Heart size={20}      className="text-green-600"  />, bg: "bg-green-50 group-hover:bg-green-100", label: "협의 내역",   sub: "협의 요청·확인"   },
-          { to: "../disputes",icon: <MessageSquareWarning size={20}      className="text-navy-600"  />, bg: "bg-green-50 group-hover:bg-green-100", label: "이의제기",   sub: "이의 요청·확인"   }
-        ].map((item) => (
-          <Link
-            key={item.to}
-            to={item.to}
-            className="bg-white border border-border rounded-lg p-4 flex items-center gap-4 hover:border-[#7eb3f5] hover:shadow-md transition-all group"
-          >
-            <div className={`${item.bg} p-3 rounded-lg transition-colors`}>{item.icon}</div>
-            <div className="flex-1">
-              <div className="font-semibold text-foreground text-sm">{item.label}</div>
-              <div className="text-xs text-muted-foreground">{item.sub}</div>
-            </div>
-            <ChevronRight size={15} className="text-muted-foreground group-hover:text-[#7eb3f5] transition-colors" />
-          </Link>
-        ))}
-      </div>
-
-      {/* ── 탭 네비 ── */}
-      <div className="flex gap-1 border-b border-border mb-6">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
-              tab === t.key
-                ? "border-[#7eb3f5] text-[#3a7fd5]"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t.icon}{t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ══════════ 탭: 개요 ══════════ */}
-      {tab === "overview" && (
-        <div className="grid grid-cols-[1fr_380px] gap-6">
-
-          {/* 월별 구매 통계 */}
-          <div className="space-y-6">
-            <div className="bg-white border border-border rounded-lg overflow-hidden">
-              <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-                <h2 className="font-bold text-foreground flex items-center gap-2">
-                  <BarChart2 size={18} className="text-[#3a7fd5]" />
-                  월별 구매 통계
-                </h2>
-                <select
-                  value={selectedPeriod}
-                  onChange={(e) => setSelectedPeriod(e.target.value)}
-                  className="text-xs border border-border rounded px-2 py-1 outline-none"
-                >
-                  <option value="3months">최근 3개월</option>
-                  <option value="6months">최근 6개월</option>
-                </select>
-              </div>
-              <div className="p-5 space-y-4">
-                {purchaseStats.map((stat) => (
-                  <div key={stat.month}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-mono text-muted-foreground">{stat.month}</span>
-                      <span className="text-sm font-bold font-mono text-foreground">
-                        ₩{(stat.total / 10000).toFixed(0)}만
-                      </span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{
-                          width: `${(stat.total / 6000000) * 100}%`,
-                          background: "linear-gradient(90deg, #3a7fd5, #7eb3f5)",
-                        }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between mt-1 text-xs text-muted-foreground">
-                      <span>{stat.count}건</span>
-                      <span>평균 ₩{(stat.avgOrder / 1000).toFixed(0)}천</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* 오른쪽: 알림 + 진행 중 문의 */}
-          <div className="space-y-4">
-            {/* 처리 필요 알림 */}
-            <div className="bg-white border border-border rounded-lg overflow-hidden">
-              <div className="px-5 py-4 border-b border-border">
-                <h2 className="font-bold text-foreground flex items-center gap-2">
-                  <Bell size={18} className="text-rose-500" />
-                  처리 필요
-                </h2>
-              </div>
-              <div className="p-4 space-y-3">
-                {[
-                  { icon: <AlertCircle size={16} className="text-rose-500" />, bg: "bg-rose-50", text: "수신된 견적 검토 1건", sub: "INQ-2024-0118 · 트렌드메이커" },
-                  { icon: <Clock size={16} className="text-amber-500" />,      bg: "bg-amber-50", text: "배송 도착 예정 1건",  sub: "FBZ-2024-0841 · 오늘 오후 예정" },
-                  { icon: <RefreshCcw size={16} className="text-blue-500" />,  bg: "bg-blue-50",  text: "발주 확인 요청 1건", sub: "FBZ-2024-0838 확정 대기 중" },
-                ].map((item) => (
-                  <div key={item.text} className={`${item.bg} rounded-lg px-4 py-3 flex items-start gap-3`}>
-                    <div className="mt-0.5">{item.icon}</div>
-                    <div>
-                      <div className="text-sm font-medium text-foreground">{item.text}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">{item.sub}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════ 탭: 발주 내역 ══════════ */}
-      {tab === "orders" && (
-        <div className="bg-white border border-border rounded-lg overflow-hidden">
-          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-            <h2 className="font-bold text-foreground flex items-center gap-2">
-              <ShoppingBag size={18} className="text-[#3a7fd5]" />
-              발주 내역
-            </h2>
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value)}
-              className="text-xs border border-border rounded px-2 py-1 outline-none"
-            >
-              <option value="3months">최근 3개월</option>
-              <option value="6months">최근 6개월</option>
-              <option value="1year">최근 1년</option>
-            </select>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted text-muted-foreground text-xs uppercase tracking-wide">
-                  <th className="px-5 py-3 text-left font-medium">주문번호</th>
-                  <th className="px-3 py-3 text-left font-medium">발주일</th>
-                  <th className="px-3 py-3 text-left font-medium">셀러</th>
-                  <th className="px-3 py-3 text-left font-medium">상품명</th>
-                  <th className="px-3 py-3 text-left font-medium">수량</th>
-                  <th className="px-3 py-3 text-right font-medium">결제금액</th>
-                  <th className="px-3 py-3 text-center font-medium">상태</th>
-                  <th className="px-3 py-3 text-center font-medium">배송 추적</th>
-                </tr>
-              </thead>
-              <tbody>
-                {myOrders.map((o) => (
-                  <tr key={o.id} className="border-t border-border hover:bg-muted/30 transition-colors">
-                    <td className="px-5 py-3 font-mono text-xs text-foreground">{o.id}</td>
-                    <td className="px-3 py-3 text-muted-foreground text-xs font-mono">{o.date}</td>
-                    <td className="px-3 py-3 text-foreground font-medium">{o.seller}</td>
-                    <td className="px-3 py-3 text-foreground">{o.product}</td>
-                    <td className="px-3 py-3 text-xs text-muted-foreground font-mono">{o.qty}</td>
-                    <td className="px-3 py-3 text-right font-mono font-bold text-foreground">
-                      ₩{o.amount.toLocaleString()}
-                    </td>
-                    <td className="px-3 py-3 text-center">
-                      <OrderBadge status={o.status} />
-                    </td>
-                    <td className="px-3 py-3 text-center">
-                      {o.tracking ? (
-                        <a
-                          href="#"
-                          className="text-xs text-[#3a7fd5] font-semibold hover:underline flex items-center justify-center gap-1"
-                        >
-                          <Truck size={12} /> 추적하기
-                        </a>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════ 탭: 발주 문의 ══════════ */}
-      {tab === "inquiries" && (
-        <div className="bg-white border border-border rounded-lg overflow-hidden">
-          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-            <h2 className="font-bold text-foreground flex items-center gap-2">
-              <FileText size={18} className="text-[#3a7fd5]" />
-              보낸 발주 문의
-            </h2>
-            <Link
-              to="/buyer/inquiry/new"
-              className="flex items-center gap-1.5 bg-[#3a7fd5] hover:bg-[#2d6ec4] text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <MessageSquare size={13} /> 새 문의 보내기
-            </Link>
-          </div>
-          <div className="divide-y divide-border">
-            {sentInquiries.map((inq) => (
-              <div key={inq.id} className="px-5 py-5">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs text-muted-foreground">{inq.id}</span>
-                    <InquiryBadge status={inq.status} />
-                    {!inq.hasReply && (
-                      <span className="text-[10px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded font-semibold animate-pulse">
-                        대기중
-                      </span>
-                    )}
-                    {inq.hasReply && inq.status === "견적수신" && (
-                      <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-semibold animate-pulse">
-                        NEW
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-xs text-muted-foreground font-mono">{inq.date}</span>
-                </div>
-
-                <div className="grid grid-cols-4 gap-4 mb-3 text-sm">
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-0.5">셀러</div>
-                    <div className="font-medium text-foreground">{inq.seller}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-0.5">요청 스타일</div>
-                    <div className="font-medium text-foreground">{inq.style}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-0.5">수량</div>
-                    <div className="font-medium text-foreground">{inq.qty}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-0.5">예산</div>
-                    <div className="font-medium text-foreground">{inq.budget}</div>
-                  </div>
-                </div>
-
-                {inq.quote && (
-                  <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-xs flex items-center gap-6 mb-3">
-                    <span className="text-blue-700 font-semibold">받은 견적</span>
-                    <span className="text-foreground">단가 <b>{inq.quote.unitPrice}</b></span>
-                    <span className="text-foreground">합계 <b>{inq.quote.total}</b></span>
-                    <span className="text-muted-foreground">수신일 {inq.quote.receivedAt}</span>
-                    <span className="ml-auto text-blue-600 font-semibold">{inq.quote.statusLabel}</span>
-                  </div>
+      <div className="max-w-[1280px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
+        {/* ── 헤더 ── */}
+        <div className="bg-gradient-to-r from-[#1a2744] to-[#243460] text-white rounded-lg p-6 mb-6 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <ShoppingBag size={24} className="text-[#7eb3f5]" />
+                <h1 className="text-2xl font-bold">스타일위크㈜</h1>
+                {/* BOTH가 아니면 뱃지로만, BOTH면 숨김 (버튼으로 대체) */}
+                {businessRole !== "BOTH" && (
+                    <span className="text-xs bg-[#7eb3f5]/20 text-[#7eb3f5] border border-[#7eb3f5]/40 px-2 py-0.5 rounded font-medium">
+                  구매
+                </span>
                 )}
-
-                <div className="flex gap-2">
-                  {inq.quote && inq.status === "견적수신" && (
-                    <>
-                      <button className="flex items-center gap-1.5 bg-[#3a7fd5] hover:bg-[#2d6ec4] text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
-                        <ThumbsUp size={13} /> 견적 수락
-                      </button>
-                      <button className="flex items-center gap-1.5 border border-border hover:border-rose-400 text-foreground text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
-                        거절
-                      </button>
-                    </>
-                  )}
-                  <button className="flex items-center gap-1.5 border border-border hover:border-[#7eb3f5] text-foreground text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
-                    <Eye size={13} /> 상세보기
-                  </button>
-                </div>
               </div>
-            ))}
+              <p className="text-blue-200/60 text-sm">{now}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* 역할 전환 버튼: BOTH인 유저에게만 노출 */}
+              {businessRole === "BOTH" && (
+                  <>
+                    <button
+                        onClick={() => navigate("/buyer")}
+                        className={`px-5 py-2 rounded text-sm font-semibold transition-colors flex items-center gap-2 ${role === "buyer" ? "bg-[#3a7fd5] text-white" : "text-blue-200/60 hover:text-white"}`}
+                    >
+                      <ShoppingBag size={15} /> 구매관리
+                    </button>
+                    <button
+                        onClick={() => navigate("/seller")}
+                        className={`px-5 py-2 rounded text-sm font-semibold transition-colors flex items-center gap-2 ${role === "seller" ? "bg-[#2d4a35] text-white" : "text-blue-200/60 hover:text-white"}`}
+                    >
+                      <Package size={15} /> 공급관리
+                    </button>
+                  </>
+              )}
+              <div className="flex items-center gap-1.5 bg-[#7eb3f5] text-[#1a2744] text-sm font-semibold px-4 py-2 rounded-lg">
+                <Package size={15} />
+                <span className="text-sm font-bold">{COUNTS.total}건</span>
+                <span className="text-xs">처리할 업무</span>
+              </div>
+              <Link
+                  to="../sourcing-request"
+                  className="flex items-center gap-1.5 bg-[#7eb3f5] hover:bg-[#6aa2e8] text-[#1a2744] text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                <MessageSquare size={15} />새 소싱 요청
+              </Link>
+              <button className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors">
+                <Bell size={18} />
+              </button>
+              <Link
+                  to="/employee-management"
+                  className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors"
+              >
+                <Settings size={18} />
+              </Link>
+            </div>
           </div>
         </div>
-      )}
 
-      {/* ══════════ 탭: 즐겨찾기 셀러 ══════════ */}
-      {tab === "sellers" && (
-        <div className="bg-white border border-border rounded-lg overflow-hidden">
-          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-            <h2 className="font-bold text-foreground flex items-center gap-2">
-              <Heart size={18} className="text-rose-400" />
-              즐겨찾기 셀러
-            </h2>
-            <Link
-              to="/sellers"
-              className="flex items-center gap-1.5 border border-border hover:border-[#7eb3f5] text-foreground text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <Search size={13} /> 셀러 탐색
-            </Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted text-muted-foreground text-xs uppercase tracking-wide">
-                  <th className="px-5 py-3 text-left font-medium">셀러명</th>
-                  <th className="px-3 py-3 text-left font-medium">지역</th>
-                  <th className="px-3 py-3 text-left font-medium">카테고리</th>
-                  <th className="px-3 py-3 text-center font-medium">평점</th>
-                  <th className="px-3 py-3 text-center font-medium">거래 건수</th>
-                  <th className="px-3 py-3 text-center font-medium">인증</th>
-                  <th className="px-3 py-3 text-center font-medium">액션</th>
-                </tr>
-              </thead>
-              <tbody>
-                {favoriteSellers.map((s) => (
-                  <tr key={s.name} className="border-t border-border hover:bg-muted/30 transition-colors">
-                    <td className="px-5 py-3 font-medium text-foreground">{s.name}</td>
-                    <td className="px-3 py-3 text-muted-foreground text-xs">
-                      <span className="flex items-center gap-1"><MapPin size={11} />{s.region}</span>
-                    </td>
-                    <td className="px-3 py-3 text-muted-foreground text-xs">{s.category}</td>
-                    <td className="px-3 py-3 text-center">
-                      <span className="flex items-center justify-center gap-1 text-amber-500 font-semibold text-xs">
-                        <Star size={12} fill="currentColor" />{s.rating}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-center font-mono text-sm font-bold text-foreground">{s.orders}건</td>
-                    <td className="px-3 py-3 text-center">
-                      {s.badge ? <SellerBadge badge={s.badge} /> : <span className="text-xs text-muted-foreground">—</span>}
-                    </td>
-                    <td className="px-3 py-3 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button className="text-xs text-[#3a7fd5] font-semibold hover:underline">문의하기</button>
-                        <span className="text-muted-foreground">|</span>
-                        <button className="text-xs text-rose-400 font-semibold hover:underline">즐겨찾기 해제</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {/* ── 긴급 알림 배너 ── */}
+        <AlertBanner />
+
+        {/* ── KPI 카드 (5칸) ── */}
+        <StatCards />
+
+        {/* ── 수령 확인 (긴급, full-width, 있을 때만) ── */}
+        {COUNTS.receipts > 0 && <ReceiptPanel />}
+
+        {/* ── 소싱요청 + 견적수신 ── */}
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <SourcingPanel />
+          <QuotePanel />
         </div>
-      )}
-    </div>
+
+        {/* ── 협의진행 + 결제대기 ── */}
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <NegotiationPanel />
+          <PaymentPanel />
+        </div>
+
+        {/* ── 배송중 + 이의제기 ── */}
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <ShippingPanel />
+          {COUNTS.disputes > 0 && <DisputePanel />}
+        </div>
+      </div>
   );
 }

@@ -437,7 +437,7 @@ export function AddressManagement() {
       };
       setAddresses((prev) => [...prev, next]);
       showToast("주소를 추가했습니다.");
-    } else if (formMode && formMode !== "new") {
+    } else if (formMode/* && formMode !== "new"*/) {
       setAddresses((prev) =>
         prev.map((a) => a.addressId === formMode.addressId ? { ...a, ...data } : a),
       );

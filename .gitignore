@@ -29,6 +29,7 @@ Desktop.ini
 backend/.gradle/
 backend/build/
 .reloadtrigger
+/src/main/resources/application.yaml
 
 # 로그
 backend/logs/

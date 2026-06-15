@@ -301,7 +301,7 @@ function StatCards() {
     {
       label: "소싱 요청", count: COUNTS.sourcing,
       icon: <Plus size={16} />,
-      href: "/buyer/sourcing",
+      href: "/buyer/my-sourcing",
       urgent: COUNTS.urgentSourcing,
       urgentLabel: "만료 임박",
     },
@@ -315,7 +315,7 @@ function StatCards() {
     {
       label: "협의 진행", count: COUNTS.negotiations,
       icon: <MessageSquare size={16} />,
-      href: "/buyer/negotiations",
+      href: "/negotiations",
       urgent: NEGOTIATIONS.filter((n) => n.hasNewMessage).length,
       urgentLabel: "미확인 메시지",
     },
@@ -326,7 +326,7 @@ function StatCards() {
       urgent: 0, urgentLabel: "",
     },
     {
-      label: "수령 확인", count: COUNTS.receipts,
+      label: "주문 관리", count: COUNTS.receipts,
       icon: <CheckSquare size={16} />,
       href: "/buyer/orders?status=DELIVERED",
       urgent: COUNTS.urgentReceipts,
@@ -422,7 +422,7 @@ function SourcingPanel() {
             icon={<Plus size={15} />}
             title="소싱 요청 중"
             count={COUNTS.sourcing}
-            href="/buyer/sourcing"
+            href="/buyer/my-sourcing"
             accent={ACCENT}
         />
         {SOURCING_REQUESTS.length === 0 ? (
@@ -525,7 +525,7 @@ function NegotiationPanel() {
             icon={<MessageSquare size={15} />}
             title="협의 진행"
             count={COUNTS.negotiations}
-            href="/buyer/negotiations"
+            href="/negotiations"
             accent={ACCENT}
         />
         {NEGOTIATIONS.length === 0 ? (
@@ -791,20 +791,16 @@ export function BuyerDashboard() {
         {/* ── 수령 확인 (긴급, full-width, 있을 때만) ── */}
         {COUNTS.receipts > 0 && <ReceiptPanel />}
 
-        {/* ── 소싱요청 + 견적수신 ── */}
-        <div className="grid grid-cols-2 gap-4 mb-4">
+        {/* ── 소싱요청 + 견적수신 + 협의진행 ── */}
+        <div className="grid grid-cols-3 gap-4 mb-4">
           <SourcingPanel />
           <QuotePanel />
-        </div>
-
-        {/* ── 협의진행 + 결제대기 ── */}
-        <div className="grid grid-cols-2 gap-4 mb-4">
           <NegotiationPanel />
-          <PaymentPanel />
         </div>
 
-        {/* ── 배송중 + 이의제기 ── */}
-        <div className="grid grid-cols-2 gap-4 mb-4">
+        {/* ── 결제대기 + 배송중 + 이의제기 ── */}
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <PaymentPanel />
           <ShippingPanel />
           {COUNTS.disputes > 0 && <DisputePanel />}
         </div>

@@ -285,21 +285,21 @@ function StatCards() {
         {
             label: "신규 요청", count: COUNTS.requests,
             icon: <Inbox size={16} />,
-            href: "/seller/sourcing?status=NEW",
+            href: "/seller/sourcing-requests?status=NEW",
             urgent: SOURCING_REQUESTS.filter((r) => r.isNew).length,
             urgentLabel: "오늘 신규",
         },
         {
             label: "견적 작성", count: COUNTS.drafts,
             icon: <FileText size={16} />,
-            href: "/seller/sourcing?status=QUOTE_PENDING",
+            href: "/seller/sourcing/:requestId/quote",
             urgent: COUNTS.overdueDrafts,
             urgentLabel: "기한 초과",
         },
         {
             label: "협의 진행", count: COUNTS.negotiations,
             icon: <MessageSquare size={16} />,
-            href: "/seller/negotiations",
+            href: "/negotiations",
             urgent: NEGOTIATIONS.filter((n) => n.hasNewMessage).length,
             urgentLabel: "미확인 메시지",
         },
@@ -313,7 +313,7 @@ function StatCards() {
         {
             label: "이의제기", count: COUNTS.disputes,
             icon: <Scale size={16} />,
-            href: "/seller/disputes",
+            href: "/disputes",
             urgent: DISPUTES.filter((d) => d.status === "PENDING_ANSWER").length,
             urgentLabel: "처리 필요",
         },
@@ -407,7 +407,7 @@ function RequestPanel() {
                 icon={<Inbox size={15} />}
                 title="신규 요청"
                 count={COUNTS.requests}
-                href="/seller/sourcing?status=NEW"
+                href="/seller/sourcing-requests?status=NEW"
                 accent={ACCENT}
             />
             {SOURCING_REQUESTS.length === 0 ? (
@@ -506,7 +506,7 @@ function NegotiationPanel() {
                 icon={<MessageSquare size={15} />}
                 title="협의 진행"
                 count={COUNTS.negotiations}
-                href="/seller/negotiations"
+                href="/negotiations"
                 accent={ACCENT}
             />
             {NEGOTIATIONS.length === 0 ? (
@@ -610,7 +610,7 @@ function DisputePanel() {
           </span>
                 </div>
                 <Link
-                    to="/seller/disputes"
+                    to="/disputes"
                     className="flex items-center gap-1 text-xs text-red-600 hover:text-red-800 transition-colors"
                 >
                     전체 보기 <ChevronRight size={12} />
@@ -787,23 +787,20 @@ export function SellerDashboard() {
             {/* ── 출고 기한 초과 (긴급, full-width, 있을 때만) ── */}
             <OverdueShipmentBanner />
 
-            {/* ── 신규요청 + 견적작성 ── */}
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            {/* ── 신규요청 + 견적작성 + 협의진행 ── */}
+            <div className="grid grid-cols-3 gap-4 mb-4">
                 <RequestPanel />
                 <QuoteDraftPanel />
-            </div>
-
-            {/* ── 협의진행 + 출고대기 ── */}
-            <div className="grid grid-cols-2 gap-4 mb-4">
                 <NegotiationPanel />
-                <ShipmentPanel />
             </div>
 
-            {/* ── 이의제기 (있을 때만, full-width) ── */}
-            <DisputePanel />
 
-            {/* ── 정산 현황 (full-width, 정보성) ── */}
-            <SettlementPanel />
+            {/* ── 출고대기 + 이의제기 + 정산 현황 ── */}
+            <div className="grid grid-cols-3 gap-4 mb-4">
+                <ShipmentPanel />
+                <DisputePanel />
+                <SettlementPanel />
+            </div>
         </div>
     );
 }

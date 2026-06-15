@@ -86,3 +86,5 @@ application-prod.properties
 # ==========================================
 docker-compose.override.yml
 docker-compose.local.yml
+
+/npm

@@ -20,6 +20,7 @@ const categories = [
     name: "상의",
     id: "tops",
     icon: "👕",
+    iconImg: "/images/top.png",
     sub: ["티셔츠/탑", "블라우스/셔츠", "니트/스웨터", "후드/맨투맨"],
     products: [
       { id: 101, name: "여성 린넨 블라우스", price: "₩8,900", moq: "50벌", image: "https://images.unsplash.com/photo-1594938298603-c8148c4b2e8e?w=200&h=150&fit=crop" },
@@ -32,6 +33,7 @@ const categories = [
     name: "하의",
     id: "bottoms",
     icon: "👖",
+    iconImg: "/images/bottom.png",
     sub: ["팬츠/슬랙스", "스커트", "진/데님", "레깅스"],
     products: [
       { id: 201, name: "와이드 슬랙스", price: "₩15,800", moq: "40벌", image: "https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=200&h=150&fit=crop" },
@@ -44,6 +46,7 @@ const categories = [
     name: "원피스/세트",
     id: "dresses",
     icon: "👗",
+    iconImg: "/images/one_piece.png",
     sub: ["원피스", "투피스세트", "점프수트", "코디세트"],
     products: [
       { id: 301, name: "플로럴 랩 원피스", price: "₩22,000", moq: "30벌", image: "https://images.unsplash.com/photo-1572804013427-4d7ca7268217?w=200&h=150&fit=crop" },
@@ -56,6 +59,7 @@ const categories = [
     name: "아우터",
     id: "outerwear",
     icon: "🧥",
+    iconImg: "/images/outer.png",
     sub: ["코트", "재킷/점퍼", "가디건", "패딩/베스트"],
     products: [
       { id: 401, name: "울 혼방 롱코트", price: "₩58,000", moq: "20벌", image: "https://images.unsplash.com/photo-1539533018447-63fcce2678e3?w=200&h=150&fit=crop" },
@@ -67,7 +71,8 @@ const categories = [
   {
     name: "이너/언더웨어",
     id: "innerwear",
-    icon: "🩱",
+    icon: "🩱",        
+    iconImg: "/images/inner.png",
     sub: ["이너웨어", "브라/속옷", "잠옷/홈웨어", "수영복"],
     products: [
       { id: 501, name: "면 이너 민소매 (3팩)", price: "₩9,900", moq: "100세트", image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=200&h=150&fit=crop" },
@@ -80,6 +85,7 @@ const categories = [
     name: "스포츠/애슬레저",
     id: "sports",
     icon: "🏃",
+    iconImg: "/images/sports.png",
     sub: ["스포츠탑", "스포츠레깅스", "트레이닝복", "요가복"],
     products: [
       { id: 601, name: "하이웨이스트 요가 레깅스", price: "₩22,000", moq: "50벌", image: "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=200&h=150&fit=crop" },
@@ -92,6 +98,7 @@ const categories = [
     name: "액세서리",
     id: "accessories",
     icon: "👜",
+    iconImg: "/images/accessory.png",
     sub: ["가방/백", "스카프/모자", "벨트/양말", "쥬얼리"],
     products: [
       { id: 701, name: "에코백 캔버스 토트", price: "₩12,000", moq: "100개", image: "https://images.unsplash.com/photo-1591561954557-26941169b49e?w=200&h=150&fit=crop" },
@@ -104,6 +111,7 @@ const categories = [
     name: "신발",
     id: "shoes",
     icon: "👠",
+    iconImg: "/images/shoes.png",
     sub: ["스니커즈", "힐/구두", "부츠/앵클부츠", "샌들/슬리퍼"],
     products: [
       { id: 801, name: "플랫폼 스니커즈", price: "₩38,000", moq: "30켤레", image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=200&h=150&fit=crop" },
@@ -295,9 +303,14 @@ export function Home() {
             to={`/products?category=${cat.id}`}
             className="flex flex-col items-center gap-2 group"
           >
-            <div className="w-20 h-20 rounded-full border-2 border-border bg-white flex items-center justify-center text-3xl group-hover:border-primary group-hover:bg-primary/5 transition-all">
-              {cat.icon}
-            </div>
+            {/* 카테고리 버튼에 이미지 추가 */}
+            <div className="w-20 h-20 rounded-full border-2 border-border bg-white flex items-center justify-center text-3xl group-hover:border-primary group-hover:bg-primary/5 transition-all overflow-hidden">
+            {cat.iconImg ? (
+            <img src={cat.iconImg} alt={cat.name} className="w-15  h-15  object-contain" />
+            ) : (
+            cat.icon
+            )}
+</div>
             <span className="text-sm text-foreground group-hover:text-primary transition-colors font-medium">
               {cat.name}
             </span>
@@ -308,9 +321,9 @@ export function Home() {
           to="/products"
           className="flex flex-col items-center gap-2 group"
         >
-          <div className="w-20 h-20 rounded-full border-2 border-dashed border-border bg-white flex items-center justify-center text-2xl group-hover:border-primary group-hover:bg-primary/5 transition-all">
-            ＋
-          </div>
+          <div className="w-20 h-20 rounded-full border-2 border-dashed border-border bg-white flex items-center justify-center text-2xl group-hover:border-primary group-hover:bg-primary/5 transition-all overflow-hidden">
+        <img src="/images/all.png" alt="전체보기" className="w-12 h-12 object-contain" />
+        </div>
           <span className="text-sm text-muted-foreground group-hover:text-primary transition-colors font-medium">
             전체보기
           </span>
@@ -320,14 +333,14 @@ export function Home() {
           to="/suppliers"
           className="flex flex-col items-center gap-2 group"
         >
-          <div className="w-20 h-20 rounded-full border-2 border-dashed border-border bg-white flex items-center justify-center text-2xl group-hover:border-primary group-hover:bg-primary/5 transition-all">
-            🏷️
-          </div>
+        <div className="w-20 h-20 rounded-full border-2 border-dashed border-border bg-white flex items-center justify-center text-2xl group-hover:border-primary group-hover:bg-primary/5 transition-all overflow-hidden">
+        <img src="/images/brand.png" alt="브랜드" className="w-18 h-18 object-contain" />
+        </div>
           <span className="text-sm text-muted-foreground group-hover:text-primary transition-colors font-medium">
             브랜드
           </span>
         </Link>
-      </div>
+      </div>{/* [추가] 브랜드 보러가기 원 */}
       {/* [추가 끝] */}
 
       {/* Fashion Services */}

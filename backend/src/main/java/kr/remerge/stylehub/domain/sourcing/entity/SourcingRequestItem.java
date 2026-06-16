@@ -31,7 +31,4 @@ public class SourcingRequestItem {
 
     @Column(name = "sample_quantity")
     private Integer sampleQuantity;
-
-    @OneToMany(mappedBy = "sourcingRequest")
-    private List<SourcingRequestItem> items = new ArrayList<>();
 }

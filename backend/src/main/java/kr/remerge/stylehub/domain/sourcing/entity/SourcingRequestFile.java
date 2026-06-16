@@ -31,7 +31,4 @@ public class SourcingRequestFile {
 
     @Column(name = "file_url", nullable = false, length = 2000)
     private String fileUrl;
-
-    @OneToMany(mappedBy = "sourcingRequest")
-    private List<SourcingRequestFile> files = new ArrayList<>();
 }

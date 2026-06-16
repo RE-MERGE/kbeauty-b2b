@@ -1,33 +1,47 @@
-import { useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { Link } from "react-router";
 import {
-  Package, Truck, CheckCircle, Clock, XCircle, ChevronDown, ChevronUp,
-  Search, AlertCircle, Eye, X, PenLine, FlaskConical,
-  ShieldCheck, RotateCcw, RefreshCw, ExternalLink,
+  AlertCircle,
+  CheckCircle,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  ExternalLink,
+  Eye,
+  FileText,
+  FlaskConical,
+  Package,
+  PenLine,
+  ReceiptText,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  ShieldCheck,
+  ShoppingBag,
+  Truck,
+  X,
+  XCircle,
 } from "lucide-react";
 
-// ── 타입 ──────────────────────────────────────────────────────────────
 type OrderStatus =
   | "CONFIRMED"
   | "SAMPLE_PREPARING"
   | "SAMPLE_SHIPPED"
   | "SAMPLE_DELIVERED"
-  | "SAMPLE_RENEGOTIATING"   // ★ 추가: 샘플 재협상 중
+  | "SAMPLE_RENEGOTIATING"
   | "CONTRACT_SIGNING"
   | "CONTRACT_CONFIRMED"
   | "PREPARING"
   | "SHIPPED"
   | "DELIVERED"
   | "COMPLETED"
-  | "CANCELLED"
+  | "CANCELED"
   | "DISPUTE"
   | "REFUNDED";
 
-type OrderType = "READY" | "CUSTOM";
-
-// ── 스텝 키 ───────────────────────────────────────────────────────────
+type OrderType = "GENERAL" | "SAMPLE" | "SOURCING";
 type StepKey =
-  | "ORDER_CONFIRMED"
+  | "CONFIRMED"
   | "SAMPLE_PREPARING"
   | "SAMPLE_SHIPPED"
   | "SAMPLE_DELIVERED"
@@ -38,675 +52,677 @@ type StepKey =
   | "SHIPPED"
   | "DELIVERED";
 
-// ── 스텝 시퀀스 ───────────────────────────────────────────────────────
-// READY + 샘플 있음
-const STEPS_READY_WITH_SAMPLE: StepKey[] = [
-  "ORDER_CONFIRMED",
-  "SAMPLE_PREPARING",
-  "SAMPLE_SHIPPED",
-  "SAMPLE_DELIVERED",
-  "PREPARING",
-  "SHIPPED",
-  "DELIVERED",
-];
-
-// READY + 샘플 없음 (기본)
-const STEPS_READY: StepKey[] = [
-  "ORDER_CONFIRMED",
-  "PREPARING",
-  "SHIPPED",
-  "DELIVERED",
-];
-
-// CUSTOM + 샘플 있음
-const STEPS_CUSTOM_WITH_SAMPLE: StepKey[] = [
-  "ORDER_CONFIRMED",
-  "SAMPLE_PREPARING",
-  "SAMPLE_SHIPPED",
-  "SAMPLE_DELIVERED",
-  "CONTRACT_SIGNING",
-  "CONTRACT_CONFIRMED",
-  "PREPARING",
-  "SHIPPED",
-  "DELIVERED",
-];
-
-// CUSTOM + 샘플 없음
-const STEPS_CUSTOM_NO_SAMPLE: StepKey[] = [
-  "ORDER_CONFIRMED",
-  "CONTRACT_SIGNING",
-  "CONTRACT_CONFIRMED",
-  "PREPARING",
-  "SHIPPED",
-  "DELIVERED",
-];
-
-const STEP_LABELS: Record<StepKey, string> = {
-  ORDER_CONFIRMED:       "주문 확정",
-  SAMPLE_PREPARING:      "샘플 제작 시작",
-  SAMPLE_SHIPPED:        "샘플 발송",
-  SAMPLE_DELIVERED:      "샘플 수령",
-  SAMPLE_RENEGOTIATING:  "샘플 재협상 중",
-  CONTRACT_SIGNING:      "계약 서명",
-  CONTRACT_CONFIRMED:    "계약 확정",
-  PREPARING:             "출고 준비",
-  SHIPPED:               "배송 시작",
-  DELIVERED:             "배송 완료",
-};
-
-// 각 상태에서 완료된 스텝 집합
-const DONE_STEPS_BY_STATUS: Record<OrderStatus, StepKey[]> = {
-  CONFIRMED:             ["ORDER_CONFIRMED"],
-  SAMPLE_PREPARING:      ["ORDER_CONFIRMED", "SAMPLE_PREPARING"],
-  SAMPLE_SHIPPED:        ["ORDER_CONFIRMED", "SAMPLE_PREPARING", "SAMPLE_SHIPPED"],
-  SAMPLE_DELIVERED:      ["ORDER_CONFIRMED", "SAMPLE_PREPARING", "SAMPLE_SHIPPED", "SAMPLE_DELIVERED"],
-  SAMPLE_RENEGOTIATING:  ["ORDER_CONFIRMED", "SAMPLE_PREPARING", "SAMPLE_SHIPPED", "SAMPLE_DELIVERED", "SAMPLE_RENEGOTIATING"],
-  CONTRACT_SIGNING:      ["ORDER_CONFIRMED", "SAMPLE_PREPARING", "SAMPLE_SHIPPED", "SAMPLE_DELIVERED", "CONTRACT_SIGNING"],
-  CONTRACT_CONFIRMED:    ["ORDER_CONFIRMED", "SAMPLE_PREPARING", "SAMPLE_SHIPPED", "SAMPLE_DELIVERED", "CONTRACT_SIGNING", "CONTRACT_CONFIRMED"],
-  PREPARING:             ["ORDER_CONFIRMED", "SAMPLE_PREPARING", "SAMPLE_SHIPPED", "SAMPLE_DELIVERED", "CONTRACT_SIGNING", "CONTRACT_CONFIRMED", "PREPARING"],
-  SHIPPED:               ["ORDER_CONFIRMED", "SAMPLE_PREPARING", "SAMPLE_SHIPPED", "SAMPLE_DELIVERED", "CONTRACT_SIGNING", "CONTRACT_CONFIRMED", "PREPARING", "SHIPPED"],
-  DELIVERED:             ["ORDER_CONFIRMED", "SAMPLE_PREPARING", "SAMPLE_SHIPPED", "SAMPLE_DELIVERED", "CONTRACT_SIGNING", "CONTRACT_CONFIRMED", "PREPARING", "SHIPPED", "DELIVERED"],
-  COMPLETED:             ["ORDER_CONFIRMED", "SAMPLE_PREPARING", "SAMPLE_SHIPPED", "SAMPLE_DELIVERED", "CONTRACT_SIGNING", "CONTRACT_CONFIRMED", "PREPARING", "SHIPPED", "DELIVERED"],
-  CANCELLED:             [],
-  DISPUTE:               ["ORDER_CONFIRMED", "PREPARING", "SHIPPED", "DELIVERED"],
-  REFUNDED:              [],
+type OrderItem = {
+  name: string;
+  quantity: number;
+  unit: string;
+  price: number;
+  material: string;
 };
 
 type Order = {
   id: string;
   date: string;
   supplier: string;
+  buyer: string;
   type: OrderType;
-  items: { name: string; quantity: number; unit: string; price: number; currency: string }[];
+  items: OrderItem[];
   status: OrderStatus;
-  total: number;
-  currency: string;
+  subtotal: number;
+  platformFee: number;
+  shippingFee: number | null;
   trackingNo: string | null;
   carrier?: string;
-  stepTimestamps?: Partial<Record<StepKey, string>>;
-  stepLocations?: Partial<Record<StepKey, string>>;
-  cancelReason?: string;
-  cancelledAt?: string;
-  disputeReason?: string;
-  sampleRequired?: boolean;
+  contractNo?: string;
   contractSignedAt?: string;
-  renegotiateReason?: string;  // ★ 재협상 사유
+  paymentMethod: string;
+  receiver: string;
+  receiverAddress: string;
+  stepTimestamps?: Partial<Record<StepKey, string>>;
+  issueMemo?: string;
 };
 
-// ── 동적 스텝 빌더 ────────────────────────────────────────────────────
-function buildSteps(order: Order) {
-  // 재협상 중이면 시퀀스에 SAMPLE_RENEGOTIATING 삽입
-  let sequence: StepKey[];
-  if (order.type === "READY") {
-    sequence = order.sampleRequired ? STEPS_READY_WITH_SAMPLE : STEPS_READY;
-  } else {
-    sequence = order.sampleRequired ? STEPS_CUSTOM_WITH_SAMPLE : STEPS_CUSTOM_NO_SAMPLE;
-  }
+const STEP_LABELS: Record<StepKey, string> = {
+  CONFIRMED: "주문 확정",
+  SAMPLE_PREPARING: "샘플 준비",
+  SAMPLE_SHIPPED: "샘플 발송",
+  SAMPLE_DELIVERED: "샘플 수령",
+  SAMPLE_RENEGOTIATING: "샘플 재협상",
+  CONTRACT_SIGNING: "계약 서명",
+  CONTRACT_CONFIRMED: "계약 완료",
+  PREPARING: "출고 준비",
+  SHIPPED: "배송 시작",
+  DELIVERED: "배송 완료",
+};
 
-  // 재협상 상태일 때는 SAMPLE_DELIVERED 다음에 SAMPLE_RENEGOTIATING 삽입
-  if (order.status === "SAMPLE_RENEGOTIATING" && !sequence.includes("SAMPLE_RENEGOTIATING")) {
-    const idx = sequence.indexOf("SAMPLE_DELIVERED");
-    if (idx !== -1) {
-      sequence = [
-        ...sequence.slice(0, idx + 1),
-        "SAMPLE_RENEGOTIATING",
-        ...sequence.slice(idx + 1),
-      ];
-    }
-  }
+const GENERAL_STEPS: StepKey[] = ["CONFIRMED", "PREPARING", "SHIPPED", "DELIVERED"];
+const SAMPLE_STEPS: StepKey[] = [
+  "CONFIRMED",
+  "SAMPLE_PREPARING",
+  "SAMPLE_SHIPPED",
+  "SAMPLE_DELIVERED",
+];
+const SOURCING_STEPS: StepKey[] = [
+  "CONFIRMED",
+  "SAMPLE_PREPARING",
+  "SAMPLE_SHIPPED",
+  "SAMPLE_DELIVERED",
+  "CONTRACT_SIGNING",
+  "CONTRACT_CONFIRMED",
+  "PREPARING",
+  "SHIPPED",
+  "DELIVERED",
+];
 
-  const doneSet = new Set(DONE_STEPS_BY_STATUS[order.status] ?? []);
+const DONE_STEPS_BY_STATUS: Record<OrderStatus, StepKey[]> = {
+  CONFIRMED: ["CONFIRMED"],
+  SAMPLE_PREPARING: ["CONFIRMED", "SAMPLE_PREPARING"],
+  SAMPLE_SHIPPED: ["CONFIRMED", "SAMPLE_PREPARING", "SAMPLE_SHIPPED"],
+  SAMPLE_DELIVERED: ["CONFIRMED", "SAMPLE_PREPARING", "SAMPLE_SHIPPED", "SAMPLE_DELIVERED"],
+  SAMPLE_RENEGOTIATING: [
+    "CONFIRMED",
+    "SAMPLE_PREPARING",
+    "SAMPLE_SHIPPED",
+    "SAMPLE_DELIVERED",
+    "SAMPLE_RENEGOTIATING",
+  ],
+  CONTRACT_SIGNING: ["CONFIRMED", "SAMPLE_PREPARING", "SAMPLE_SHIPPED", "SAMPLE_DELIVERED", "CONTRACT_SIGNING"],
+  CONTRACT_CONFIRMED: [
+    "CONFIRMED",
+    "SAMPLE_PREPARING",
+    "SAMPLE_SHIPPED",
+    "SAMPLE_DELIVERED",
+    "CONTRACT_SIGNING",
+    "CONTRACT_CONFIRMED",
+  ],
+  PREPARING: [
+    "CONFIRMED",
+    "SAMPLE_PREPARING",
+    "SAMPLE_SHIPPED",
+    "SAMPLE_DELIVERED",
+    "CONTRACT_SIGNING",
+    "CONTRACT_CONFIRMED",
+    "PREPARING",
+  ],
+  SHIPPED: [
+    "CONFIRMED",
+    "SAMPLE_PREPARING",
+    "SAMPLE_SHIPPED",
+    "SAMPLE_DELIVERED",
+    "CONTRACT_SIGNING",
+    "CONTRACT_CONFIRMED",
+    "PREPARING",
+    "SHIPPED",
+  ],
+  DELIVERED: [
+    "CONFIRMED",
+    "SAMPLE_PREPARING",
+    "SAMPLE_SHIPPED",
+    "SAMPLE_DELIVERED",
+    "CONTRACT_SIGNING",
+    "CONTRACT_CONFIRMED",
+    "PREPARING",
+    "SHIPPED",
+    "DELIVERED",
+  ],
+  COMPLETED: [
+    "CONFIRMED",
+    "SAMPLE_PREPARING",
+    "SAMPLE_SHIPPED",
+    "SAMPLE_DELIVERED",
+    "CONTRACT_SIGNING",
+    "CONTRACT_CONFIRMED",
+    "PREPARING",
+    "SHIPPED",
+    "DELIVERED",
+  ],
+  CANCELED: [],
+  DISPUTE: ["CONFIRMED", "PREPARING", "SHIPPED", "DELIVERED"],
+  REFUNDED: [],
+};
 
-  return sequence.map((key) => ({
-    status:   STEP_LABELS[key],
-    done:     doneSet.has(key),
-    time:     order.stepTimestamps?.[key] ?? "—",
-    location: order.stepLocations?.[key],
-    isReneg:  key === "SAMPLE_RENEGOTIATING",
-  }));
+const statusConfig: Record<
+  OrderStatus,
+  { label: string; tone: string; icon: ReactNode; group: "progress" | "sample" | "contract" | "done" | "issue" }
+> = {
+  CONFIRMED: {
+    label: "주문 확정",
+    tone: "border-blue-200 bg-blue-50 text-blue-700",
+    icon: <CheckCircle size={13} />,
+    group: "progress",
+  },
+  SAMPLE_PREPARING: {
+    label: "샘플 준비",
+    tone: "border-amber-200 bg-amber-50 text-amber-700",
+    icon: <FlaskConical size={13} />,
+    group: "sample",
+  },
+  SAMPLE_SHIPPED: {
+    label: "샘플 배송",
+    tone: "border-amber-200 bg-amber-50 text-amber-700",
+    icon: <Truck size={13} />,
+    group: "sample",
+  },
+  SAMPLE_DELIVERED: {
+    label: "샘플 수령",
+    tone: "border-amber-200 bg-amber-50 text-amber-700",
+    icon: <Package size={13} />,
+    group: "sample",
+  },
+  SAMPLE_RENEGOTIATING: {
+    label: "샘플 재협상",
+    tone: "border-orange-200 bg-orange-50 text-orange-700",
+    icon: <RefreshCw size={13} />,
+    group: "sample",
+  },
+  CONTRACT_SIGNING: {
+    label: "계약 서명",
+    tone: "border-primary/25 bg-secondary text-primary",
+    icon: <PenLine size={13} />,
+    group: "contract",
+  },
+  CONTRACT_CONFIRMED: {
+    label: "계약 완료",
+    tone: "border-primary/25 bg-secondary text-primary",
+    icon: <ShieldCheck size={13} />,
+    group: "contract",
+  },
+  PREPARING: {
+    label: "출고 준비",
+    tone: "border-sky-200 bg-sky-50 text-sky-700",
+    icon: <Package size={13} />,
+    group: "progress",
+  },
+  SHIPPED: {
+    label: "배송 중",
+    tone: "border-sky-200 bg-sky-50 text-sky-700",
+    icon: <Truck size={13} />,
+    group: "progress",
+  },
+  DELIVERED: {
+    label: "배송 완료",
+    tone: "border-green-200 bg-green-50 text-green-700",
+    icon: <CheckCircle size={13} />,
+    group: "done",
+  },
+  COMPLETED: {
+    label: "거래 완료",
+    tone: "border-green-200 bg-green-50 text-green-700",
+    icon: <CheckCircle size={13} />,
+    group: "done",
+  },
+  CANCELED: {
+    label: "취소",
+    tone: "border-slate-300 bg-slate-100 text-slate-600",
+    icon: <XCircle size={13} />,
+    group: "issue",
+  },
+  DISPUTE: {
+    label: "이의 제기",
+    tone: "border-rose-200 bg-rose-50 text-rose-700",
+    icon: <AlertCircle size={13} />,
+    group: "issue",
+  },
+  REFUNDED: {
+    label: "환불 완료",
+    tone: "border-slate-200 bg-slate-100 text-slate-600",
+    icon: <RotateCcw size={13} />,
+    group: "issue",
+  },
+};
+
+const typeConfig: Record<OrderType, { label: string; tone: string }> = {
+  GENERAL: { label: "일반 주문", tone: "border-blue-200 bg-blue-50 text-blue-700" },
+  SAMPLE: { label: "샘플 주문", tone: "border-amber-200 bg-amber-50 text-amber-700" },
+  SOURCING: { label: "소싱 주문", tone: "border-primary/25 bg-secondary text-primary" },
+};
+
+const orders: Order[] = [
+  {
+    id: "ORD-2024-0841",
+    date: "2024.05.18",
+    supplier: "르블랑",
+    buyer: "스타일위크",
+    type: "GENERAL",
+    items: [
+      { name: "여성 린넨 오버핏 블라우스", quantity: 70, unit: "장", price: 12000, material: "린넨 혼방" },
+      { name: "와이드 린넨 슬랙스", quantity: 25, unit: "장", price: 18000, material: "린넨 혼방" },
+    ],
+    status: "SHIPPED",
+    subtotal: 1290000,
+    platformFee: 64500,
+    shippingFee: null,
+    trackingNo: "598412873021",
+    carrier: "CJ대한통운",
+    paymentMethod: "법인카드",
+    receiver: "홍길동 / 010-1234-5678",
+    receiverAddress: "서울특별시 강남구 테헤란로 123 A동 5층",
+    stepTimestamps: {
+      CONFIRMED: "2024.05.18 11:22",
+      PREPARING: "2024.05.19 09:15",
+      SHIPPED: "2024.05.20 11:40",
+    },
+  },
+  {
+    id: "ORD-2024-0855",
+    date: "2024.05.16",
+    supplier: "데일리앤코",
+    buyer: "스타일위크",
+    type: "SAMPLE",
+    items: [{ name: "오버사이즈 코튼 셔츠", quantity: 100, unit: "장", price: 15000, material: "코튼" }],
+    status: "SAMPLE_DELIVERED",
+    subtotal: 1500000,
+    platformFee: 75000,
+    shippingFee: 3000,
+    trackingNo: "112837465099",
+    carrier: "CJ대한통운",
+    paymentMethod: "무통장 입금",
+    receiver: "홍길동 / 010-1234-5678",
+    receiverAddress: "서울특별시 강남구 테헤란로 123 A동 5층",
+    stepTimestamps: {
+      CONFIRMED: "2024.05.16 09:00",
+      SAMPLE_PREPARING: "2024.05.17 10:00",
+      SAMPLE_SHIPPED: "2024.05.18 14:00",
+      SAMPLE_DELIVERED: "2024.05.19 11:30",
+    },
+  },
+  {
+    id: "ORD-2024-0901",
+    date: "2024.05.20",
+    supplier: "르블랑 어패럴",
+    buyer: "스타일위크",
+    type: "SOURCING",
+    contractNo: "CTR-2024-0901",
+    items: [{ name: "여성 린넨 오버핏 블라우스 (주문제작)", quantity: 200, unit: "벌", price: 14000, material: "린넨 혼방" }],
+    status: "SAMPLE_RENEGOTIATING",
+    subtotal: 2800000,
+    platformFee: 140000,
+    shippingFee: null,
+    trackingNo: "384729103847",
+    carrier: "한진택배",
+    paymentMethod: "계약 후 결제",
+    receiver: "김민지 / 010-9876-5432",
+    receiverAddress: "경기도 용인시 기흥구 중부대로 456 B동 입고장",
+    issueMemo: "블루그레이 컬러 톤이 너무 밝습니다. 한 단계 진한 톤으로 재제작 요청드립니다.",
+    stepTimestamps: {
+      CONFIRMED: "2024.05.20 14:00",
+      SAMPLE_PREPARING: "2024.05.21 09:00",
+      SAMPLE_SHIPPED: "2024.05.23 11:00",
+      SAMPLE_DELIVERED: "2024.05.24 15:30",
+      SAMPLE_RENEGOTIATING: "2024.05.25 10:00",
+    },
+  },
+  {
+    id: "ORD-2024-0888",
+    date: "2024.05.15",
+    supplier: "에이블스튜디오",
+    buyer: "스타일위크",
+    type: "SOURCING",
+    contractNo: "CTR-2024-0888",
+    items: [{ name: "여성 와이드 팬츠 (주문제작)", quantity: 150, unit: "벌", price: 18000, material: "폴리 스판" }],
+    status: "CONTRACT_SIGNING",
+    subtotal: 2700000,
+    platformFee: 135000,
+    shippingFee: null,
+    trackingNo: null,
+    paymentMethod: "계약 후 결제",
+    receiver: "홍길동 / 010-1234-5678",
+    receiverAddress: "서울특별시 강남구 테헤란로 123 A동 5층",
+    stepTimestamps: {
+      CONFIRMED: "2024.05.15 10:00",
+      CONTRACT_SIGNING: "2024.05.15 13:20",
+    },
+  },
+  {
+    id: "ORD-2024-0807",
+    date: "2024.05.02",
+    supplier: "데일리앤코",
+    buyer: "스타일위크",
+    type: "GENERAL",
+    items: [{ name: "여성 봄 니트 가디건", quantity: 40, unit: "장", price: 16200, material: "아크릴 니트" }],
+    status: "COMPLETED",
+    subtotal: 648000,
+    platformFee: 32400,
+    shippingFee: 3000,
+    trackingNo: "293847102938",
+    carrier: "CJ대한통운",
+    paymentMethod: "법인카드",
+    receiver: "홍길동 / 010-1234-5678",
+    receiverAddress: "서울특별시 강남구 테헤란로 123 A동 5층",
+    stepTimestamps: {
+      CONFIRMED: "2024.05.02 11:00",
+      PREPARING: "2024.05.03 09:00",
+      SHIPPED: "2024.05.04 10:30",
+      DELIVERED: "2024.05.06 15:00",
+    },
+  },
+  {
+    id: "ORD-2024-0780",
+    date: "2024.04.15",
+    supplier: "라온어패럴",
+    buyer: "스타일위크",
+    type: "GENERAL",
+    items: [{ name: "여성 베이직 오버핏 셔츠", quantity: 50, unit: "장", price: 18900, material: "코튼" }],
+    status: "DISPUTE",
+    subtotal: 945000,
+    platformFee: 47250,
+    shippingFee: 3000,
+    trackingNo: "192837465019",
+    carrier: "롯데택배",
+    paymentMethod: "법인카드",
+    receiver: "홍길동 / 010-1234-5678",
+    receiverAddress: "서울특별시 강남구 테헤란로 123 A동 5층",
+    issueMemo: "수령한 상품 중 M 사이즈 10장에서 봉제 불량이 발견되었습니다.",
+  },
+  {
+    id: "ORD-2024-0791",
+    date: "2024.04.20",
+    supplier: "어반드레스",
+    buyer: "스타일위크",
+    type: "GENERAL",
+    items: [{ name: "플리츠 미디 스커트", quantity: 45, unit: "장", price: 15000, material: "폴리" }],
+    status: "CANCELED",
+    subtotal: 675000,
+    platformFee: 33750,
+    shippingFee: 0,
+    trackingNo: null,
+    paymentMethod: "무통장 입금",
+    receiver: "홍길동 / 010-1234-5678",
+    receiverAddress: "서울특별시 강남구 테헤란로 123 A동 5층",
+    issueMemo: "내부 예산 변경으로 인해 주문을 진행하지 않기로 결정했습니다.",
+  },
+];
+
+const searchOptions = [
+  { value: "product", label: "제품명" },
+  { value: "quantity", label: "수량" },
+  { value: "brand", label: "브랜드" },
+  { value: "material", label: "소재" },
+] as const;
+
+type SearchType = (typeof searchOptions)[number]["value"];
+
+const CARRIER_TRACKING: Record<string, (no: string) => string> = {
+  CJ대한통운: (no) => `https://www.cjlogistics.com/ko/tool/parcel/tracking?gnbInvcNo=${no}`,
+  한진택배: (no) => `https://www.hanjin.com/kor/CMS/DeliveryMgr/WaybillResult.do?mCode=MN038&schLang=KR&wblnumText2=${no}`,
+  롯데택배: (no) => `https://www.lotteglogis.com/home/reservation/tracking/linkView?InvNo=${no}`,
+};
+
+function formatPrice(value: number) {
+  return `${value.toLocaleString()}원`;
 }
 
-// ── 상태 설정 ──────────────────────────────────────────────────────────
-const statusConfig: Record<OrderStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
-  CONFIRMED:            { label: "주문 확정",      color: "text-blue-700",         bg: "bg-blue-50 border-blue-200",       icon: <CheckCircle size={13} /> },
-  SAMPLE_PREPARING:     { label: "샘플 제작 중",   color: "text-amber-700",        bg: "bg-amber-50 border-amber-200",     icon: <FlaskConical size={13} /> },
-  SAMPLE_SHIPPED:       { label: "샘플 배송 중",   color: "text-amber-700",        bg: "bg-amber-50 border-amber-200",     icon: <Truck size={13} /> },
-  SAMPLE_DELIVERED:     { label: "샘플 수령",      color: "text-amber-700",        bg: "bg-amber-50 border-amber-200",     icon: <Package size={13} /> },
-  SAMPLE_RENEGOTIATING: { label: "샘플 재협상 중", color: "text-orange-700",       bg: "bg-orange-50 border-orange-200",   icon: <RefreshCw size={13} /> },
-  CONTRACT_SIGNING:     { label: "계약 서명 중",   color: "text-purple-700",       bg: "bg-purple-50 border-purple-200",   icon: <PenLine size={13} /> },
-  CONTRACT_CONFIRMED:   { label: "계약 확정",      color: "text-purple-700",       bg: "bg-purple-50 border-purple-200",   icon: <ShieldCheck size={13} /> },
-  PREPARING:            { label: "출고 준비",      color: "text-[#C4956A]",        bg: "bg-rose-50 border-rose-200",       icon: <Package size={13} /> },
-  SHIPPED:              { label: "배송 중",        color: "text-[#C4956A]",        bg: "bg-rose-50 border-rose-200",       icon: <Truck size={13} /> },
-  DELIVERED:            { label: "배송 완료",      color: "text-green-700",        bg: "bg-green-50 border-green-200",     icon: <CheckCircle size={13} /> },
-  COMPLETED:            { label: "거래 완료",      color: "text-green-700",        bg: "bg-green-50 border-green-200",     icon: <CheckCircle size={13} /> },
-  CANCELLED:            { label: "취소됨",         color: "text-red-700",          bg: "bg-red-50 border-red-200",         icon: <XCircle size={13} /> },
-  DISPUTE:              { label: "이의 제기",      color: "text-red-700",          bg: "bg-red-50 border-red-200",         icon: <AlertCircle size={13} /> },
-  REFUNDED:             { label: "환불 완료",      color: "text-muted-foreground", bg: "bg-muted border-border",           icon: <RotateCcw size={13} /> },
-};
+function getOrderTotal(order: Order) {
+  return order.subtotal + order.platformFee + (order.shippingFee ?? 0);
+}
 
-const typeConfig: Record<OrderType, { label: string; color: string; bg: string }> = {
-  READY:  { label: "일반 구매", color: "text-blue-700",   bg: "bg-blue-50 border-blue-200"   },
-  CUSTOM: { label: "주문제작",  color: "text-purple-700", bg: "bg-purple-50 border-purple-200" },
-};
+function getTotalQuantity(order: Order) {
+  return order.items.reduce((total, item) => total + item.quantity, 0);
+}
 
-// 택배사별 배송 추적 URL
-const CARRIER_TRACKING: Record<string, (no: string) => string> = {
-  "CJ대한통운":  (no) => `https://www.cjlogistics.com/ko/tool/parcel/tracking?gnbInvcNo=${no}`,
-  "한진택배":    (no) => `https://www.hanjin.com/kor/CMS/DeliveryMgr/WaybillResult.do?mCode=MN038&schLang=KR&wblnumText2=${no}`,
-  "롯데택배":    (no) => `https://www.lotteglogis.com/home/reservation/tracking/linkView?InvNo=${no}`,
-  "로젠택배":    (no) => `https://www.ilogen.com/web/personal/trace/${no}`,
-};
+function getMainItemLabel(order: Order) {
+  return order.items.length > 1 ? `${order.items[0].name} 외 ${order.items.length - 1}건` : order.items[0].name;
+}
 
-function getTrackingUrl(carrier: string | undefined, trackingNo: string): string {
-  if (!carrier || !CARRIER_TRACKING[carrier]) {
-    return `https://www.cjlogistics.com/ko/tool/parcel/tracking?gnbInvcNo=${trackingNo}`;
-  }
+function getTrackingUrl(carrier: string | undefined, trackingNo: string) {
+  if (!carrier || !CARRIER_TRACKING[carrier]) return CARRIER_TRACKING.CJ대한통운(trackingNo);
   return CARRIER_TRACKING[carrier](trackingNo);
 }
 
-// ── 더미 데이터 ────────────────────────────────────────────────────────
-const sampleOrders: Order[] = [
-  {
-    id: "ORD-2024-0841", date: "2024.05.18", supplier: "르블랑", type: "READY",
-    items: [
-      { name: "여성 린넨 오버핏 블라우스", quantity: 70, unit: "장", price: 12000, currency: "₩" },
-      { name: "와이드 린넨 슬랙스", quantity: 25, unit: "장", price: 18000, currency: "₩" },
-    ],
-    status: "SHIPPED", total: 1290000, currency: "₩",
-    trackingNo: "598412873021", carrier: "CJ대한통운",
-    stepTimestamps: {
-      ORDER_CONFIRMED: "2024.05.18 11:22",
-      PREPARING:       "2024.05.19 09:15",
-      SHIPPED:         "2024.05.20 11:40",
-    },
-    stepLocations: { SHIPPED: "CJ대한통운 마포 집하장" },
-  },
-  {
-    id: "ORD-2024-0820", date: "2024.05.10", supplier: "모아뜨", type: "READY",
-    items: [{ name: "플로럴 랩 원피스", quantity: 30, unit: "장", price: 25000, currency: "₩" }],
-    status: "DELIVERED", total: 753000, currency: "₩",
-    trackingNo: "471928374650", carrier: "한진택배",
-    stepTimestamps: {
-      ORDER_CONFIRMED: "2024.05.10 10:10",
-      PREPARING:       "2024.05.11 10:00",
-      SHIPPED:         "2024.05.12 08:30",
-      DELIVERED:       "2024.05.14 14:20",
-    },
-    stepLocations: { SHIPPED: "한진택배 성수 집하장" },
-  },
-  {
-    // ★ READY + 샘플 있음 케이스
-    id: "ORD-2024-0855", date: "2024.05.16", supplier: "데일리앤코", type: "READY",
-    sampleRequired: true,
-    items: [{ name: "오버사이즈 코튼 셔츠", quantity: 100, unit: "장", price: 15000, currency: "₩" }],
-    status: "SAMPLE_DELIVERED", total: 1500000, currency: "₩",
-    trackingNo: "112837465099", carrier: "CJ대한통운",
-    stepTimestamps: {
-      ORDER_CONFIRMED:  "2024.05.16 09:00",
-      SAMPLE_PREPARING: "2024.05.17 10:00",
-      SAMPLE_SHIPPED:   "2024.05.18 14:00",
-      SAMPLE_DELIVERED: "2024.05.19 11:30",
-    },
-    stepLocations: { SAMPLE_SHIPPED: "CJ대한통운" },
-  },
-  {
-    // ★ 샘플 재협상 중 케이스
-    id: "ORD-2024-0901", date: "2024.05.20", supplier: "르블랑 어패럴", type: "CUSTOM",
-    sampleRequired: true,
-    items: [{ name: "여성 린넨 오버핏 블라우스 (주문제작)", quantity: 200, unit: "벌", price: 14000, currency: "₩" }],
-    status: "SAMPLE_RENEGOTIATING", total: 2800000, currency: "₩",
-    trackingNo: "384729103847", carrier: "한진택배",
-    renegotiateReason: "블루그레이 컬러 톤이 너무 밝습니다. 한 단계 진한 톤으로 재제작 요청드립니다.",
-    stepTimestamps: {
-      ORDER_CONFIRMED:       "2024.05.20 14:00",
-      SAMPLE_PREPARING:      "2024.05.21 09:00",
-      SAMPLE_SHIPPED:        "2024.05.23 11:00",
-      SAMPLE_DELIVERED:      "2024.05.24 15:30",
-      SAMPLE_RENEGOTIATING:  "2024.05.25 10:00",
-    },
-    stepLocations: { SAMPLE_SHIPPED: "한진택배" },
-  },
-  {
-    id: "ORD-2024-0888", date: "2024.05.15", supplier: "에이블스튜디오", type: "CUSTOM",
-    sampleRequired: false,
-    items: [{ name: "여성 와이드 팬츠 (주문제작)", quantity: 150, unit: "벌", price: 18000, currency: "₩" }],
-    status: "CONTRACT_SIGNING", total: 2700000, currency: "₩", trackingNo: null,
-    stepTimestamps: { ORDER_CONFIRMED: "2024.05.15 10:00" },
-  },
-  {
-    id: "ORD-2024-0807", date: "2024.05.02", supplier: "데일리앤코", type: "READY",
-    items: [{ name: "여성 봄 니트 가디건", quantity: 40, unit: "장", price: 16200, currency: "₩" }],
-    status: "COMPLETED", total: 648000, currency: "₩",
-    trackingNo: "293847102938", carrier: "CJ대한통운",
-    stepTimestamps: {
-      ORDER_CONFIRMED: "2024.05.02 11:00",
-      PREPARING:       "2024.05.03 09:00",
-      SHIPPED:         "2024.05.04 10:30",
-      DELIVERED:       "2024.05.06 15:00",
-    },
-  },
-  {
-    id: "ORD-2024-0791", date: "2024.04.20", supplier: "어반드레스", type: "READY",
-    items: [{ name: "플리츠 미디 스커트", quantity: 45, unit: "장", price: 15000, currency: "₩" }],
-    status: "CANCELLED", total: 675000, currency: "₩", trackingNo: null,
-    cancelReason: "내부 예산 변경으로 인해 주문을 진행하지 않기로 결정했습니다.",
-    cancelledAt: "2024.04.21 13:20",
-  },
-  {
-    id: "ORD-2024-0780", date: "2024.04.15", supplier: "라온어패럴", type: "READY",
-    items: [{ name: "여성 베이직 오버핏 셔츠", quantity: 50, unit: "장", price: 18900, currency: "₩" }],
-    status: "DISPUTE", total: 945000, currency: "₩",
-    trackingNo: "192837465019", carrier: "롯데택배",
-    disputeReason: "수령한 상품 중 M 사이즈 10장에서 봉제 불량이 발견되었습니다.",
-  },
-];
+function buildTimeline(order: Order) {
+  let sequence =
+    order.type === "SOURCING"
+      ? SOURCING_STEPS
+      : order.type === "SAMPLE"
+        ? SAMPLE_STEPS
+        : GENERAL_STEPS;
 
-const statusFilters: { value: string; label: string }[] = [
-  { value: "ALL",                  label: "전체"     },
-  { value: "CONFIRMED",            label: "주문 확정" },
-  { value: "SAMPLE",               label: "샘플"     },
-  { value: "SAMPLE_RENEGOTIATING", label: "재협상"   },
-  { value: "CONTRACT_SIGNING",     label: "계약 서명" },
-  { value: "PREPARING",            label: "준비 중"  },
-  { value: "SHIPPED",              label: "배송 중"  },
-  { value: "DELIVERED",            label: "배송 완료" },
-  { value: "COMPLETED",            label: "거래 완료" },
-  { value: "CANCELLED",            label: "취소"     },
-  { value: "DISPUTE",              label: "이의 제기" },
-];
+  if (order.status === "SAMPLE_RENEGOTIATING" && !sequence.includes("SAMPLE_RENEGOTIATING")) {
+    const index = sequence.indexOf("SAMPLE_DELIVERED");
+    sequence = [...sequence.slice(0, index + 1), "SAMPLE_RENEGOTIATING", ...sequence.slice(index + 1)];
+  }
 
-const matchesFilter = (order: Order, filter: string): boolean => {
-  if (filter === "ALL") return true;
-  if (filter === "SAMPLE") return ["SAMPLE_PREPARING", "SAMPLE_SHIPPED", "SAMPLE_DELIVERED"].includes(order.status);
-  return order.status === filter;
-};
-
-// ── 액션 버튼 ──────────────────────────────────────────────────────────
-function ActionButtons({
-  order, onConfirm, onDispute, onCancel, onRenegotiate,
-}: {
-  order: Order;
-  onConfirm:     (o: Order) => void;
-  onDispute:     (o: Order) => void;
-  onCancel:      (o: Order) => void;
-  onRenegotiate: (o: Order) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2 pt-3 border-t border-border flex-wrap">
-
-      {/* ── 샘플 수령 → 3가지 선택지 ── */}
-      {order.status === "SAMPLE_DELIVERED" && (
-        <>
-          <button
-            onClick={() => onCancel(order)}
-            className="border border-red-300 text-red-600 hover:bg-red-50 text-xs px-3 py-1.5 rounded font-medium transition-colors flex items-center gap-1.5"
-          >
-            <XCircle size={12} /> 샘플 거절
-          </button>
-          {/* ★ 재협상 버튼 */}
-          <button
-            onClick={() => onRenegotiate(order)}
-            className="border border-orange-300 text-orange-600 hover:bg-orange-50 text-xs px-3 py-1.5 rounded font-medium transition-colors flex items-center gap-1.5"
-          >
-            <RefreshCw size={12} /> 재협상 요청
-          </button>
-          <Link
-            to={`/buyer/orders/${order.id}/contract-sign`}
-            className="bg-[#C4956A] hover:bg-[#b3845a] text-white text-xs px-3 py-1.5 rounded font-semibold transition-colors flex items-center gap-1.5"
-          >
-            <PenLine size={12} /> 본생산 확정
-          </Link>
-        </>
-      )}
-
-      {/* ── 재협상 진행 중 ── */}
-      {order.status === "SAMPLE_RENEGOTIATING" && (
-        <div className="flex items-center gap-2 flex-wrap flex-1">
-          <div className="flex items-center gap-1.5 text-xs text-orange-700 bg-orange-50 px-3 py-1.5 rounded border border-orange-200 flex-1 min-w-0">
-            <RefreshCw size={12} className="flex-shrink-0" />
-            <span className="truncate">재협상 중 — 공급사 검토 대기</span>
-          </div>
-          {/* 재협상 중에도 취소 가능 */}
-          <button
-            onClick={() => onCancel(order)}
-            className="border border-red-300 text-red-600 hover:bg-red-50 text-xs px-3 py-1.5 rounded font-medium transition-colors flex items-center gap-1.5 flex-shrink-0"
-          >
-            <XCircle size={12} /> 취소
-          </button>
-        </div>
-      )}
-
-      {order.status === "CONTRACT_SIGNING" && (
-        <Link
-          to={`/buyer/orders/${order.id}/contract-sign`}
-          className="bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-1.5 rounded font-semibold transition-colors flex items-center gap-1.5"
-        >
-          <PenLine size={12} /> 계약서 서명하기
-        </Link>
-      )}
-
-      {order.status === "CONTRACT_CONFIRMED" && (
-        <Link
-          to={`/checkout?type=custom&orderId=${order.id}`}
-          className="bg-[#C4956A] hover:bg-[#b3845a] text-white text-xs px-3 py-1.5 rounded font-semibold transition-colors flex items-center gap-1.5"
-        >
-          본결제 진행하기
-        </Link>
-      )}
-
-      {/* ── 배송 중 → 배송 추적 버튼 ── */}
-      {order.status === "SHIPPED" && order.trackingNo && (
-        <a
-          href={getTrackingUrl(order.carrier, order.trackingNo)}
-          target="_blank"
-          rel="noreferrer"
-          className="border border-[#C4956A] text-[#C4956A] hover:bg-rose-50 text-xs px-3 py-1.5 rounded font-semibold transition-colors flex items-center gap-1.5"
-        >
-          <ExternalLink size={12} /> 배송 추적
-          {order.carrier && <span className="text-[10px] opacity-70">({order.carrier})</span>}
-        </a>
-      )}
-
-      {order.status === "DELIVERED" && (
-        <>
-          <button
-            onClick={() => onConfirm(order)}
-            className="bg-[#C4956A] hover:bg-[#b3845a] text-white text-xs px-3 py-1.5 rounded font-semibold transition-colors flex items-center gap-1.5"
-          >
-            <CheckCircle size={12} /> 거래 확정
-          </button>
-          <button
-            onClick={() => onDispute(order)}
-            className="border border-red-300 text-red-600 hover:bg-red-50 text-xs px-3 py-1.5 rounded font-medium transition-colors flex items-center gap-1.5"
-          >
-            <AlertCircle size={12} /> 이의 제기
-          </button>
-        </>
-      )}
-
-      {order.status === "DISPUTE" && (
-        <div className="flex items-center gap-1.5 text-xs text-red-700 bg-red-50 px-3 py-1.5 rounded border border-red-200">
-          <AlertCircle size={12} />
-          관리자 검토 중
-        </div>
-      )}
-
-      {order.status === "CANCELLED" && (
-        <button
-          onClick={() => onCancel(order)}
-          className="border border-border text-muted-foreground hover:border-[#C4956A] hover:text-[#C4956A] text-xs px-3 py-1.5 rounded font-medium transition-colors"
-        >
-          취소 사유 보기
-        </button>
-      )}
-
-      <Link
-        to={`/orders/${order.id}`}
-        className="text-xs text-muted-foreground hover:text-[#C4956A] transition-colors ml-auto flex items-center gap-1"
-      >
-        <Eye size={11} /> 주문 상세
-      </Link>
-    </div>
-  );
+  const done = new Set(DONE_STEPS_BY_STATUS[order.status]);
+  return sequence.map((key) => ({
+    key,
+    label: STEP_LABELS[key],
+    done: done.has(key),
+    time: order.stepTimestamps?.[key] ?? "대기 중",
+  }));
 }
 
-// ── 메인 컴포넌트 ──────────────────────────────────────────────────────
-export function Orders() {
-  const [expandedId,       setExpandedId]       = useState<string | null>(null);
-  const [statusFilter,     setStatusFilter]     = useState("ALL");
-  const [search,           setSearch]           = useState("");
-  const [confirmTarget,    setConfirmTarget]    = useState<Order | null>(null);
-  const [disputeTarget,    setDisputeTarget]    = useState<Order | null>(null);
-  const [cancelTarget,     setCancelTarget]     = useState<Order | null>(null);
+function getNextAction(order: Order) {
+  switch (order.status) {
+    case "SAMPLE_DELIVERED":
+      return "샘플 확인 후 본생산 확정, 재협상, 취소 중 선택";
+    case "SAMPLE_RENEGOTIATING":
+      return "셀러가 수정 요청을 검토 중입니다";
+    case "CONTRACT_SIGNING":
+      return "계약서 서명이 필요합니다";
+    case "CONTRACT_CONFIRMED":
+      return "계약 완료 후 결제를 진행할 수 있습니다";
+    case "SHIPPED":
+      return "배송 추적 후 수령을 확인하세요";
+    case "DELIVERED":
+      return "상품 확인 후 거래 확정 또는 이의 제기를 진행하세요";
+    case "DISPUTE":
+      return "관리자 중재 및 셀러 답변을 기다리는 중입니다";
+    case "CANCELED":
+      return "취소 처리된 주문입니다";
+    case "COMPLETED":
+      return "거래가 완료되었습니다";
+    default:
+      return "셀러의 다음 처리를 기다리는 중입니다";
+  }
+}
+
+function needsBuyerAction(order: Order) {
+  return ["SAMPLE_DELIVERED", "CONTRACT_SIGNING", "CONTRACT_CONFIRMED", "DELIVERED"].includes(order.status);
+}
+
+function getPassiveNotice(order: Order) {
+  switch (order.status) {
+    case "SAMPLE_RENEGOTIATING":
+      return "셀러 검토 대기";
+    case "SHIPPED":
+      return "배송 진행 중";
+    case "DISPUTE":
+      return "이의제기 처리 중";
+    case "COMPLETED":
+      return "거래 완료";
+    case "CANCELED":
+      return "주문 취소";
+    case "REFUNDED":
+      return "환불 완료";
+    default:
+      return "";
+  }
+}
+
+function matchesFilter(order: Order, filter: string) {
+  if (filter === "ALL") return true;
+  if (filter === "PROGRESS") {
+    return [
+      "CONFIRMED",
+      "SAMPLE_PREPARING",
+      "SAMPLE_SHIPPED",
+      "SAMPLE_DELIVERED",
+      "SAMPLE_RENEGOTIATING",
+      "CONTRACT_SIGNING",
+      "CONTRACT_CONFIRMED",
+      "PREPARING",
+    ].includes(order.status);
+  }
+  if (filter === "SHIPPING") return ["SHIPPED", "DELIVERED"].includes(order.status);
+  if (filter === "ISSUE") return ["DISPUTE", "CANCELED", "REFUNDED", "COMPLETED"].includes(order.status);
+  return true;
+}
+
+export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
+  const [expandedId, setExpandedId] = useState<string | null>("ORD-2024-0855");
+  const [activeFilter, setActiveFilter] = useState("PROGRESS");
+  const [searchType, setSearchType] = useState<SearchType>("product");
+  const [search, setSearch] = useState("");
+  const [confirmTarget, setConfirmTarget] = useState<Order | null>(null);
+  const [disputeTarget, setDisputeTarget] = useState<Order | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
   const [renegotiateTarget, setRenegotiateTarget] = useState<Order | null>(null);
-  const [renegotiateText,  setRenegotiateText]  = useState("");
+  const [renegotiateText, setRenegotiateText] = useState("");
 
-  const filtered = sampleOrders.filter((o) => {
-    const matchStatus = matchesFilter(o, statusFilter);
-    const matchSearch =
-      o.id.includes(search) ||
-      o.supplier.toLowerCase().includes(search.toLowerCase()) ||
-      o.items.some((i) => i.name.includes(search));
-    return matchStatus && matchSearch;
-  });
+  const filteredOrders = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    return orders.filter((order) => {
+      const filterMatched = matchesFilter(order, activeFilter);
+      const keywordMatched = !keyword || order.items.some((item) => {
+        if (searchType === "product") return item.name.toLowerCase().includes(keyword);
+        if (searchType === "quantity") return String(item.quantity).includes(keyword);
+        if (searchType === "brand") return order.supplier.toLowerCase().includes(keyword);
+        return item.material.toLowerCase().includes(keyword);
+      });
 
-  const handleConfirmTrade  = () => { setConfirmTarget(null);  alert("거래가 확정되었습니다. 셀러 정산이 진행됩니다."); };
-  const handleSubmitDispute = () => { setDisputeTarget(null);  alert("이의 제기가 접수되었습니다. 관리자가 검토 후 안내드립니다."); };
-  const handleRenegotiate   = () => {
+      return filterMatched && keywordMatched;
+    });
+  }, [activeFilter, search, searchType]);
+
+  const stats = useMemo(() => {
+    const inProgress = orders.filter((order) =>
+      ["CONFIRMED", "SAMPLE_PREPARING", "SAMPLE_SHIPPED", "SAMPLE_DELIVERED", "SAMPLE_RENEGOTIATING", "PREPARING"].includes(order.status)
+    ).length;
+    const shipping = orders.filter((order) => ["SHIPPED", "DELIVERED"].includes(order.status)).length;
+    const issues = orders.filter((order) => ["DISPUTE", "CANCELED", "REFUNDED"].includes(order.status)).length;
+
+    return [
+      { filter: "ALL", label: "전체 주문", value: `${orders.length}건`, icon: <ReceiptText size={18} />, tone: "bg-secondary text-primary" },
+      { filter: "PROGRESS", label: "진행 중", value: `${inProgress}건`, icon: <Truck size={18} />, tone: "bg-sky-50 text-sky-700" },
+      { filter: "SHIPPING", label: "배송 중", value: `${shipping}건`, icon: <Package size={18} />, tone: "bg-amber-50 text-amber-700" },
+      { filter: "ISSUE", label: "완료/이슈", value: `${issues}건`, icon: <AlertCircle size={18} />, tone: "bg-red-50 text-red-700" },
+    ];
+  }, []);
+
+  const handleConfirmTrade = () => {
+    setConfirmTarget(null);
+    alert("거래가 확정되었습니다. 셀러 정산이 진행됩니다.");
+  };
+
+  const handleSubmitDispute = () => {
+    setDisputeTarget(null);
+    alert("이의 제기가 접수되었습니다. 관리자가 검토 후 안내드립니다.");
+  };
+
+  const handleRenegotiate = () => {
     if (!renegotiateText.trim()) return;
     setRenegotiateTarget(null);
     setRenegotiateText("");
-    alert("재협상 요청이 접수되었습니다. 공급사가 검토 후 연락드립니다.");
+    alert("재협상 요청이 접수되었습니다. 공급사가 검토 후 수정안을 전달합니다.");
   };
 
   return (
-    <div className="max-w-[1280px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
-      <h1 className="text-2xl font-bold text-foreground mb-6 flex items-center gap-2">
-        <Package size={24} className="text-[#C4956A]" />
-        주문 관리
-      </h1>
+    <div className="min-h-screen bg-slate-50 px-4 py-8">
+      <div className="mx-auto max-w-[1240px]">
+        <header className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-xs font-bold text-primary">
+                <ShoppingBag size={13} />
+                {role === "SELLER" ? "셀러 주문 관리" : "바이어 주문 관리"}
+              </div>
+              <h1 className="text-2xl font-black text-slate-950">주문 진행 상태를 한눈에 확인하세요</h1>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                일반 주문, 샘플 주문, 소싱 주문의 진행 상태와 필요한 처리 항목을 함께 관리합니다.
+              </p>
+            </div>
+            <Link
+              to="/cart"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-white transition hover:bg-primary/90"
+            >
+              <Package size={15} />
+              주문 하기
+            </Link>
+          </div>
+        </header>
 
-      {/* 검색 + 필터 */}
-      <div className="bg-white border border-border rounded-lg p-4 mb-5 flex items-center gap-4 flex-wrap">
-        <div className="flex items-center border border-border rounded-lg px-3 py-2 gap-2 flex-1 min-w-[220px]">
-          <Search size={14} className="text-muted-foreground" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="주문번호, 공급사, 상품명 검색..."
-            className="text-sm outline-none flex-1 bg-transparent"
-          />
-        </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {statusFilters.map((f) => (
+        <section className="mb-5 grid gap-3 md:grid-cols-4">
+          {stats.map((stat) => (
             <button
-              key={f.value}
-              onClick={() => setStatusFilter(f.value)}
-              className={`px-3 py-1.5 text-xs rounded-full border transition-colors ${
-                statusFilter === f.value
-                  ? "bg-[#C4956A] text-white border-[#C4956A]"
-                  : "border-border text-muted-foreground hover:border-[#C4956A] hover:text-[#C4956A]"
+              key={stat.label}
+              type="button"
+              onClick={() => setActiveFilter(stat.filter)}
+              className={`rounded-xl border p-4 text-left shadow-sm transition ${
+                activeFilter === stat.filter
+                  ? "border-primary bg-white ring-2 ring-primary/10"
+                  : "border-slate-200 bg-white hover:border-primary/30"
               }`}
             >
-              {f.label}
+              <div className="flex items-center justify-between">
+                <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${stat.tone}`}>{stat.icon}</span>
+                <span className="text-2xl font-black text-slate-950">{stat.value}</span>
+              </div>
+              <p className={`mt-3 text-sm font-bold ${activeFilter === stat.filter ? "text-primary" : "text-slate-600"}`}>
+                {stat.label}
+              </p>
             </button>
           ))}
-        </div>
-      </div>
+        </section>
 
-      {/* 주문 목록 */}
-      <div className="space-y-3">
-        {filtered.map((order) => {
-          const status     = statusConfig[order.status];
-          const type       = typeConfig[order.type];
-          const isExpanded = expandedId === order.id;
-          const steps      = buildSteps(order);
-
-          return (
-            <div key={order.id} className="bg-white border border-border rounded-lg overflow-hidden">
-              {/* 헤더 */}
-              <div
-                className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-muted/30 transition-colors"
-                onClick={() => setExpandedId(isExpanded ? null : order.id)}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="font-mono font-bold text-sm text-foreground">{order.id}</span>
-                    <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded border ${type.bg} ${type.color}`}>
-                      {type.label}
-                    </span>
-                    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border ${status.bg} ${status.color}`}>
-                      {status.icon}{status.label}
-                    </span>
-                    {order.sampleRequired && (
-                      <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
-                        <FlaskConical size={10} /> 샘플 포함
-                      </span>
-                    )}
-                    {/* 재협상 사유 미리보기 */}
-                    {order.status === "SAMPLE_RENEGOTIATING" && order.renegotiateReason && (
-                      <span className="text-[11px] text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded max-w-[200px] truncate">
-                        {order.renegotiateReason}
-                      </span>
-                    )}
-                    {/* 배송 중 송장번호 */}
-                    {order.trackingNo && order.status === "SHIPPED" && (
-                      <span className="text-[11px] text-[#C4956A] font-mono bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                        {order.trackingNo}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-4">
-                    <span>{order.date}</span>
-                    <span>{order.supplier}</span>
-                    <span>{order.items.length}개 품목</span>
-                  </div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="font-bold text-foreground font-mono">
-                    {order.currency}{order.total.toLocaleString()}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {order.items.reduce((a, i) => a + i.quantity, 0).toLocaleString()}장
-                  </div>
-                </div>
-                {isExpanded
-                  ? <ChevronUp size={16} className="text-muted-foreground flex-shrink-0" />
-                  : <ChevronDown size={16} className="text-muted-foreground flex-shrink-0" />}
-              </div>
-
-              {/* 펼침 */}
-              {isExpanded && (
-                <div className="border-t border-border bg-muted/20 px-5 py-4">
-
-                  {/* 상품 목록 */}
-                  <div className="space-y-2 mb-4">
-                    {order.items.map((item) => (
-                      <div key={item.name} className="flex items-center justify-between text-sm">
-                        <div className="text-foreground">{item.name}</div>
-                        <div className="text-right flex-shrink-0 ml-4">
-                          <span className="text-muted-foreground font-mono">
-                            {item.quantity.toLocaleString()} {item.unit} × {item.currency}{item.price.toLocaleString()}
-                          </span>
-                          <span className="ml-3 font-bold font-mono text-foreground">
-                            {item.currency}{(item.quantity * item.price).toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* 진행 타임라인 */}
-                  {steps.length > 0 && order.status !== "CANCELLED" && (
-                    <div className="border-t border-border pt-4 mb-4">
-                      <h4 className="text-xs font-semibold text-foreground mb-3 flex items-center gap-1.5">
-                        <Truck size={13} className="text-[#C4956A]" />
-                        진행 현황
-                        <span className="text-muted-foreground font-normal ml-1">
-                          ({steps.filter(s => s.done).length}/{steps.length} 완료)
-                        </span>
-                      </h4>
-                      <div className="relative">
-                        <div className="absolute left-[15px] top-0 bottom-0 w-px bg-muted" />
-                        <div className="space-y-2.5">
-                          {steps.map((step, i) => (
-                            <div key={i} className="flex items-start gap-3 relative">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 z-10 border-2 transition-colors ${
-                                step.isReneg
-                                  ? "bg-orange-100 border-orange-300"
-                                  : step.done
-                                    ? "bg-[#C4956A] border-[#C4956A]"
-                                    : "bg-white border-border"
-                              }`}>
-                                {step.isReneg
-                                  ? <RefreshCw size={13} className="text-orange-600" />
-                                  : step.done
-                                    ? <CheckCircle size={14} className="text-white" />
-                                    : <Clock size={14} className="text-muted-foreground" />}
-                              </div>
-                              <div className="pt-0.5 flex-1">
-                                <div className={`text-xs font-semibold ${
-                                  step.isReneg
-                                    ? "text-orange-700"
-                                    : step.done
-                                      ? "text-foreground"
-                                      : "text-muted-foreground"
-                                }`}>
-                                  {step.status}
-                                </div>
-                                <div className="text-[11px] text-muted-foreground font-mono">{step.time}</div>
-                                {step.location && (
-                                  <div className="text-[11px] text-[#C4956A]">{step.location}</div>
-                                )}
-                                {/* 재협상 사유 인라인 표시 */}
-                                {step.isReneg && order.renegotiateReason && (
-                                  <div className="mt-1 text-[11px] text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1 leading-relaxed">
-                                    {order.renegotiateReason}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 계약 서명 완료 */}
-                  {order.contractSignedAt && (
-                    <div className="bg-purple-50 border border-purple-200 rounded px-3 py-2 text-xs text-purple-700 flex items-center gap-2 mb-3">
-                      <ShieldCheck size={13} />
-                      계약 서명 완료 — {order.contractSignedAt}
-                    </div>
-                  )}
-
-                  {/* 액션 버튼 */}
-                  <ActionButtons
-                    order={order}
-                    onConfirm={setConfirmTarget}
-                    onDispute={setDisputeTarget}
-                    onCancel={setCancelTarget}
-                    onRenegotiate={setRenegotiateTarget}
-                  />
-                </div>
-              )}
+        <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <select
+              value={searchType}
+              onChange={(event) => setSearchType(event.target.value as SearchType)}
+              className="h-[42px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none transition focus:border-primary"
+            >
+              {searchOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+              <Search size={15} className="text-slate-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={`${searchOptions.find((option) => option.value === searchType)?.label} 검색`}
+                className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+              />
             </div>
-          );
-        })}
-      </div>
+          </div>
+        </section>
 
-      {filtered.length === 0 && (
-        <div className="text-center py-20 text-muted-foreground">
-          <Package size={40} className="mx-auto mb-3 opacity-30" />
-          <div className="font-medium">주문 내역이 없습니다</div>
-          <div className="text-sm mt-1">다른 필터를 선택하거나 새로운 주문을 시작해보세요</div>
-        </div>
-      )}
+        <main className="space-y-4">
+          {filteredOrders.map((order) => (
+            <OrderCard
+              key={order.id}
+              order={order}
+              expanded={expandedId === order.id}
+              onToggle={() => setExpandedId(expandedId === order.id ? null : order.id)}
+              onConfirm={setConfirmTarget}
+              onDispute={setDisputeTarget}
+              onCancel={setCancelTarget}
+              onRenegotiate={setRenegotiateTarget}
+            />
+          ))}
+        </main>
 
-      {/* ── 재협상 요청 모달 ── */}
-      {renegotiateTarget && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
-            <button onClick={() => setRenegotiateTarget(null)} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
-              <X size={18} />
-            </button>
-            <div className="w-12 h-12 bg-orange-50 rounded-full flex items-center justify-center mb-4">
-              <RefreshCw size={26} className="text-orange-500" />
-            </div>
-            <h3 className="text-lg font-bold text-foreground mb-1">샘플 재협상 요청</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              수정이 필요한 부분을 구체적으로 작성해 주세요.<br />
-              공급사가 검토 후 수정 샘플을 다시 제작합니다.
+        {filteredOrders.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center">
+            <Package size={40} className="mx-auto mb-3 text-slate-300" />
+            <p className="font-bold text-slate-700">조건에 맞는 주문이 없습니다</p>
+            <p className="mt-1 text-sm text-slate-500">검색어를 바꾸거나 다른 상태 필터를 선택해 보세요.</p>
+          </div>
+        )}
+
+        {renegotiateTarget && (
+          <BaseModal onClose={() => setRenegotiateTarget(null)} icon={<RefreshCw size={26} />} tone="orange" title="샘플 재협상 요청">
+            <p className="mb-4 text-sm leading-6 text-slate-500">
+              샘플 확인 후 수정이 필요한 부분을 정해진 양식으로 남깁니다.
             </p>
-            <div className="bg-muted/60 border border-border rounded-lg p-3 text-xs text-muted-foreground mb-4">
-              <div className="font-semibold text-foreground mb-0.5">{renegotiateTarget.id}</div>
-              <div>{renegotiateTarget.supplier} · {renegotiateTarget.currency}{renegotiateTarget.total.toLocaleString()}</div>
-            </div>
-            <div className="space-y-3">
+            <OrderMiniSummary order={renegotiateTarget} />
+            <div className="mt-4 space-y-3">
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">재협상 유형</label>
-                <select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#C4956A] bg-white">
+                <label className="mb-1.5 block text-xs font-bold text-slate-500">재협상 유형</label>
+                <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary">
                   <option>색상 수정</option>
                   <option>소재 변경</option>
                   <option>디자인 수정</option>
@@ -716,164 +732,472 @@ export function Orders() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                  수정 요청 내용 <span className="text-red-500">*</span>
-                </label>
+                <label className="mb-1.5 block text-xs font-bold text-slate-500">수정 요청 내용</label>
                 <textarea
                   rows={4}
                   value={renegotiateText}
-                  onChange={(e) => setRenegotiateText(e.target.value)}
+                  onChange={(event) => setRenegotiateText(event.target.value)}
                   placeholder="예) 블루그레이 컬러가 너무 밝습니다. 한 단계 진한 톤으로 재제작 요청드립니다."
-                  className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#C4956A] resize-none"
+                  className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">참고 이미지 첨부 (선택)</label>
-                <div className="border-2 border-dashed border-border rounded-lg p-3 text-center text-xs text-muted-foreground hover:border-[#C4956A]/40 cursor-pointer transition-colors">
-                  클릭하여 참고 이미지 첨부
-                </div>
+              <div className="rounded-lg border-2 border-dashed border-slate-200 p-4 text-center text-xs font-medium text-slate-500">
+                참고 이미지 첨부
               </div>
             </div>
-            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700 mt-3">
-              ⚠️ 재협상 요청 시 추가 샘플 제작비가 발생할 수 있습니다.
+            <div className="mt-5 flex gap-2">
+              <ModalButton variant="ghost" onClick={() => setRenegotiateTarget(null)}>취소</ModalButton>
+              <ModalButton disabled={!renegotiateText.trim()} onClick={handleRenegotiate}>요청하기</ModalButton>
             </div>
-            <div className="flex gap-2 mt-4">
-              <button onClick={() => setRenegotiateTarget(null)} className="flex-1 border border-border text-foreground hover:border-[#C4956A] hover:text-[#C4956A] py-2.5 rounded text-sm font-medium transition-colors">
-                취소
-              </button>
-              <button
-                onClick={handleRenegotiate}
-                disabled={!renegotiateText.trim()}
-                className="flex-1 bg-orange-500 hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed text-white py-2.5 rounded text-sm font-semibold transition-colors"
-              >
-                재협상 요청
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </BaseModal>
+        )}
 
-      {/* ── 거래 확정 모달 ── */}
-      {confirmTarget && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
-            <button onClick={() => setConfirmTarget(null)} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
-              <X size={18} />
-            </button>
-            <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle size={26} className="text-green-600" />
-            </div>
-            <h3 className="text-lg font-bold text-foreground mb-2">거래를 확정하시겠습니까?</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              상품 수량 및 오염·하자가 없는지 확인하셨나요?<br />
-              거래 확정 이후에는 이의 제기가 어려우며, 대금이 셀러에게 정산됩니다.
+        {confirmTarget && (
+          <BaseModal onClose={() => setConfirmTarget(null)} icon={<CheckCircle size={26} />} tone="green" title="거래를 확정하시겠습니까?">
+            <p className="mb-4 text-sm leading-6 text-slate-500">
+              상품 수량과 하자 여부를 확인한 뒤 거래를 확정해 주세요. 확정 후 셀러 정산이 진행됩니다.
             </p>
-            <div className="bg-muted/60 border border-border rounded p-3 text-xs text-muted-foreground mb-5">
-              <div className="font-semibold text-foreground mb-1">주문번호 {confirmTarget.id}</div>
-              <div>공급사 {confirmTarget.supplier} · 결제금액 {confirmTarget.currency}{confirmTarget.total.toLocaleString()}</div>
+            <OrderMiniSummary order={confirmTarget} />
+            <div className="mt-5 flex gap-2">
+              <ModalButton variant="ghost" onClick={() => setConfirmTarget(null)}>취소</ModalButton>
+              <ModalButton onClick={handleConfirmTrade}>거래 확정</ModalButton>
             </div>
-            <div className="flex gap-2">
-              <button onClick={() => setConfirmTarget(null)} className="flex-1 border border-border text-foreground hover:border-[#C4956A] hover:text-[#C4956A] py-2.5 rounded text-sm font-medium transition-colors">취소</button>
-              <button onClick={handleConfirmTrade} className="flex-1 bg-[#C4956A] hover:bg-[#b3845a] text-white py-2.5 rounded text-sm font-semibold transition-colors">확인</button>
-            </div>
-          </div>
-        </div>
-      )}
+          </BaseModal>
+        )}
 
-      {/* ── 이의 제기 모달 ── */}
-      {disputeTarget && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
-            <button onClick={() => setDisputeTarget(null)} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
-              <X size={18} />
-            </button>
-            <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-4">
-              <AlertCircle size={26} className="text-red-600" />
-            </div>
-            <h3 className="text-lg font-bold text-foreground mb-2">이의 제기 접수</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-              수량 부족, 오염·하자, 오배송 등 문제가 있는 경우 이의 제기를 접수할 수 있습니다.
+        {disputeTarget && (
+          <BaseModal onClose={() => setDisputeTarget(null)} icon={<AlertCircle size={26} />} tone="red" title="이의 제기 접수">
+            <p className="mb-4 text-sm leading-6 text-slate-500">
+              수량 부족, 불량, 오배송 등 문제가 있는 경우 증빙과 함께 이의 제기를 접수합니다.
             </p>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">이의 유형</label>
-                <select className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#C4956A] bg-white">
+                <label className="mb-1.5 block text-xs font-bold text-slate-500">이의 유형</label>
+                <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary">
                   <option>수량 부족</option>
-                  <option>오염 / 하자</option>
+                  <option>불량</option>
                   <option>오배송</option>
-                  <option>파손</option>
+                  <option>배송 문제</option>
                   <option>기타</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">증빙 사진 첨부</label>
-                <div className="border-2 border-dashed border-border rounded-lg p-4 text-center text-xs text-muted-foreground hover:border-[#C4956A]/40 cursor-pointer transition-colors">
-                  클릭하여 사진 첨부 (최대 5장)
+              <div className="rounded-lg border-2 border-dashed border-slate-200 p-4 text-center text-xs font-medium text-slate-500">
+                증빙 파일 첨부
+              </div>
+              <textarea
+                rows={4}
+                placeholder="문제 상황을 자세히 작성해 주세요."
+                className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+            </div>
+            <div className="mt-5 flex gap-2">
+              <ModalButton variant="ghost" onClick={() => setDisputeTarget(null)}>취소</ModalButton>
+              <ModalButton tone="red" onClick={handleSubmitDispute}>접수하기</ModalButton>
+            </div>
+          </BaseModal>
+        )}
+
+        {cancelTarget && (
+          <BaseModal onClose={() => setCancelTarget(null)} icon={<XCircle size={26} />} tone="red" title="주문 취소 정보">
+            <OrderMiniSummary order={cancelTarget} />
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-700">
+              {cancelTarget.issueMemo ?? "취소 사유가 등록되지 않았습니다."}
+            </div>
+            <div className="mt-5">
+              <ModalButton onClick={() => setCancelTarget(null)}>확인</ModalButton>
+            </div>
+          </BaseModal>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OrderCard({
+  order,
+  expanded,
+  onToggle,
+  onConfirm,
+  onDispute,
+  onCancel,
+  onRenegotiate,
+}: {
+  order: Order;
+  expanded: boolean;
+  onToggle: () => void;
+  onConfirm: (order: Order) => void;
+  onDispute: (order: Order) => void;
+  onCancel: (order: Order) => void;
+  onRenegotiate: (order: Order) => void;
+}) {
+  const status = statusConfig[order.status];
+  const type = typeConfig[order.type];
+  const timeline = buildTimeline(order);
+  const showActionNotice = needsBuyerAction(order);
+  const passiveNotice = getPassiveNotice(order);
+
+  return (
+    <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <button type="button" onClick={onToggle} className="block w-full text-left transition hover:bg-slate-50">
+        <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="font-mono text-sm font-black text-slate-950">{order.id}</span>
+              <Badge className={type.tone}>{type.label}</Badge>
+            </div>
+
+            <div className="flex flex-col gap-3 md:flex-row md:items-start">
+              <div className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-black ${status.tone}`}>
+                {status.icon}
+                {status.label}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="line-clamp-1 text-base font-black text-slate-950">{getMainItemLabel(order)}</h2>
+                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                  <span>{order.date}</span>
+                  <span>{order.supplier}</span>
+                  <span>{order.items.length}개 품목</span>
+                  <span>{getTotalQuantity(order).toLocaleString()}개</span>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">상세 내용</label>
-                <textarea rows={3} placeholder="상품 문제 상황을 자세히 작성해 주세요." className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#C4956A] resize-none" />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-5">
-              <button onClick={() => setDisputeTarget(null)} className="flex-1 border border-border text-foreground hover:border-[#C4956A] hover:text-[#C4956A] py-2.5 rounded text-sm font-medium transition-colors">취소</button>
-              <button onClick={handleSubmitDispute} className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded text-sm font-semibold transition-colors">접수하기</button>
             </div>
           </div>
+
+          <div className="flex items-end justify-between gap-4 lg:block lg:text-right">
+            <div>
+              <p className="text-xs font-bold text-slate-500">결제 금액</p>
+              <p className="mt-1 whitespace-nowrap text-xl font-black text-primary">{formatPrice(getOrderTotal(order))}</p>
+            </div>
+            <span className="text-slate-400">{expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</span>
+          </div>
         </div>
+      </button>
+
+      <div className={`border-t px-5 ${showActionNotice ? "border-primary/15 bg-secondary/80 py-3" : "border-slate-100 bg-slate-50/70 py-2.5"}`}>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          {showActionNotice ? (
+            <div className="flex min-w-0 items-start gap-2 text-sm">
+              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-white">
+                <Clock size={14} />
+              </span>
+              <div>
+                <p className="font-black text-primary">확인 필요</p>
+                <p className="mt-0.5 font-semibold text-slate-700">{getNextAction(order)}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-slate-400">
+              {passiveNotice && (
+                <>
+                  <Clock size={13} />
+                  <span>{passiveNotice}</span>
+                </>
+              )}
+            </div>
+          )}
+          <OrderActions
+            order={order}
+            onConfirm={onConfirm}
+            onDispute={onDispute}
+            onCancel={onCancel}
+            onRenegotiate={onRenegotiate}
+          />
+        </div>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-slate-100 p-5">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="space-y-5">
+              <section>
+                <SectionLabel icon={<Package size={14} />} title="주문 상품" />
+                <div className="overflow-hidden rounded-lg border border-slate-200">
+                  {order.items.map((item) => (
+                    <div key={item.name} className="grid gap-2 border-b border-slate-100 bg-white px-4 py-3 text-sm last:border-b-0 md:grid-cols-[minmax(0,1fr)_190px] md:items-center">
+                      <div>
+                        <p className="font-bold text-slate-950">{item.name}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {item.quantity.toLocaleString()}
+                          {item.unit} x {formatPrice(item.price)} · {item.material}
+                        </p>
+                      </div>
+                      <p className="whitespace-nowrap text-right font-black text-slate-950">
+                        {formatPrice(item.quantity * item.price)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section>
+                <SectionLabel icon={<Truck size={14} />} title="진행 타임라인" />
+                <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-5">
+                  {timeline.map((step) => (
+                    <div
+                      key={step.key}
+                      className={`rounded-lg border p-3 ${
+                        step.done ? "border-primary/25 bg-secondary/60" : "border-slate-200 bg-white"
+                      }`}
+                    >
+                      <div className="mb-2 flex items-center gap-2">
+                        <span
+                          className={`flex h-6 w-6 items-center justify-center rounded-full ${
+                            step.done ? "bg-primary text-white" : "bg-slate-100 text-slate-400"
+                          }`}
+                        >
+                          {step.done ? <CheckCircle size={13} /> : <Clock size={13} />}
+                        </span>
+                        <p className="text-xs font-black text-slate-900">{step.label}</p>
+                      </div>
+                      <p className="text-[11px] text-slate-500">{step.time}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {order.issueMemo && (
+                <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm leading-6 text-orange-800">
+                  {order.issueMemo}
+                </div>
+              )}
+            </div>
+
+            <aside className="rounded-xl border border-slate-200 bg-white p-4">
+              <SectionLabel icon={<ReceiptText size={14} />} title="주문 요약" />
+              <div className="space-y-3 text-sm">
+                <SummaryRow label="상품 금액" value={formatPrice(order.subtotal)} />
+                <SummaryRow label="배송비" value={order.shippingFee === null ? "착불" : formatPrice(order.shippingFee)} />
+                <SummaryRow label="플랫폼 수수료" value={formatPrice(order.platformFee)} />
+                <div className="border-t border-slate-100 pt-3">
+                  <SummaryRow label="최종 금액" value={formatPrice(getOrderTotal(order))} strong />
+                </div>
+                <SummaryRow label="결제 방식" value={order.paymentMethod} />
+                <SummaryRow label="수령인" value={order.receiver} />
+                <div>
+                  <p className="text-xs font-bold text-slate-500">배송지</p>
+                  <p className="mt-1 text-sm font-semibold leading-6 text-slate-900">{order.receiverAddress}</p>
+                </div>
+                {order.trackingNo && (
+                  <SummaryRow label="송장번호" value={`${order.carrier ?? ""} ${order.trackingNo}`} />
+                )}
+              </div>
+            </aside>
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function OrderActions({
+  order,
+  onConfirm,
+  onDispute,
+  onCancel,
+  onRenegotiate,
+}: {
+  order: Order;
+  onConfirm: (order: Order) => void;
+  onDispute: (order: Order) => void;
+  onCancel: (order: Order) => void;
+  onRenegotiate: (order: Order) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {order.status === "SAMPLE_DELIVERED" && (
+        <>
+          <ActionButton tone="ghost" icon={<XCircle size={13} />} onClick={() => onCancel(order)}>샘플 거절</ActionButton>
+          <ActionButton tone="orange" icon={<RefreshCw size={13} />} onClick={() => onRenegotiate(order)}>재협상 요청</ActionButton>
+          <LinkButton to={`/buyer/orders/${order.id}/contract-sign`} icon={<PenLine size={13} />}>본생산 확정</LinkButton>
+        </>
       )}
 
-      {/* ── 취소 모달 ── */}
-      {cancelTarget && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 relative">
-            <button onClick={() => setCancelTarget(null)} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
-              <X size={18} />
-            </button>
-            <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mb-4">
-              <XCircle size={26} className="text-red-600" />
-            </div>
-            <h3 className="text-lg font-bold text-foreground mb-2">
-              {cancelTarget.status === "SAMPLE_DELIVERED" || cancelTarget.status === "SAMPLE_RENEGOTIATING"
-                ? "샘플 검토 후 취소"
-                : "주문 취소 정보"}
-            </h3>
-            {(cancelTarget.status === "SAMPLE_DELIVERED" || cancelTarget.status === "SAMPLE_RENEGOTIATING") ? (
-              <>
-                <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                  샘플 검토 후 취소 시 샘플 비용은 환불되지 않습니다. 취소 사유를 입력해 주세요.
-                </p>
-                <textarea rows={3} placeholder="취소 사유를 입력해 주세요." className="w-full border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[#C4956A] resize-none mb-4" />
-                <div className="flex gap-2">
-                  <button onClick={() => setCancelTarget(null)} className="flex-1 border border-border text-foreground py-2.5 rounded text-sm font-medium transition-colors">돌아가기</button>
-                  <button onClick={() => setCancelTarget(null)} className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded text-sm font-semibold transition-colors">취소 확정</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="bg-muted/60 border border-border rounded p-3 text-xs text-muted-foreground mb-4">
-                  <div className="font-semibold text-foreground mb-1">주문번호 {cancelTarget.id}</div>
-                  <div>공급사 {cancelTarget.supplier} · 주문금액 {cancelTarget.currency}{cancelTarget.total.toLocaleString()}</div>
-                </div>
-                {cancelTarget.cancelledAt && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                    <div className="text-xs font-semibold text-red-800">취소 일시</div>
-                    <div className="text-xs text-red-700 mt-1">{cancelTarget.cancelledAt}</div>
-                  </div>
-                )}
-                <div className="mb-5">
-                  <div className="text-sm font-semibold text-foreground mb-2">취소 사유</div>
-                  <div className="text-sm text-muted-foreground leading-relaxed">
-                    {cancelTarget.cancelReason ?? "취소 사유가 등록되지 않았습니다."}
-                  </div>
-                </div>
-                <button onClick={() => setCancelTarget(null)} className="w-full bg-[#C4956A] hover:bg-[#b3845a] text-white py-2.5 rounded text-sm font-semibold transition-colors">확인</button>
-              </>
-            )}
-          </div>
-        </div>
+      {order.status === "SAMPLE_RENEGOTIATING" && (
+        <ActionButton tone="ghost" icon={<XCircle size={13} />} onClick={() => onCancel(order)}>취소</ActionButton>
       )}
+
+      {order.status === "CONTRACT_SIGNING" && (
+        <LinkButton to={`/buyer/orders/${order.id}/contract-sign`} icon={<PenLine size={13} />}>계약서 서명</LinkButton>
+      )}
+
+      {order.status === "CONTRACT_CONFIRMED" && (
+        <LinkButton to={`/checkout?type=custom&orderId=${order.id}`} icon={<FileText size={13} />}>결제 진행</LinkButton>
+      )}
+
+      {order.status === "SHIPPED" && order.trackingNo && (
+        <a
+          href={getTrackingUrl(order.carrier, order.trackingNo)}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-white px-3 py-1.5 text-xs font-bold text-primary transition hover:bg-secondary"
+        >
+          <ExternalLink size={13} />
+          배송 추적
+        </a>
+      )}
+
+      {order.status === "DELIVERED" && (
+        <>
+          <ActionButton icon={<CheckCircle size={13} />} onClick={() => onConfirm(order)}>거래 확정</ActionButton>
+          <ActionButton tone="red" icon={<AlertCircle size={13} />} onClick={() => onDispute(order)}>이의 제기</ActionButton>
+        </>
+      )}
+
+      {order.status === "CANCELED" && (
+        <ActionButton tone="ghost" icon={<Eye size={13} />} onClick={() => onCancel(order)}>취소 사유</ActionButton>
+      )}
+
+      <Link
+        to={`/orders/${order.id}`}
+        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-500 transition hover:bg-white hover:text-primary"
+      >
+        <Eye size={13} />
+        상세
+      </Link>
     </div>
+  );
+}
+
+function Badge({ children, className }: { children: ReactNode; className: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+function SectionLabel({ icon, title }: { icon: ReactNode; title: string }) {
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-secondary text-primary">{icon}</span>
+      <h3 className="text-sm font-black text-slate-950">{title}</h3>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <span className="text-slate-500">{label}</span>
+      <span className={`text-right ${strong ? "text-base font-black text-primary" : "font-semibold text-slate-900"}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function ActionButton({
+  children,
+  icon,
+  tone = "primary",
+  onClick,
+}: {
+  children: ReactNode;
+  icon: ReactNode;
+  tone?: "primary" | "ghost" | "red" | "orange";
+  onClick: () => void;
+}) {
+  const className = {
+    primary: "bg-primary text-white hover:bg-primary/90",
+    ghost: "border border-slate-200 bg-white text-slate-600 hover:border-primary/30 hover:text-primary",
+    red: "border border-red-200 bg-white text-red-600 hover:bg-red-50",
+    orange: "border border-orange-200 bg-white text-orange-600 hover:bg-orange-50",
+  }[tone];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${className}`}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+}
+
+function LinkButton({ to, icon, children }: { to: string; icon: ReactNode; children: ReactNode }) {
+  return (
+    <Link
+      to={to}
+      className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white transition hover:bg-primary/90"
+    >
+      {icon}
+      {children}
+    </Link>
+  );
+}
+
+function BaseModal({
+  children,
+  icon,
+  onClose,
+  title,
+  tone,
+}: {
+  children: ReactNode;
+  icon: ReactNode;
+  onClose: () => void;
+  title: string;
+  tone: "green" | "red" | "orange";
+}) {
+  const toneClass = {
+    green: "bg-green-50 text-green-600",
+    red: "bg-red-50 text-red-600",
+    orange: "bg-orange-50 text-orange-600",
+  }[tone];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <button type="button" onClick={onClose} className="absolute right-4 top-4 text-slate-400 transition hover:text-slate-900">
+          <X size={20} />
+        </button>
+        <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-full ${toneClass}`}>{icon}</div>
+        <h3 className="mb-2 text-lg font-black text-slate-950">{title}</h3>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function OrderMiniSummary({ order }: { order: Order }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+      <p className="font-black text-slate-950">{order.id}</p>
+      <p className="mt-1 text-slate-500">
+        {order.supplier} · {formatPrice(getOrderTotal(order))}
+      </p>
+    </div>
+  );
+}
+
+function ModalButton({
+  children,
+  disabled = false,
+  onClick,
+  tone = "primary",
+  variant = "solid",
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+  tone?: "primary" | "red";
+  variant?: "solid" | "ghost";
+}) {
+  const solidClass = tone === "red" ? "bg-red-500 text-white hover:bg-red-600" : "bg-primary text-white hover:bg-primary/90";
+  const className = variant === "ghost"
+    ? "border border-slate-200 bg-white text-slate-600 hover:border-primary/30 hover:text-primary"
+    : solidClass;
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`inline-flex flex-1 items-center justify-center rounded-lg px-4 py-2.5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${className}`}
+    >
+      {children}
+    </button>
   );
 }

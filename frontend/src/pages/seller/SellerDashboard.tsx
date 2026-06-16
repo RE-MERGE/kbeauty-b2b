@@ -722,61 +722,72 @@ export function SellerDashboard() {
     return (
         <div className="max-w-[1280px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
             {/* ── 헤더 ── */}
-            <div className="bg-gradient-to-r from-[#1C1C1C] to-[#2a2a2a] text-white rounded-lg p-6 mb-6 shadow-lg">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <div className="flex items-center gap-3 mb-1">
-                            <Layers size={24} className="text-[#C4956A]" />
-                            <h1 className="text-2xl font-bold">르솔레이유</h1>
-                            {businessRole !== "BOTH" && (
-                                <span className="text-xs bg-[#C4956A]/20 text-[#C4956A] border border-[#C4956A]/40 px-2 py-0.5 rounded font-medium">
-                  공급
-                </span>
-                            )}
+            <header className="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-4">
+
+                    {/* 좌: 브랜드 + 타이틀 */}
+                    <div className="min-w-0 flex-1">
+                        <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+                            <Layers size={12} />
+                            공급현황
                         </div>
-                        <p className="text-gray-400 text-sm">{now}</p>
+                        <h1 className="text-xl font-black text-slate-950">
+                            르솔레이유
+                        </h1>
+                        <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
+                            공급 현황을 한눈에 소싱 요청 응대, 견적 작성, 출고 관리, 정산 현황을 통합 관리할 수 있습니다.
+                        </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                        {/* 역할 전환 버튼: BOTH인 유저에게만 노출 */}
-                        {businessRole === "BOTH" && (
-                            <>
+
+                    {/* 우: 2행 레이아웃 */}
+                    <div className="flex shrink-0 flex-col items-end gap-2.5">
+
+                        {/* 윗줄: 구매관리 전환 · 알림 · 설정 */}
+                        <div className="flex items-center gap-2">
+                            {businessRole === "BOTH" && (
                                 <button
-                                    onClick={() => navigate("/buyer")}
-                                    className={`px-5 py-2 rounded text-sm font-semibold transition-colors flex items-center gap-2 ${role === "buyer" ? "bg-[#3a7fd5] text-white" : "text-gray-400 hover:text-white"}`}
+                                    onClick={() => navigate(role === "seller" ? "/buyer" : "/seller")}
+                                    className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
                                 >
-                                    <ShoppingBag size={15} /> 구매관리
+                                    {role === "seller" ? <ShoppingBag size={13} /> : <Layers size={13} />}
+                                    {role === "seller" ? "구매관리로 전환" : "공급관리로 전환"}
                                 </button>
+                            )}
+                            <div className="relative">
                                 <button
-                                    onClick={() => navigate("/seller")}
-                                    className={`px-5 py-2 rounded text-sm font-semibold transition-colors flex items-center gap-2 ${role === "seller" ? "bg-[#C4956A] text-white" : "text-gray-400 hover:text-white"}`}
+                                    className="flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500 transition hover:bg-slate-100"
+                                    aria-label={`알림 ${COUNTS.total}건`}
                                 >
-                                    <Layers size={15} /> 공급관리
+                                    <Bell size={16} />
                                 </button>
-                            </>
-                        )}
-                        <div className="flex items-center gap-1.5 bg-[#C4956A] text-white text-sm font-semibold px-4 py-2 rounded-lg">
-                            <Package size={15} />
-                            <span className="text-sm font-bold">{COUNTS.total}건</span>
-                            <span className="text-xs">처리할 업무</span>
+                                {COUNTS.total > 0 && (
+                                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#3a7fd5] px-1 text-[10px] font-black text-white">
+        {COUNTS.total}
+      </span>
+                                )}
+                            </div>
+                            <Link
+                                to="/company-settings"
+                                className="flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500 transition hover:bg-slate-100"
+                                aria-label="설정"
+                            >
+                                <Settings size={16} />
+                            </Link>
                         </div>
-                        <Link
-                            to="/seller/products/new"
-                            className="flex items-center gap-1.5 bg-[#C4956A] hover:bg-[#b3845a] text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-                        >
-                            <Plus size={15} /> 제품 등록
-                        </Link>
-                        <button className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors">
-                            <Bell size={18} />
-                        </button>
-                        <Link
-                            to="/employee-management"
-                            className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors"
-                        >
-                            <Settings size={18} />
-                        </Link>
+
+                        {/* 아랫줄: 처리할 업무 · 제품 등록 */}
+                        <div className="flex items-center gap-2">
+                            <Link
+                                to="/seller/products/new"
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-primary/90"
+                            >
+                                <Plus size={13} /> 제품 등록
+                            </Link>
+                        </div>
+
                     </div>
                 </div>
-            </div>
+            </header>
 
             {/* ── 긴급 알림 배너 ── */}
             <AlertBanner />

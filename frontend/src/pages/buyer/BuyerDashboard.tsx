@@ -3,7 +3,7 @@ import {
   FileText, MessageSquare, CreditCard, Truck,
   CheckSquare, ChevronRight, AlertCircle, Clock,
   ArrowRight, Package, Plus, ShoppingBag, Bell, Settings,
-  Scale, Timer,
+  Scale, Timer, Layers,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -326,6 +326,12 @@ function StatCards() {
       urgent: 0, urgentLabel: "",
     },
     {
+      label: "이의 제기", count: COUNTS.payments,
+      icon: <Scale size={16} />,
+      href: "/disputes",
+      urgent: 0, urgentLabel: "",
+    },
+    {
       label: "주문 관리", count: COUNTS.receipts,
       icon: <CheckSquare size={16} />,
       href: "/buyer/orders?status=DELIVERED",
@@ -335,7 +341,7 @@ function StatCards() {
   ];
 
   return (
-      <div className="grid grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-6 gap-3 mb-6">
         {cards.map((c) => (
             <Link
                 key={c.label}
@@ -725,62 +731,76 @@ export function BuyerDashboard() {
   return (
       <div className="max-w-[1280px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
         {/* ── 헤더 ── */}
-        <div className="bg-gradient-to-r from-[#1a2744] to-[#243460] text-white rounded-lg p-6 mb-6 shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <ShoppingBag size={24} className="text-[#7eb3f5]" />
-                <h1 className="text-2xl font-bold">스타일위크㈜</h1>
-                {/* BOTH가 아니면 뱃지로만, BOTH면 숨김 (버튼으로 대체) */}
-                {businessRole !== "BOTH" && (
-                    <span className="text-xs bg-[#7eb3f5]/20 text-[#7eb3f5] border border-[#7eb3f5]/40 px-2 py-0.5 rounded font-medium">
-                  구매
-                </span>
-                )}
+        <header className="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+
+            {/* 좌: 회사명 + 타이틀 */}
+            <div className="min-w-0 flex-1">
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+                <ShoppingBag size={12} />
+                구매관리
               </div>
-              <p className="text-blue-200/60 text-sm">{now}</p>
+              <h1 className="text-xl font-black text-slate-950">
+                스타일위크㈜
+              </h1>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
+                구매 현황을 한눈에 소싱 요청, 견적 검토, 발주 결제, 배송 및 수령 확인을 통합 관리할 수 있습니다.
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              {/* 역할 전환 버튼: BOTH인 유저에게만 노출 */}
-              {businessRole === "BOTH" && (
-                  <>
+
+            {/* 우: 2행 레이아웃 */}
+            <div className="flex shrink-0 flex-col items-end gap-2.5">
+
+              {/* 윗줄: 역할 전환 · 알림 · 설정 */}
+              {/* 윗줄: 역할 전환 · 알림(뱃지) · 설정 */}
+              <div className="flex items-center gap-2">
+                {businessRole === "BOTH" && (
                     <button
-                        onClick={() => navigate("/buyer")}
-                        className={`px-5 py-2 rounded text-sm font-semibold transition-colors flex items-center gap-2 ${role === "buyer" ? "bg-[#3a7fd5] text-white" : "text-blue-200/60 hover:text-white"}`}
+                        onClick={() => navigate(role === "buyer" ? "/seller" : "/buyer")}
+                        className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
                     >
-                      <ShoppingBag size={15} /> 구매관리
+                      {role === "buyer" ? <Layers size={13} /> : <ShoppingBag size={13} />}
+                      {role === "buyer" ? "공급관리로 전환" : "구매관리로 전환"}
                     </button>
-                    <button
-                        onClick={() => navigate("/seller")}
-                        className={`px-5 py-2 rounded text-sm font-semibold transition-colors flex items-center gap-2 ${role === "seller" ? "bg-[#2d4a35] text-white" : "text-blue-200/60 hover:text-white"}`}
-                    >
-                      <Package size={15} /> 공급관리
-                    </button>
-                  </>
-              )}
-              <div className="flex items-center gap-1.5 bg-[#7eb3f5] text-[#1a2744] text-sm font-semibold px-4 py-2 rounded-lg">
-                <Package size={15} />
-                <span className="text-sm font-bold">{COUNTS.total}건</span>
-                <span className="text-xs">처리할 업무</span>
+                )}
+
+                {/* 알림 — 업무 수 뱃지 */}
+                <div className="relative">
+                  <button
+                      className="flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500 transition hover:bg-slate-100"
+                      aria-label={`알림 ${COUNTS.total}건`}
+                  >
+                    <Bell size={16} />
+                  </button>
+                  {COUNTS.total > 0 && (
+                      <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#3a7fd5] px-1 text-[10px] font-black text-white">
+        {COUNTS.total}
+      </span>
+                  )}
+                </div>
+
+                <Link
+                    to="/company-settings"
+                    className="flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500 transition hover:bg-slate-100"
+                    aria-label="설정"
+                >
+                  <Settings size={16} />
+                </Link>
               </div>
-              <Link
-                  to="../sourcing-request"
-                  className="flex items-center gap-1.5 bg-[#7eb3f5] hover:bg-[#6aa2e8] text-[#1a2744] text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-              >
-                <MessageSquare size={15} />새 소싱 요청
-              </Link>
-              <button className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors">
-                <Bell size={18} />
-              </button>
-              <Link
-                  to="/employee-management"
-                  className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg transition-colors"
-              >
-                <Settings size={18} />
-              </Link>
+
+              {/* 아랫줄: 새 소싱 요청 */}
+              <div className="flex items-center gap-2">
+                <Link
+                    to="../sourcing-request"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-1.5 text-xs font-bold text-white transition hover:bg-primary/90"
+                >
+                  <MessageSquare size={13} /> 새 소싱 요청
+                </Link>
+              </div>
+
             </div>
           </div>
-        </div>
+        </header>
 
         {/* ── 긴급 알림 배너 ── */}
         <AlertBanner />

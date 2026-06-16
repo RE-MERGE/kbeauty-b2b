@@ -11,12 +11,12 @@ import { AdminAnalytics } from "@/pages/admin/AdminAnalytics";
 import { AdminUsers } from "@/pages/admin/AdminUsers";
 import { SearchPage } from "@/pages/admin/SearchPage";
 
-import { RegisterBuyer } from "@/pages/auth/Buyer";
-import { RegisterSeller } from "@/pages/auth/Seller";
+import { RegisterBuyer } from "@/pages/auth/BuyerResister";
+import { RegisterSeller } from "@/pages/auth/SellerResister";
 import { AuthLayout } from "@/pages/auth/layout";
 import { Login } from "@/pages/auth/Login";
 import { Register } from "@/pages/auth/Register";
-import { RegisterEmployee } from "@/pages/auth/Employee";
+import { RegisterEmployee } from "@/pages/auth/EmployeeResister";
 import { RegisterSuccess } from "@/pages/auth/Success";
 import { FindId } from "@/pages/auth/FindId";
 import { FindPw } from "@/pages/auth/FindPw";
@@ -80,7 +80,7 @@ export const router = createBrowserRouter([
             { path: "supplier-register", Component: SupplierRegister },
             { path: "inquiry", Component: Inquiry },
             { path: "mypage", Component: MyPage },
-            { path: "employee-management", Component: CompanySettings },
+            { path: "settings", Component: CompanySettings },
             { path: "partner", Component: PartnerPlan },
             { path: "quotes/:quoteId", Component: QuoteDetail },
 

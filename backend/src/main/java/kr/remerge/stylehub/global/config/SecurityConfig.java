@@ -1,3 +1,4 @@
+/*
 package kr.remerge.stylehub.global.config;
 
 import kr.remerge.stylehub.global.security.JwtAuthenticationFilter;
@@ -51,3 +52,4 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 }
+*/

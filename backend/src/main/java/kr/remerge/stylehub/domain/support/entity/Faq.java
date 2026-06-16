@@ -1,4 +1,34 @@
 package kr.remerge.stylehub.domain.support.entity;
 
-public class Faq {
+
+import jakarta.persistence.*;
+import kr.remerge.stylehub.global.entity.BaseEntity;
+import lombok.*;
+
+@Entity
+@Table(name = "faqs")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@Builder
+public class Faq extends BaseEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "faq_id")
+    private Integer faqId;
+
+    @Column(length = 50)
+    private String category;
+
+    @Column(nullable = false, length = 300)
+    private String question;
+
+    @Lob
+    @Column(nullable = false)
+    private String answer;
+
+    @Builder.Default
+    @Column(name = "sort_order", nullable = false)
+    private Integer sortOrder = 0;
 }

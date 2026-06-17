@@ -29,6 +29,12 @@ interface NavGroup {
 
 const NAV_GROUPS: NavGroup[] = [
   {
+    label: "쇼핑 활동",
+    items: [
+      { id: "product-activity", label: "관심 · 최근 상품", icon: <Heart size={15} /> },
+    ],
+  },
+  {
     label: "계정",
     items: [
       { id: "profile",       label: "내 정보",       icon: <User size={15} /> },
@@ -41,12 +47,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { id: "notifications", label: "알림 설정",      icon: <Bell size={15} /> },
       { id: "blocks",        label: "차단 관리",      icon: <Ban size={15} /> },
-    ],
-  },
-  {
-    label: "쇼핑 활동",
-    items: [
-      { id: "product-activity", label: "관심 · 최근 상품", icon: <Heart size={15} /> },
     ],
   },
 ];

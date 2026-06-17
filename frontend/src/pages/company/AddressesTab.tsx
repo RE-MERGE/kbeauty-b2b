@@ -410,7 +410,7 @@ function DefaultsSummary({
 
 // ── Main Export ───────────────────────────────────────────────────────────────
 
-export function AddressManagement() {
+export function AddressesTab() {
   const [addresses, setAddresses]           = useState<Address[]>(MOCK_ADDRESSES);
   const [companyDefaults, setCompanyDefaults] = useState<CompanyDefaults>(MOCK_COMPANY_DEFAULTS);
   const [userDefaults, setUserDefaults]       = useState<UserDefaults>(MOCK_USER_DEFAULTS);
@@ -552,3 +552,4 @@ export function AddressManagement() {
     </>
   );
 }
+

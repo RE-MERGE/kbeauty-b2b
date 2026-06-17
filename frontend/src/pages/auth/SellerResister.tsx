@@ -15,7 +15,7 @@ interface FormData {
     businessLicense: File | null;
     delegationDoc: File | null;
     employmentDoc: File | null;
-    storeName: string;
+    brandName: string;
     storeType: StoreType;
     shopUrl: string;
     managerName: string;
@@ -169,9 +169,9 @@ function Step2({form, set}: { form: FormData; set: (f: Partial<FormData>) => voi
     ];
     return (
         <div className="space-y-4">
-            <Field label="매장명 (상호명)" required>
-                <input type="text" value={form.storeName} onChange={(e) => set({storeName: e.target.value})}
-                       placeholder="고객에게 보여지는 브랜드/매장명" className={inputCls}/>
+            <Field label="브랜드명">
+                <input type="text" value={form.brandName} onChange={(e) => set({brandName: e.target.value})}
+                       placeholder="대표 브랜드" className={inputCls}/>
             </Field>
             <Field label="매장 타입" required>
                 <div className="grid grid-cols-3 gap-2">
@@ -251,7 +251,7 @@ function Step3({form, set}: { form: FormData; set: (f: Partial<FormData>) => voi
                 {[
                     ["사업자번호", form.businessNo || "–"],
                     ["회사명", form.companyName || "–"],
-                    ["매장명", form.storeName || "–"],
+                    ["매장명", form.brandName || "–"],
                     ["담당자", form.managerName || "–"],
                     ["정산계좌", form.bankName && form.accountNumber ? `${form.bankName}은행 ${form.accountNumber}` : "–"],
                 ].map(([k, v]) => (
@@ -274,7 +274,7 @@ export function RegisterSeller() {
         businessNo: "", companyName: "", presidentName: "",
         addressMain: "", addressDetail: "", businessLicense: null,
         delegationDoc: null, employmentDoc: null,
-        storeName: "", storeType: "online", shopUrl: "",
+        brandName: "", storeType: "online", shopUrl: "",
         managerName: "", managerPhone: "", managerEmail: "",
         bankName: "", accountNumber: "", accountHolder: "",
         preferredCategories: [],

@@ -1,10 +1,13 @@
 package kr.remerge.stylehub.domain.product.entity;
 
 import jakarta.persistence.*;
+import kr.remerge.stylehub.domain.cart.dto.CartOptionResponse;
+import kr.remerge.stylehub.domain.cart.dto.CartResponse;
 import kr.remerge.stylehub.global.entity.BaseEntity;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(
@@ -58,4 +61,8 @@ public class ProductOption extends BaseEntity {
     @Builder.Default
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "productOption")
+    private List<CartOptionResponse> optionValues = new ArrayList<>();
 }

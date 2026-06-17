@@ -56,9 +56,9 @@ public record CartResponse(
 
         return productOption.getOptionValues()
                 .stream()
-                .map(optionValue -> new CartOptionResponse(
-                        optionValue.optionName(),
-                        optionValue.optionValue()
+                .map(value -> new CartOptionResponse(
+                        value.getOptionName(),
+                        value.getOptionValue()
                 ))
                 .toList();
     }

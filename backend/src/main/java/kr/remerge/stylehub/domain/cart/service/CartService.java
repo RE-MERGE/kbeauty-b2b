@@ -6,8 +6,8 @@ import kr.remerge.stylehub.domain.cart.entity.CartItem;
 import kr.remerge.stylehub.domain.cart.repository.CartRepository;
 import kr.remerge.stylehub.domain.product.entity.ProductOption;
 import kr.remerge.stylehub.domain.product.repository.ProductOptionRepository;
-import kr.remerge.stylehub.domain.user.UserRepository;
 import kr.remerge.stylehub.domain.user.entity.User;
+import kr.remerge.stylehub.domain.user.repository.UserRepository;
 import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -47,7 +47,7 @@ public class CartService {
         );
     }
 
-    public List<CartResponse> getCart(CustomUserDetails userDetails) {
+    public List<CartResponse> getCartByUserId2(CustomUserDetails userDetails) {
 
         if (userDetails == null) {
             throw new IllegalArgumentException("로그인이 필요합니다.");
@@ -67,5 +67,12 @@ public class CartService {
     private User findUser(CartAddRequest request) {
         return userRepository.findById(request.userId()).
                 orElseThrow(() -> new IllegalArgumentException("회원 정보를 찾을 수 없습니다"));
+    }
+
+    public List<CartResponse> getCartByUserId(Integer userId) {
+        return cartRepository.findByUser_UserId(userId)
+                .stream()
+                .map(CartResponse::from)
+                .toList();
     }
 }

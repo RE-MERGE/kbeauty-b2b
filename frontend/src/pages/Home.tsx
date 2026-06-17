@@ -312,7 +312,7 @@ export function Home() {
           {/* [추가] 인기 브랜드 */}
           <div className="bg-secondary rounded border border-primary/20 p-4">
             <div className="text-xs font-semibold text-primary tracking-wider mb-3 flex items-center justify-between">
-              <span>🏆 인기 브랜드</span>
+              <span>🏆 이번주 인기 브랜드</span>
               <Link to="/suppliers" className="text-muted-foreground hover:text-primary font-normal text-[11px]"></Link>
             </div>
             {popularBrands.map((brand, i) => (

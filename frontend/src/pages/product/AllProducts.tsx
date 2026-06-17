@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router";
-import { Search, Filter, Heart, ShoppingCart, Grid3x3, List, ChevronDown } from "lucide-react";
+import { Search, Filter, Heart, ShoppingCart, Grid3x3, List, ChevronDown, X } from "lucide-react";
 
 export type Product = {
   id: string;
@@ -17,51 +17,35 @@ export type Product = {
 };
 
 const categories = [
-  {
-    id: "all", name: "전체", count: 56, subCategories: [],
-  },
-  {
-    id: "tops", name: "상의", count: 14,
-    subCategories: ["티셔츠/탑", "블라우스/셔츠", "니트/스웨터", "후드/맨투맨", "재킷/블레이저"],
-  },
-  {
-    id: "bottoms", name: "하의", count: 10,
-    subCategories: ["팬츠/슬랙스", "스커트", "진/데님", "레깅스", "반바지"],
-  },
-  {
-    id: "dresses", name: "원피스/세트", count: 8,
-    subCategories: ["원피스", "점프수트", "투피스세트"],
-  },
-  {
-    id: "outerwear", name: "아우터", count: 7,
-    subCategories: ["코트", "재킷/점퍼", "가디건", "패딩"],
-  },
-  {
-    id: "innerwear", name: "이너/언더웨어", count: 5,
-    subCategories: ["이너웨어", "속옷", "잠옷/홈웨어"],
-  },
-  {
-    id: "sports", name: "스포츠/애슬레저", count: 6,
-    subCategories: ["스포츠탑", "스포츠레깅스", "트레이닝복", "스포츠세트"],
-  },
-  {
-    id: "accessories", name: "액세서리", count: 4,
-    subCategories: ["가방/백", "모자", "스카프/머플러", "벨트", "양말/타이즈"],
-  },
-  {
-    id: "shoes", name: "신발", count: 4,
-    subCategories: ["스니커즈", "부츠/앵클부츠", "플랫/로퍼", "힐/펌프스"],
-  },
+  { id: "tops", name: "상의", count: 14, subCategories: ["티셔츠/탑", "블라우스/셔츠", "니트/스웨터", "후드/맨투맨", "재킷/블레이저"] },
+  { id: "bottoms", name: "하의", count: 10, subCategories: ["팬츠/슬랙스", "스커트", "진/데님", "레깅스", "반바지"] },
+  { id: "dresses", name: "원피스/세트", count: 8, subCategories: ["원피스", "점프수트", "투피스세트"] },
+  { id: "outerwear", name: "아우터", count: 7, subCategories: ["코트", "재킷/점퍼", "가디건", "패딩"] },
+  { id: "innerwear", name: "이너/언더웨어", count: 5, subCategories: ["이너웨어", "속옷", "잠옷/홈웨어"] },
+  { id: "sports", name: "스포츠/애슬레저", count: 6, subCategories: ["스포츠탑", "스포츠레깅스", "트레이닝복", "스포츠세트"] },
+  { id: "accessories", name: "액세서리", count: 4, subCategories: ["가방/백", "모자", "스카프/머플러", "벨트", "양말/타이즈"] },
+  { id: "shoes", name: "신발", count: 4, subCategories: ["스니커즈", "부츠/앵클부츠", "플랫/로퍼", "힐/펌프스"] },
 ];
 
-// [추가] 브랜드 대분류 - 카테고리와 동일한 구조
-const brandGroups = [
-  { id: "all", name: "전체", brands: [] },
-  { id: "women", name: "여성복", brands: ["동대문패션", "스타일컴퍼니", "엘레강스모드", "트렌드하우스", "페미닌스타일", "내추럴보이", "세트스타일", "코지니트"] },
-  { id: "men", name: "남성복", brands: ["캐주얼하우스", "진워크스", "프리미엄어패럴"] },
-  { id: "sports", name: "스포츠", brands: ["액티브웨어코리아", "스포츠라이프"] },
-  { id: "home", name: "홈·이너", brands: ["베이직이너", "코지홈"] },
-  { id: "acc", name: "액세서리·신발", brands: ["패션액세서리몰", "슈즈마켓"] },
+// [추가] 브랜드 전체 목록 - 가나다순
+const allBrands = [
+  { name: "내추럴보이", logo: "/images/brands/natural.png" },
+  { name: "동대문패션", logo: "/images/brands/ddm.png" },
+  { name: "베이직이너", logo: "/images/brands/basic.png" },
+  { name: "세트스타일", logo: "/images/brands/set.png" },
+  { name: "스타일컴퍼니", logo: "/images/brands/style.png" },
+  { name: "스포츠라이프", logo: "/images/brands/sportslife.png" },
+  { name: "슈즈마켓", logo: "/images/brands/shoes.png" },
+  { name: "액티브웨어코리아", logo: "/images/brands/active.png" },
+  { name: "엘레강스모드", logo: "/images/brands/elegance.png" },
+  { name: "진워크스", logo: "/images/brands/jean.png" },
+  { name: "캐주얼하우스", logo: "/images/brands/casual.png" },
+  { name: "코지니트", logo: "/images/brands/cozy.png" },
+  { name: "코지홈", logo: "/images/brands/cozyhome.png" },
+  { name: "트렌드하우스", logo: "/images/brands/trend.png" },
+  { name: "패션액세서리몰", logo: "/images/brands/acc.png" },
+  { name: "페미닌스타일", logo: "/images/brands/feminine.png" },
+  { name: "프리미엄어패럴", logo: "/images/brands/premium.png" },
 ];
 
 export const products: Product[] = [
@@ -91,28 +75,181 @@ export const products: Product[] = [
   { id: "F024", name: "앵클 첼시 부츠", brand: "슈즈마켓", price: 65000, category: "shoes", subCategory: "부츠/앵클부츠", image: "https://images.unsplash.com/photo-1460353581641-37baddab0fa2?w=400", moq: "20", moqUnit: "켤레", sizes: ["230", "235", "240", "245", "250"] },
 ];
 
+// [추가] ㄱㄴㄷ 초성 목록
+const CHOSUNG = ["전체", "ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"];
+
+function getChosung(str: string): string {
+  const code = str.charCodeAt(0) - 0xAC00;
+  if (code < 0) return str[0];
+  const chosungIdx = Math.floor(code / (21 * 28));
+  return ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"][chosungIdx];
+}
+
+// [추가] 카테고리 목록 (브랜드 패널용)
+const brandPanelCategories = [
+  { id: "all", name: "전체" },
+  { id: "tops", name: "상의" },
+  { id: "bottoms", name: "하의" },
+  { id: "dresses", name: "원피스/세트" },
+  { id: "outerwear", name: "아우터" },
+  { id: "innerwear", name: "이너/언더웨어" },
+  { id: "sports", name: "스포츠/애슬레저" },
+  { id: "accessories", name: "액세서리" },
+  { id: "shoes", name: "신발" },
+];
+
+// [추가] 카테고리별 브랜드 매핑
+const brandsByCategory: Record<string, string[]> = {
+  all: [],
+  tops: ["동대문패션", "스타일컴퍼니", "캐주얼하우스", "엘레강스모드", "코지니트", "내추럴보이", "트렌드하우스"],
+  bottoms: ["스타일컴퍼니", "트렌드하우스", "진워크스", "페미닌스타일"],
+  dresses: ["트렌드하우스", "내추럴보이", "세트스타일"],
+  outerwear: ["프리미엄어패럴", "진워크스", "코지니트"],
+  innerwear: ["베이직이너", "코지홈"],
+  sports: ["액티브웨어코리아", "스포츠라이프"],
+  accessories: ["패션액세서리몰"],
+  shoes: ["슈즈마켓"],
+};
+
+function BrandPanel({ allBrands, selectedBrand, onSelect, onClear }: {
+  allBrands: { name: string; logo: string }[];
+  selectedBrand: string;
+  onSelect: (name: string) => void;
+  onClear: () => void;
+}) {
+  const [chosung, setChosung] = useState("전체");
+  const [panelCat, setPanelCat] = useState("all");
+  const [visibleCount, setVisibleCount] = useState(10);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const catFiltered = panelCat === "all"
+    ? allBrands
+    : allBrands.filter(b => (brandsByCategory[panelCat] ?? []).includes(b.name));
+
+  const chosungFiltered = chosung === "전체"
+    ? catFiltered
+    : catFiltered.filter(b => getChosung(b.name) === chosung);
+
+  const visible = chosungFiltered.slice(0, visibleCount);
+
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 10) {
+      setVisibleCount((v) => v + 10);
+    }
+  };
+
+  return (
+    <div className="absolute left-full top-0 ml-2 bg-white border border-border rounded-lg shadow-xl z-30 flex flex-col" style={{ width: "420px" }}>
+      {/* 헤더 */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
+        <span className="text-sm font-bold text-foreground">브랜드 선택</span>
+        {selectedBrand && (
+          <button onClick={onClear} className="text-xs text-primary hover:underline">선택 해제</button>
+        )}
+      </div>
+      {/* ㄱㄴㄷ 필터 */}
+      <div className="flex flex-wrap gap-1 px-3 py-2 border-b border-border flex-shrink-0">
+        {CHOSUNG.map((c) => (
+          <button
+            key={c}
+            onClick={() => { setChosung(c); setVisibleCount(10); }}
+            className={`text-xs px-2 py-1 rounded transition-colors ${chosung === c ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:text-primary"}`}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+      {/* 카테고리 + 브랜드 리스트 */}
+      <div className="flex flex-1 min-h-0" style={{ maxHeight: "360px" }}>
+        {/* 왼쪽 카테고리 */}
+        <div className="w-28 border-r border-border flex-shrink-0 overflow-y-auto">
+          {brandPanelCategories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => { setPanelCat(cat.id); setVisibleCount(10); }}
+              className={`w-full text-left px-3 py-2.5 text-xs transition-colors border-b border-border ${
+                panelCat === cat.id
+                  ? "bg-primary text-white font-semibold"
+                  : "text-foreground hover:bg-secondary"
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+        {/* 오른쪽 브랜드 리스트 */}
+        <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
+          {visible.length === 0 ? (
+            <div className="text-center py-8 text-sm text-muted-foreground">해당 브랜드가 없습니다</div>
+          ) : (
+            visible.map((brand) => (
+              <button
+                key={brand.name}
+                onClick={() => onSelect(selectedBrand === brand.name ? "" : brand.name)}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 border-b border-border transition-colors text-left ${
+                  selectedBrand === brand.name
+                    ? "bg-primary/10 text-primary"
+                    : "hover:bg-secondary text-foreground"
+                }`}
+              >
+                <div className="w-8 h-8 rounded bg-white border border-border flex items-center justify-center flex-shrink-0 overflow-hidden">
+                  <img
+                    src={brand.logo}
+                    alt={brand.name}
+                    className="w-full h-full object-contain"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                </div>
+                <span className="text-sm">{brand.name}</span>
+                {selectedBrand === brand.name && (
+                  <span className="ml-auto text-primary font-bold text-xs">✓</span>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AllProducts() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get("category") || "all");
   const [selectedSubCategory, setSelectedSubCategory] = useState(searchParams.get("sub") || "");
   const [expandedCategory, setExpandedCategory] = useState<string | null>(searchParams.get("category") || null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
   const [selectedBrand, setSelectedBrand] = useState("");
   const [sidebarTab, setSidebarTab] = useState<"category" | "brand">("category");
-  const [expandedBrandGroup, setExpandedBrandGroup] = useState<string | null>(null);
-  const [favorites, setFavorites] = useState<string[]>(() => { 
-  const saved = localStorage.getItem("wishlist");
-  return saved ? JSON.parse(saved) : [];
-}); 
+  // [추가] 브랜드 패널 열림 state
+  const [brandPanelOpen, setBrandPanelOpen] = useState(false);
+  const brandPanelRef = useRef<HTMLDivElement>(null);
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    const saved = localStorage.getItem("wishlist");
+    return saved ? JSON.parse(saved) : [];
+  });
+
   useEffect(() => {
     const cat = searchParams.get("category") || "all";
     const sub = searchParams.get("sub") || "";
-    const q = searchParams.get("q") || "";
     setSelectedCategory(cat);
     setSelectedSubCategory(sub);
-    setSearchQuery(q);
   }, [searchParams]);
+
+  // [추가] 외부 클릭 시 브랜드 패널 닫기
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (brandPanelRef.current && !brandPanelRef.current.contains(e.target as Node)) {
+        setBrandPanelOpen(false);
+      }
+    };
+    if (brandPanelOpen) {
+      document.addEventListener("mousedown", handler);
+    }
+    return () => document.removeEventListener("mousedown", handler);
+  }, [brandPanelOpen]);
 
   const handleCategoryChange = (catId: string) => {
     if (catId === "all") {
@@ -122,7 +259,6 @@ export function AllProducts() {
       setSearchParams({});
       return;
     }
-    // 이미 선택된 카테고리 클릭 시 접기
     if (expandedCategory === catId) {
       setExpandedCategory(null);
     } else {
@@ -130,54 +266,30 @@ export function AllProducts() {
     }
     setSelectedCategory(catId);
     setSelectedSubCategory("");
-    const params: Record<string, string> = { category: catId };
-    if (searchQuery) params.q = searchQuery;
-    setSearchParams(params);
+    setSearchParams({ category: catId });
   };
 
   const handleSubCategoryChange = (subCat: string) => {
     setSelectedSubCategory(subCat);
-    const params: Record<string, string> = { category: selectedCategory, sub: subCat };
-    if (searchQuery) params.q = searchQuery;
-    setSearchParams(params);
-  };
-
-  // [추가] 브랜드 대분류 펼침 핸들러
-  const handleBrandGroupClick = (groupId: string) => {
-    if (groupId === "all") {
-      setSelectedBrand("");
-      setExpandedBrandGroup(null);
-      return;
-    }
-    setExpandedBrandGroup(expandedBrandGroup === groupId ? null : groupId);
-    setSelectedBrand("");
+    setSearchParams({ category: selectedCategory, sub: subCat });
   };
 
   const filteredProducts = products.filter((p) => {
     const matchCategory = selectedCategory === "all" || p.category === selectedCategory;
     const matchSub = !selectedSubCategory || p.subCategory === selectedSubCategory;
-    // [추가] 브랜드 필터 조건
     const matchBrand = !selectedBrand || p.brand === selectedBrand;
-    // [추가] 브랜드 대분류 필터 - 펼쳐진 그룹의 브랜드만 필터
-    const expandedGroup = brandGroups.find((g) => g.id === expandedBrandGroup);
-    const matchBrandGroup = !expandedBrandGroup || (expandedGroup?.brands.includes(p.brand) ?? false);
-    const matchSearch = !searchQuery ||
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.subCategory.toLowerCase().includes(searchQuery.toLowerCase());
-    // [수정] matchBrand, matchBrandGroup 추가
-    return matchCategory && matchSub && matchBrand && matchBrandGroup && matchSearch;
+    return matchCategory && matchSub && matchBrand;
   });
 
-  const toggleFavorite = (productId: string) => { //좋아요 페이지 추가용
-  setFavorites((prev) => {
-    const next = prev.includes(productId)
-      ? prev.filter((id) => id !== productId)
-      : [...prev, productId];
-    localStorage.setItem("wishlist", JSON.stringify(next));
-    return next;
-  });
-};
+  const toggleFavorite = (productId: string) => {
+    setFavorites((prev) => {
+      const next = prev.includes(productId)
+        ? prev.filter((id) => id !== productId)
+        : [...prev, productId];
+      localStorage.setItem("wishlist", JSON.stringify(next));
+      return next;
+    });
+  };
 
   return (
     <div className="max-w-[1480px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
@@ -187,161 +299,123 @@ export function AllProducts() {
         <p className="text-muted-foreground">국내 여성복 B2B 도매 상품을 탐색하세요</p>
       </div>
 
-      {/* Search & Filter Bar */}
-      <div className="bg-white border border-border rounded-lg p-4 mb-6 flex items-center gap-4">
-        <div className="flex-1 relative">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="상품명, 브랜드, 카테고리 검색..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setViewMode("grid")}
-            className={`p-2.5 rounded-lg transition-colors ${viewMode === "grid" ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:text-foreground"}`}
-          >
-            <Grid3x3 size={18} />
-          </button>
-          <button
-            onClick={() => setViewMode("list")}
-            className={`p-2.5 rounded-lg transition-colors ${viewMode === "list" ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:text-foreground"}`}
-          >
-            <List size={18} />
-          </button>
-        </div>
-        <button className="flex items-center gap-2 px-4 py-2.5 border border-border rounded-lg text-sm font-medium text-foreground hover:border-primary hover:text-primary transition-colors">
-          <Filter size={16} />
-          필터
+      {/* 뷰모드/필터 버튼 */}
+      <div className="flex justify-end mb-6 gap-2">
+        <button
+          onClick={() => setViewMode("grid")}
+          className={`p-2.5 rounded-lg transition-colors ${viewMode === "grid" ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+        >
+          <Grid3x3 size={18} />
         </button>
+        <button
+          onClick={() => setViewMode("list")}
+          className={`p-2.5 rounded-lg transition-colors ${viewMode === "list" ? "bg-primary text-white" : "bg-muted text-muted-foreground hover:text-foreground"}`}
+        >
+          <List size={18} />
+        </button>
+        
       </div>
 
       <div className="grid grid-cols-[240px_1fr] gap-6">
         {/* Sidebar */}
-        <div>
-          {/* [추가] 사이드바 토글 버튼 */}
+        {/* [수정] relative로 브랜드 패널 기준점 설정 */}
+        <div className="relative" ref={brandPanelRef}>
+          {/* 사이드바 토글 버튼 */}
           <div className="flex gap-2 mb-4">
-            <button
-              onClick={() => setSidebarTab("category")}
+          <button
+              onClick={() => {
+                if (selectedCategory !== "all" || selectedSubCategory) {
+                  setSelectedCategory("all");
+                  setSelectedSubCategory("");
+                  setExpandedCategory(null);
+                  setSearchParams({});
+                } else {
+                  setSidebarTab("category");
+                  setBrandPanelOpen(false);
+                }
+              }}
               className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all border ${
-                sidebarTab === "category"
+                selectedCategory !== "all" || selectedSubCategory
                   ? "bg-primary text-white border-primary"
                   : "bg-white text-foreground border-border hover:border-primary hover:text-primary"
               }`}
             >
               카테고리
             </button>
+            {/* [수정] 브랜드 탭 클릭 시 옆에 패널 오픈 */}
             <button
-              onClick={() => setSidebarTab("brand")}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all border ${
-                sidebarTab === "brand"
+              onClick={() => {
+                if (selectedBrand) {
+                  setSelectedBrand("");
+                } else {
+                  setSidebarTab("brand");
+                  setBrandPanelOpen((v) => !v);
+                }
+              }}
+             className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all border ${
+                selectedBrand
                   ? "bg-primary text-white border-primary"
                   : "bg-white text-foreground border-border hover:border-primary hover:text-primary"
               }`}
             >
-              브랜드
+              {selectedBrand ? `${selectedBrand}` : "브랜드"}
             </button>
           </div>
-          {/* [추가 끝] */}
 
-          {/* [추가] 카테고리 패널 */}
-          {sidebarTab === "category" && (
-            <div className="space-y-1">
-              {categories.map((cat) => (
-                <div key={cat.id}>
-                  <button
-                    onClick={() => handleCategoryChange(cat.id)}
-                    className={`w-full text-left px-4 py-2.5 rounded-lg transition-all text-sm ${
-                      selectedCategory === cat.id && !selectedSubCategory
-                        ? "bg-primary text-white font-semibold shadow-sm"
-                        : selectedCategory === cat.id
-                        ? "bg-primary/10 text-primary font-semibold"
-                        : "bg-white border border-border text-foreground hover:border-primary hover:text-primary"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span>{cat.name}</span>
-                      {cat.subCategories.length > 0 && (
-                        <ChevronDown
-                          size={13}
-                          className={`transition-transform ${expandedCategory === cat.id ? "rotate-180" : ""} ${selectedCategory === cat.id && !selectedSubCategory ? "text-white/80" : "text-muted-foreground"}`}
-                        />
-                      )}
-                    </div>
-                  </button>
-                  {expandedCategory === cat.id && cat.subCategories.length > 0 && (
-                    <div className="ml-3 mt-1 space-y-0.5 border-l-2 border-primary/20 pl-3">
-                      {cat.subCategories.map((sub) => (
-                        <button
-                          key={sub}
-                          onClick={() => handleSubCategoryChange(sub)}
-                          className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors ${
-                            selectedSubCategory === sub
-                              ? "bg-primary text-white font-semibold"
-                              : "text-muted-foreground hover:text-primary hover:bg-primary/5"
-                          }`}
-                        >
-                          {sub}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+          {/* 카테고리 패널 */}
+          <div className="space-y-1">
+            {categories.map((cat) => (
+              <div key={cat.id}>
+                <button
+                  onClick={() => handleCategoryChange(cat.id)}
+                  className={`w-full text-left px-4 py-2.5 rounded-lg transition-all text-sm ${
+                    selectedCategory === cat.id && !selectedSubCategory
+                      ? "bg-primary text-white font-semibold shadow-sm"
+                      : selectedCategory === cat.id
+                      ? "bg-primary/10 text-primary font-semibold"
+                      : "bg-white border border-border text-foreground hover:border-primary hover:text-primary"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span>{cat.name}</span>
+                    {cat.subCategories.length > 0 && (
+                      <ChevronDown
+                        size={13}
+                        className={`transition-transform ${expandedCategory === cat.id ? "rotate-180" : ""} ${selectedCategory === cat.id && !selectedSubCategory ? "text-white/80" : "text-muted-foreground"}`}
+                      />
+                    )}
+                  </div>
+                </button>
+                {expandedCategory === cat.id && cat.subCategories.length > 0 && (
+                  <div className="ml-3 mt-1 space-y-0.5 border-l-2 border-primary/20 pl-3">
+                    {cat.subCategories.map((sub) => (
+                      <button
+                        key={sub}
+                        onClick={() => handleSubCategoryChange(sub)}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors ${
+                          selectedSubCategory === sub
+                            ? "bg-primary text-white font-semibold"
+                            : "text-muted-foreground hover:text-primary hover:bg-primary/5"
+                        }`}
+                      >
+                        {sub}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* [추가] 브랜드 패널 - 사이드바 오른쪽에 붙어서 나옴 */}
+          {brandPanelOpen && (
+            <BrandPanel
+              allBrands={allBrands}
+              selectedBrand={selectedBrand}
+              onSelect={(name) => { setSelectedBrand(name); setBrandPanelOpen(false); }}
+              onClear={() => setSelectedBrand("")}
+            />
           )}
-
-          {/* [추가] 브랜드 패널 - 카테고리와 완전히 동일한 구조 */}
-          {sidebarTab === "brand" && (
-            <div className="space-y-1">
-              {brandGroups.map((group) => (
-                <div key={group.id}>
-                  <button
-                    onClick={() => handleBrandGroupClick(group.id)}
-                    className={`w-full text-left px-4 py-2.5 rounded-lg transition-all text-sm ${
-                      expandedBrandGroup === group.id
-                        ? "bg-primary text-white font-semibold shadow-sm"
-                        : group.id === "all" && !expandedBrandGroup
-                        ? "bg-primary text-white font-semibold shadow-sm"
-                        : "bg-white border border-border text-foreground hover:border-primary hover:text-primary"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span>{group.name}</span>
-                      {group.brands.length > 0 && (
-                        <ChevronDown
-                          size={13}
-                          className={`transition-transform ${expandedBrandGroup === group.id ? "rotate-180" : ""} ${expandedBrandGroup === group.id ? "text-white/80" : "text-muted-foreground"}`}
-                        />
-                      )}
-                    </div>
-                  </button>
-                  {expandedBrandGroup === group.id && group.brands.length > 0 && (
-                    <div className="ml-3 mt-1 space-y-0.5 border-l-2 border-primary/20 pl-3">
-                      {group.brands.map((brand) => (
-                        <button
-                          key={brand}
-                          onClick={() => setSelectedBrand(selectedBrand === brand ? "" : brand)}
-                          className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors ${
-                            selectedBrand === brand
-                              ? "bg-primary text-white font-semibold"
-                              : "text-muted-foreground hover:text-primary hover:bg-primary/5"
-                          }`}
-                        >
-                          {brand}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          {/* [추가 끝] */}
-
         </div>
 
         {/* Product Grid/List */}
@@ -349,9 +423,8 @@ export function AllProducts() {
           <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-muted-foreground">
               총 <span className="font-bold text-foreground">{filteredProducts.length}</span>개 상품
-              {selectedSubCategory && (
-                <span className="ml-2 text-primary font-medium">· {selectedSubCategory}</span>
-              )}
+              {selectedSubCategory && <span className="ml-2 text-primary font-medium">· {selectedSubCategory}</span>}
+              {selectedBrand && <span className="ml-2 text-primary font-medium">· {selectedBrand}</span>}
             </p>
           </div>
 

@@ -18,6 +18,7 @@ public record CartResponse(
         List<CartOptionResponse> options,
 
         Long unitPrice,
+        Integer moq,
         Integer quantity,
         Long totalPrice,
 
@@ -44,6 +45,7 @@ public record CartResponse(
                 options,
 
                 unitPrice,
+                product.getMoq(),
                 cartItem.getQuantity(),
                 totalPrice,
 

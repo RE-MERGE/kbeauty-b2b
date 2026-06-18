@@ -4,7 +4,9 @@ import jakarta.validation.Valid;
 import kr.remerge.stylehub.domain.cart.dto.CartAddRequest;
 import kr.remerge.stylehub.domain.cart.dto.CartResponse;
 import kr.remerge.stylehub.domain.cart.service.CartService;
+import kr.remerge.stylehub.global.auth.security.AuthUser;
 import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
+import kr.remerge.stylehub.global.auth.security.LoginUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,10 +23,11 @@ public class CartController {
 
     @PostMapping
     public ResponseEntity<?> addItem(
+            @LoginUser AuthUser authUser,
             @Valid @RequestBody CartAddRequest request
     ) {
 
-        cartService.addToCart(request);
+        cartService.addToCart(authUser.userId(), request);
         return ResponseEntity.ok().build();
     }
 

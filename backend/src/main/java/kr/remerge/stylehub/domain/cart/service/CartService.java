@@ -25,9 +25,9 @@ public class CartService {
     private final ProductOptionRepository productOptionRepository;
 
     @Transactional
-    public void addToCart(CartAddRequest request) {
+    public void addToCart(Integer userId, CartAddRequest request) {
 
-        User user = findUser(request);
+        User user = findUser(userId);
         ProductOption productOption = findProductOption(request);
 
         cartRepository.findByUserAndProductOptionAndCartType(
@@ -64,8 +64,9 @@ public class CartService {
                 .orElseThrow(() -> new IllegalArgumentException("상품을 조회할 수 없습니다."));
     }
 
-    private User findUser(CartAddRequest request) {
-        return userRepository.findById(request.userId()).
+    private User findUser(Integer userId) {
+        return userRepository.findById(userId).
                 orElseThrow(() -> new IllegalArgumentException("회원 정보를 찾을 수 없습니다"));
     }
+
 }

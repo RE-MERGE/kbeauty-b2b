@@ -1,23 +1,20 @@
 package kr.remerge.stylehub.global.auth;
 
+import kr.remerge.stylehub.domain.user.entity.User;
+import kr.remerge.stylehub.domain.user.repository.UserRepository;
+import kr.remerge.stylehub.global.auth.dto.LoginRequest;
+import kr.remerge.stylehub.global.auth.dto.TokenResponse;
+import kr.remerge.stylehub.global.auth.jwt.JwtProvider;
+import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
+import kr.remerge.stylehub.global.exception.BusinessException;
+import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import kr.remerge.stylehub.global.auth.jwt.JwtProvider;
-import kr.remerge.stylehub.global.auth.dto.LoginRequest;
-import kr.remerge.stylehub.global.auth.dto.TokenResponse;
-import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
-import kr.remerge.stylehub.global.exception.BusinessException;
-import kr.remerge.stylehub.global.exception.ErrorCode;
-import kr.remerge.stylehub.domain.user.entity.User;
-import kr.remerge.stylehub.domain.user.repository.UserRepository;
 /*
 흐름 요약
 로그인 요청
@@ -79,6 +76,7 @@ public class AuthService {
         // 7. JWT 발급 (이 부분을 꼭 추가하세요!)
         String accessToken = jwtProvider.generateAccessToken(
                 user.getUserId(),
+                user.getCompany().getCompanyId(),
                 user.getRole().name(),
                 user.getBusinessRole().name()
         );
@@ -113,9 +111,9 @@ public class AuthService {
         //    리프레시 토큰은 그대로 유지
         String newAccessToken = jwtProvider.generateAccessToken(
                 user.getUserId(),
+                user.getCompany().getCompanyId(),
                 user.getRole().name(),
-                user.getBusinessRole().name()
-        );
+                user.getBusinessRole().name());
 
         return TokenResponse.of(newAccessToken, refreshToken);
     }

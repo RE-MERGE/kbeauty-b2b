@@ -5,10 +5,13 @@ import jakarta.persistence.*;
 import kr.remerge.stylehub.global.entity.BaseEntity;
 import lombok.*;
 
-import java.time.LocalDateTime;
-
 @Entity
-@Table(name = "product_images")
+@Table(
+        name = "product_images",
+        indexes = {
+                @Index(name = "idx_product_images_product_option_id", columnList = "product_option_id")
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -26,4 +29,12 @@ public class ProductImage extends BaseEntity {
 
     @Column(name = "image_url", nullable = false, length = 2000)
     private String imageUrl;
+
+    @Builder.Default
+    @Column(name = "sort_order", nullable = false)
+    private Integer sortOrder = 0;
+
+    @Builder.Default
+    @Column(name = "is_main", nullable = false)
+    private Boolean isMain = false;
 }

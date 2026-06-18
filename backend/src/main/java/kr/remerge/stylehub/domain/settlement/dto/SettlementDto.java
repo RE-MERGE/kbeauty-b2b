@@ -1,9 +1,9 @@
 package kr.remerge.stylehub.domain.settlement.dto;
+import lombok.*;
 
+import java.time.LocalDateTime;
 
 @Data
-@getter
-@setter
 public class SettlementDto {
     private int settlement_id;
 
@@ -17,6 +17,6 @@ public class SettlementDto {
     private int final_amount;
     private String status;
 
-    private date settled_at;
-    private date created_at;
+    private LocalDateTime settled_at;
+    private LocalDateTime created_at;
 }

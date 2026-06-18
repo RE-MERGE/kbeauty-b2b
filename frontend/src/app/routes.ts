@@ -22,7 +22,7 @@ import { FindId } from "@/pages/auth/FindId";
 import { FindPw } from "@/pages/auth/FindPw";
 
 import { BuyerOrderDetail } from "@/pages/buyer/BuyerOrderDetail";
-import { BuyerSourcingList } from "@/pages/buyer/BuyerSourcingList";
+import { BuyerSourcingList } from "@/pages/sourcing/BuyerSourcingList";
 import { BuyerDashboard } from "@/pages/buyer/BuyerDashboard";
 import { BuyerShippingQuotes } from "@/pages/buyer/BuyerShippingQuotes";
 

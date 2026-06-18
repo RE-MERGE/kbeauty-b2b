@@ -1,6 +1,7 @@
 package kr.remerge.stylehub.domain.quote.entity;
 
 import jakarta.persistence.*;
+import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.sourcing.entity.SourcingRequest;
 import kr.remerge.stylehub.domain.user.entity.User;
 import lombok.*;
@@ -41,6 +42,13 @@ public class Quote{
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "seller_id", nullable = false)
     private User seller;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
+
+    @Column(name = "company_name", length = 50)
+    private String companyName;
 
     @Column(name = "buyer_name", length = 50)
     private String buyerName;

@@ -121,6 +121,18 @@ public class Order {
     @Column(name = "sender_address_detail", length = 255)
     private String senderAddressDetail;
 
+    @Column(name = "carrier", length = 50)
+    private String carrier; // 택배사 또는 운송사명
+
+    @Column(name = "tracking_number", length = 100)
+    private String trackingNumber; // 운송장 번호
+
+    @Column(name = "shipped_at")
+    private LocalDateTime shippedAt; // 출고 일시
+
+    @Column(name = "delivered_at")
+    private LocalDateTime deliveredAt; // 배송 완료 일시
+
     @Lob
     @Column(name = "canceled_reason")
     private String canceledReason;

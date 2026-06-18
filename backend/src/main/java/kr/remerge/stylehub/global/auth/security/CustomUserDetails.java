@@ -20,6 +20,7 @@ public class CustomUserDetails implements UserDetails {
 
     // DB의 users 테이블에서 가져온 정보들
     private final Integer userId;
+    private final Integer companyId;
     private final String email;
     private final String password;
     private final String role;          // ADMIN / PRESIDENT / EMPLOYEE
@@ -34,6 +35,7 @@ public class CustomUserDetails implements UserDetails {
     // 엔티티 전체를 들고 다니지 않고 필요한 값만 복사하는 게 포인트
     public CustomUserDetails(User user) {
         this.userId = user.getUserId();
+        this.companyId = (user.getCompany() != null) ? user.getCompany().getCompanyId() : null;
         this.email = user.getEmail();
         this.password = user.getPassword();
         this.role = user.getRole().name();

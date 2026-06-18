@@ -47,7 +47,7 @@ public class CartService {
         );
     }
 
-    public List<CartResponse> getCartByUserId2(CustomUserDetails userDetails) {
+    public List<CartResponse> getCartByUserId(CustomUserDetails userDetails) {
 
         if (userDetails == null) {
             throw new IllegalArgumentException("로그인이 필요합니다.");
@@ -67,12 +67,5 @@ public class CartService {
     private User findUser(CartAddRequest request) {
         return userRepository.findById(request.userId()).
                 orElseThrow(() -> new IllegalArgumentException("회원 정보를 찾을 수 없습니다"));
-    }
-
-    public List<CartResponse> getCartByUserId(Integer userId) {
-        return cartRepository.findByUser_UserId(userId)
-                .stream()
-                .map(CartResponse::from)
-                .toList();
     }
 }

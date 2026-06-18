@@ -33,14 +33,9 @@ public class CartController {
             @AuthenticationPrincipal CustomUserDetails userDetails
     ) {
 
-        List<CartResponse> cartItemList =  cartService.getCartByUserId2(userDetails);
+        List<CartResponse> cartItemList =  cartService.getCartByUserId(userDetails);
 
         return ResponseEntity.ok(cartItemList);
-    }
-
-    @GetMapping("/test")
-    public List<CartResponse> getCartTest(@RequestParam Integer userId) {
-        return cartService.getCartByUserId(userId);
     }
 
 }

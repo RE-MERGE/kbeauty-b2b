@@ -49,7 +49,7 @@ public ApiResponse<?> getUsers() { ... }
 public class SecurityConfig {
 
     private static final String[] PUBLIC_URLS = {
-            "/**",
+            "/api/**",
             //"/api/auth/**",         // 로그인, 회원가입, 토큰 재발급
             // "/api/cart/**",
             //"/swagger-ui/**",       // Swagger UI
@@ -89,7 +89,7 @@ public class SecurityConfig {
                         .requestMatchers(PUBLIC_URLS).permitAll()
 
                         // /api/admin/** 은 ADMIN 역할만 접근 가능
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")1
 
                         // 그 외 모든 요청은 인증 필요
                         .anyRequest().authenticated()

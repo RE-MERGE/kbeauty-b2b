@@ -1,9 +1,6 @@
 package kr.remerge.stylehub.global.auth.jwt;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.JwtException;
-import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -24,8 +21,6 @@ public class JwtProvider {
     // ───────────────────────────────────────────
 
     // yml에 설정한 secret 문자열을 실제 암호화 Key 객체로 변환
-    // [변경 전] 리턴 타입이 Key여서 파싱할 때 매번 (SecretKey)로 형변환해야 했음
-    // [변경 후] 최신 jjwt 스펙에 맞게 처음부터 'SecretKey'를 반환하도록 수정하여 코드 간결화
     private SecretKey getSigningKey() {
         byte[] keyBytes = jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8);
         return Keys.hmacShaKeyFor(keyBytes);
@@ -37,13 +32,12 @@ public class JwtProvider {
 
     // 액세스 토큰 생성
     // userId, role, businessRole을 토큰 안에 담아서 발급
-    public String generateAccessToken(Long userId, String role, String businessRole) {
-        return buildToken(userId, role, businessRole, jwtProperties.getAccessTokenExpiration());
+    public String generateAccessToken(Integer userId, Integer companyId, String role, String businessRole) {
+        return buildToken(userId, companyId, role, businessRole, jwtProperties.getAccessTokenExpiration());
     }
 
     // 리프레시 토큰 생성
-    public String generateRefreshToken(Long userId) {
-        // [변경 후] jjwt 0.12.x 버전의 빌더 문법 적용
+    public String generateRefreshToken(Integer userId) {
         // 1. setSubject(), setIssuedAt(), setExpiration() -> 모두 'set'이 제거된 최신 메서드로 변경
         // 2. signWith(Key, 알고리즘) -> signWith(Key) 하나로 변경 (jjwt가 키 길이를 보고 최적의 알고리즘을 자동 세팅함)
         return Jwts.builder()
@@ -55,16 +49,22 @@ public class JwtProvider {
     }
 
     // 실제 토큰을 조립하는 내부 메서드
-    private String buildToken(Long userId, String role, String businessRole, long expiration) {
-        // [변경 후] generateRefreshToken과 동일하게 최신형 빌더 문법으로 리팩토링
-        return Jwts.builder()
+    private String buildToken(Integer userId, Integer companyId, String role, String businessRole, long expiration) {
+        JwtBuilder builder = Jwts.builder()
                 .subject(String.valueOf(userId))  // 토큰 주인 (userId)
+                .claim("companyId", companyId) // 회사 PK
                 .claim("role", role)                 // ADMIN / PRESIDENT / EMPLOYEE
                 .claim("businessRole", businessRole) // BUYER / SELLER / BOTH
                 .issuedAt(new Date())             // 발급 시각
                 .expiration(new Date(System.currentTimeMillis() + expiration)) // 만료 시각
-                .signWith(getSigningKey())        // 서명
-                .compact();                          // 문자열로 직렬화
+                .signWith(getSigningKey());    // 서명
+
+        // companyId가 있을 때만 클레임에 추가 (null 안전성 확보)
+        if (companyId != null) {
+            builder.claim("companyId", companyId);
+        }
+
+        return builder.compact();
     }
 
     // ───────────────────────────────────────────
@@ -86,10 +86,13 @@ public class JwtProvider {
         return getClaims(token).get("businessRole", String.class);
     }
 
+    // 토큰에서 companyId 추출
+    public Integer getCompanyId(String token) {
+        return getClaims(token).get("companyId", Integer.class);
+    }
+
     // 토큰을 파싱해서 Claims(페이로드 전체) 반환
     private Claims getClaims(String token) {
-        // [변경 전] .verifyWith((SecretKey) getSigningKey()) 처럼 지저분한 캐스팅이 있었음
-        // [변경 후] getSigningKey()의 반환 타입이 SecretKey로 바뀌었으므로 괄호 없이 깔끔하게 매핑
         return Jwts.parser()
                 .verifyWith(getSigningKey()) // 서명 키 검증 설정
                 .build()                     // 파서 객체 빌드
@@ -106,9 +109,6 @@ public class JwtProvider {
         try {
             getClaims(token); // 파싱 성공하면 유효한 토큰
             return true;
-        } catch (ExpiredJwtException e) {
-            // 만료된 토큰 → Filter 레이어 등에서 catch하여 리프레시 토큰 로직을 타도록 그대로 다시 던짐 (throw)
-            throw e;
         } catch (JwtException | IllegalArgumentException e) {
             // 위변조, 형식 오류 등 → 무조건 잘못된 토큰이므로 false 반환
             return false;

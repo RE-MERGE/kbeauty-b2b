@@ -62,6 +62,8 @@ export function ProductDetail() {
     unit: "/벌",
     moq: 100,
     verified: true,
+    sampleAvailable: true,
+    samplePrice: 10000,
 
     productType: "OEM/ODM" as "기성품" | "OEM/ODM", // 제품 유형 추가
 
@@ -109,7 +111,10 @@ export function ProductDetail() {
 
   const total = product.price * quantity;
 
+
   const handleAddToCart = async () => {
+    if (isAddingToCart) return;
+
     try {
       setIsAddingToCart(true);
       await api.post("/cart", {
@@ -117,9 +122,10 @@ export function ProductDetail() {
         quantity,
         cartType: "NORMAL",
       });
-
       navigate("/cart");
-    } catch {
+    } catch (error) {
+      const apiError = error as { response?: { status?: number; data?: unknown } };
+      console.error("장바구니 추가 실패", apiError.response?.status, apiError.response?.data);
       window.alert("장바구니에 담지 못했습니다. 로그인 상태와 상품 옵션을 확인해주세요.");
     } finally {
       setIsAddingToCart(false);

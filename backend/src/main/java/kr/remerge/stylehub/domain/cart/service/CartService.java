@@ -8,7 +8,6 @@ import kr.remerge.stylehub.domain.product.entity.ProductOption;
 import kr.remerge.stylehub.domain.product.repository.ProductOptionRepository;
 import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.repository.UserRepository;
-import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,7 +25,6 @@ public class CartService {
 
     @Transactional
     public void addToCart(Integer userId, CartAddRequest request) {
-
         User user = findUser(userId);
         ProductOption productOption = findProductOption(request);
 
@@ -35,7 +33,7 @@ public class CartService {
                 productOption,
                 request.cartType()
         ).ifPresentOrElse(
-                cartItem ->  cartItem.addQuantity(request.quantity()),
+                cartItem -> cartItem.addQuantity(request.quantity()),
                 () -> cartRepository.save(
                         new CartItem(
                                 user,
@@ -47,16 +45,27 @@ public class CartService {
         );
     }
 
-    public List<CartResponse> getCartByUserId(CustomUserDetails userDetails) {
+    public List<CartResponse> getCartByUserId(Integer userId) {
 
-        if (userDetails == null) {
-            throw new IllegalArgumentException("로그인이 필요합니다.");
-        }
+        validateUserId(userId);
 
-        return cartRepository.findByUser_UserId(userDetails.getUserId())
+        return cartRepository.findByUser_UserId(userId)
                 .stream()
                 .map(CartResponse::from)
                 .toList();
+    }
+
+    @Transactional
+    public CartResponse updateQuantity(Integer userId, Integer cartItemId, Integer quantity) {
+        CartItem cartItem = getOwnedCartItem(userId, cartItemId);
+        cartItem.updateQuantity(quantity);
+        return CartResponse.from(cartItem);
+    }
+
+    @Transactional
+    public void deleteCartItem(Integer userId, Integer cartItemId) {
+        CartItem cartItem = getOwnedCartItem(userId, cartItemId);
+        cartRepository.delete(cartItem);
     }
 
     private ProductOption findProductOption(CartAddRequest request) {
@@ -65,8 +74,24 @@ public class CartService {
     }
 
     private User findUser(Integer userId) {
-        return userRepository.findById(userId).
-                orElseThrow(() -> new IllegalArgumentException("회원 정보를 찾을 수 없습니다"));
+        validateUserId(userId);
+
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("회원 정보를 찾을 수 없습니다."));
     }
 
+    private CartItem getOwnedCartItem(Integer userId, Integer cartItemId) {
+        validateUserId(userId);
+
+        return cartRepository.findByCartItemIdAndUser_UserId(cartItemId, userId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException("장바구니 상품을 조회할 수 없습니다.")
+                );
+    }
+
+    private void validateUserId(Integer userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("로그인이 필요합니다.");
+        }
+    }
 }

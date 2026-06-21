@@ -4,10 +4,17 @@ import kr.remerge.stylehub.domain.cart.dto.CartResponse;
 import kr.remerge.stylehub.domain.cart.entity.CartItem;
 import kr.remerge.stylehub.domain.cart.enumtype.CartType;
 import kr.remerge.stylehub.domain.cart.repository.CartRepository;
+import kr.remerge.stylehub.domain.company.entity.Address;
+import kr.remerge.stylehub.domain.company.entity.Company;
+import kr.remerge.stylehub.domain.company.repository.AddressRepository;
+import kr.remerge.stylehub.domain.order.checkout.dto.AddressCreateRequest;
+import kr.remerge.stylehub.domain.order.checkout.dto.AddressResponse;
 import kr.remerge.stylehub.domain.order.checkout.dto.CheckoutRequest;
 import kr.remerge.stylehub.domain.order.checkout.dto.CheckoutResponse;
 import kr.remerge.stylehub.domain.product.entity.Product;
 import kr.remerge.stylehub.domain.product.entity.ProductOption;
+import kr.remerge.stylehub.domain.user.entity.User;
+import kr.remerge.stylehub.domain.user.repository.UserRepository;
 import kr.remerge.stylehub.global.exception.BusinessException;
 import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +32,8 @@ import static java.util.stream.Collectors.groupingBy;
 public class CheckoutService {
 
     private final CartRepository cartRepository;
+    private final UserRepository userRepository;
+    private final AddressRepository addressRepository;
 
     public CheckoutResponse getCheckout(Integer userId, CheckoutRequest checkoutRequest) {
 
@@ -129,5 +138,57 @@ public class CheckoutService {
         }
 
         return totalShippingFee;
+    }
+
+    public List<AddressResponse> getAddress(Integer userId) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        Integer companyId = user.getCompany().getCompanyId();
+
+        Integer defaultAddressId = user.getDefaultReceivingAddress() == null
+                ? null
+                : user.getDefaultReceivingAddress().getAddressId();
+
+        return addressRepository
+                .findByCompany_CompanyIdAndDeletedAtIsNull(companyId)
+                .stream()
+                .map(address -> AddressResponse.from(
+                        address,
+                        address.getAddressId().equals(defaultAddressId)
+                ))
+                .toList();
+    }
+
+    @Transactional
+    public AddressResponse createAddress(Integer userId, AddressCreateRequest request) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        Company company = user.getCompany();
+
+        if (company == null) {
+            throw new BusinessException(ErrorCode.COMPANY_NOT_FOUND);
+        }
+
+        Address address = Address.builder()
+                .company(company)
+                .addressName(request.addressName())
+                .zipcode(request.zipcode())
+                .address(request.address())
+                .addressDetail(request.addressDetail())
+                .build();
+
+        Address savedAddress = addressRepository.save(address);
+
+        boolean isDefault = user.getDefaultReceivingAddress() == null;
+
+        if (isDefault) {
+            user.updateDefaultReceivingAddress(savedAddress);
+        }
+
+        return AddressResponse.from(savedAddress, isDefault);
     }
 }

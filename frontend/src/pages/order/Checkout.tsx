@@ -48,14 +48,26 @@ type CheckoutPreviewResponse = {
 };
 
 type DeliveryAddress = {
-  id: number;
-  label: string;
-  receiverName: string;
-  receiverPhone: string;
+  addressId: number;
+  addressName: string;
   zipcode: string;
   address: string;
   addressDetail: string;
   isDefault: boolean;
+};
+
+type AddressCreateRequest = {
+  addressName: string;
+  zipcode: string;
+  address: string;
+  addressDetail: string;
+};
+
+const EMPTY_ADDRESS_FORM: AddressCreateRequest = {
+  addressName: "",
+  zipcode: "",
+  address: "",
+  addressDetail: "",
 };
 
 const READY_ITEMS: OrderItem[] = [
@@ -96,39 +108,6 @@ const isSignedMap: Record<string, boolean> = {
   "ORD-2024-0901": false,
 };
 
-const COMPANY_ADDRESSES: DeliveryAddress[] = [
-  {
-    id: 1,
-    label: "회사 기본 배송지",
-    receiverName: "홍길동",
-    receiverPhone: "010-1234-5678",
-    zipcode: "06234",
-    address: "서울특별시 강남구 테헤란로 123",
-    addressDetail: "A동 5층",
-    isDefault: true,
-  },
-  {
-    id: 2,
-    label: "물류 창고",
-    receiverName: "김민지",
-    receiverPhone: "010-9876-5432",
-    zipcode: "17084",
-    address: "경기도 용인시 기흥구 중부대로 456",
-    addressDetail: "B동 입고장",
-    isDefault: false,
-  },
-  {
-    id: 3,
-    label: "오프라인 매장",
-    receiverName: "박서준",
-    receiverPhone: "010-2468-1357",
-    zipcode: "04524",
-    address: "서울특별시 중구 명동길 77",
-    addressDetail: "1층 매장",
-    isDefault: false,
-  },
-];
-
 const TOSS_CLIENT_KEY = "test_ck_GePWvyJnrKme6gpAnkz63gLzN97E";
 
 function formatPrice(value: number) {
@@ -154,6 +133,13 @@ export function Checkout() {
   const [checkoutPreview, setCheckoutPreview] = useState<CheckoutPreviewResponse | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(!isCustom);
   const [previewError, setPreviewError] = useState("");
+  const [addresses, setAddresses] = useState<DeliveryAddress[]>([]);
+  const [selectedAddress, setSelectedAddress] = useState<DeliveryAddress | null>(null);
+  const [isAddressLoading, setIsAddressLoading] = useState(true);
+  const [addressError, setAddressError] = useState("");
+  const [addressForm, setAddressForm] = useState<AddressCreateRequest>(EMPTY_ADDRESS_FORM);
+  const [isAddressSaving, setIsAddressSaving] = useState(false);
+  const [addressSaveError, setAddressSaveError] = useState("");
 
   useEffect(() => {
     if (isCustom) {
@@ -190,6 +176,23 @@ export function Checkout() {
     void loadCheckoutPreview();
   }, [checkoutState, isCustom]);
 
+  useEffect(() => {
+    const loadAddresses = async () => {
+      try {
+        const response = await api.get<DeliveryAddress[]>("/checkout/address");
+        setAddresses(response.data);
+        setSelectedAddress(response.data.find((address) => address.isDefault) ?? null);
+      } catch (error) {
+        console.error("배송지 조회 실패", error);
+        setAddressError("배송지 목록을 불러오지 못했습니다.");
+      } finally {
+        setIsAddressLoading(false);
+      }
+    };
+
+    void loadAddresses();
+  }, []);
+
   const orderItems: OrderItem[] = checkoutPreview
     ? checkoutPreview.items.map((item) => ({
         id: item.cartItemId,
@@ -206,7 +209,6 @@ export function Checkout() {
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showAddressModal, setShowAddressModal] = useState(false);
-  const [selectedAddress, setSelectedAddress] = useState(COMPANY_ADDRESSES[0]);
   const [orderNumber, setOrderNumber] = useState("");
 
   const subtotal = checkoutPreview?.productAmount
@@ -241,8 +243,37 @@ export function Checkout() {
   }
   const orderTypeLabel = isCustom ? "소싱 주문" : isSample ? "샘플 주문" : "일반 주문";
 
+  const handleAddressFormChange = (field: keyof AddressCreateRequest, value: string) => {
+    setAddressForm((previous) => ({ ...previous, [field]: value }));
+  };
+
+  const handleAddressSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!addressForm.addressName.trim() || !addressForm.address.trim()) {
+      setAddressSaveError("배송지 이름과 주소를 입력해 주세요.");
+      return;
+    }
+
+    try {
+      setIsAddressSaving(true);
+      setAddressSaveError("");
+
+      const response = await api.post<DeliveryAddress>("/checkout/address", addressForm);
+      setAddresses((previous) => [...previous, response.data]);
+      setSelectedAddress(response.data);
+      setAddressForm(EMPTY_ADDRESS_FORM);
+      setShowAddressModal(false);
+    } catch (error) {
+      console.error("배송지 등록 실패", error);
+      setAddressSaveError("배송지를 등록하지 못했습니다.");
+    } finally {
+      setIsAddressSaving(false);
+    }
+  };
+
   const handlePayment = async () => {
-    if (!agreeTerms || !isSigned) return;
+    if (!agreeTerms || !isSigned || !selectedAddress) return;
 
     const newOrderNumber = `ORD-${new Date().getFullYear()}-${String(
       Math.floor(Math.random() * 9000) + 1000
@@ -338,36 +369,47 @@ export function Checkout() {
             <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <SectionTitle icon={<MapPin size={16} />} title="배송지 정보" />
               <div className="rounded-xl border border-primary/15 bg-secondary/50 p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="inline-flex items-center gap-2 rounded-lg border border-primary/20 bg-white px-3 py-1.5 shadow-sm">
-                    <span className="text-xs font-bold text-primary">{selectedAddress.label}</span>
+                {isAddressLoading ? (
+                  <p className="text-sm font-semibold text-slate-500">배송지 목록을 불러오고 있습니다.</p>
+                ) : selectedAddress ? (
+                  <>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div className="inline-flex items-center gap-2 rounded-lg border border-primary/20 bg-white px-3 py-1.5 shadow-sm">
+                        <span className="text-xs font-bold text-primary">{selectedAddress.addressName}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddressModal(true)}
+                        className="rounded-lg border border-primary/30 bg-white px-3 py-1.5 text-xs font-bold text-primary transition hover:bg-secondary"
+                      >
+                        변경
+                      </button>
+                    </div>
+                    <div className="rounded-lg border border-white bg-white p-4 shadow-sm">
+                      <div className="grid gap-3 text-sm text-slate-700 md:grid-cols-2">
+                        <InfoRow label="우편번호" value={selectedAddress.zipcode} />
+                        <InfoRow label="주소" value={selectedAddress.address} className="md:col-span-2" />
+                        <InfoRow label="상세주소" value={selectedAddress.addressDetail} className="md:col-span-2" />
+                      </div>
+                      <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
+                        결제 완료 시 이 주소로 배송 정보가 확정됩니다.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-between gap-3 rounded-lg bg-white p-4 shadow-sm">
+                    <p className="text-sm font-semibold text-slate-600">
+                      {addressError || "선택된 배송지가 없습니다."}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddressModal(true)}
+                      className="shrink-0 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white"
+                    >
+                      {addresses.length > 0 ? "배송지 선택" : "배송지 등록"}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddressModal(true)}
-                    className="rounded-lg border border-primary/30 bg-white px-3 py-1.5 text-xs font-bold text-primary transition hover:bg-secondary"
-                  >
-                    변경
-                  </button>
-                </div>
-                <div className="rounded-lg border border-white bg-white p-4 shadow-sm">
-                  <div className="grid gap-3 text-sm text-slate-700 md:grid-cols-2">
-                    <InfoRow
-                      label="수령인"
-                      value={`${selectedAddress.receiverName} / ${selectedAddress.receiverPhone}`}
-                    />
-                    <InfoRow label="우편번호" value={selectedAddress.zipcode} />
-                    <InfoRow
-                      label="주소"
-                      value={selectedAddress.address}
-                      className="md:col-span-2"
-                    />
-                    <InfoRow label="상세주소" value={selectedAddress.addressDetail} className="md:col-span-2" />
-                  </div>
-                  <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
-                    결제 완료 시 이 주소로 배송 정보가 확정됩니다.
-                  </p>
-                </div>
+                )}
               </div>
 
               <div className="mt-4">
@@ -488,10 +530,10 @@ export function Checkout() {
 
               <button
                 type="button"
-                disabled={!agreeTerms || (isCustom && !isSigned)}
+                disabled={!agreeTerms || !selectedAddress || (isCustom && !isSigned)}
                 onClick={handlePayment}
                 className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3.5 text-sm font-bold transition ${
-                  agreeTerms && (!isCustom || isSigned)
+                  agreeTerms && selectedAddress && (!isCustom || isSigned)
                     ? "bg-primary text-white hover:bg-primary/90"
                     : "cursor-not-allowed bg-slate-100 text-slate-400"
                 }`}
@@ -499,6 +541,8 @@ export function Checkout() {
                 <LockKeyhole size={15} />
                 {!agreeTerms
                   ? "약관에 동의해 주세요"
+                  : !selectedAddress
+                    ? "배송지를 선택해 주세요"
                   : isCustom && !isSigned
                     ? "전자서명 후 결제 가능"
                     : `${formatPrice(total)} 결제하기`}
@@ -579,62 +623,109 @@ export function Checkout() {
                   <MapPin size={13} />
                   배송지 변경
                 </div>
-                <h2 className="text-xl font-black text-slate-950">회사 배송지를 선택하세요</h2>
+                <h2 className="text-xl font-black text-slate-950">
+                  {addresses.length === 0 ? "배송지를 등록하세요" : "회사 배송지를 선택하세요"}
+                </h2>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  선택한 배송지는 이번 주문의 수령지로 적용됩니다.
+                  {addresses.length === 0
+                    ? "처음 등록한 배송지는 이번 주문의 수령지로 선택됩니다."
+                    : "선택한 배송지는 이번 주문의 수령지로 적용됩니다."}
                 </p>
               </div>
 
-              <div className="space-y-3">
-                {COMPANY_ADDRESSES.map((address) => {
-                  const isSelected = selectedAddress.id === address.id;
+              {addresses.length === 0 ? (
+                <form className="space-y-4" onSubmit={handleAddressSubmit}>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    등록된 배송지가 없습니다. 이번 주문에 사용할 배송지를 등록해 주세요.
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <AddressInput
+                      label="배송지 이름"
+                      value={addressForm.addressName}
+                      placeholder="예: 본사, 물류창고"
+                      onChange={(value) => handleAddressFormChange("addressName", value)}
+                    />
+                    <AddressInput
+                      label="우편번호"
+                      value={addressForm.zipcode}
+                      placeholder="우편번호"
+                      onChange={(value) => handleAddressFormChange("zipcode", value)}
+                    />
+                    <AddressInput
+                      label="주소"
+                      value={addressForm.address}
+                      placeholder="도로명 주소"
+                      onChange={(value) => handleAddressFormChange("address", value)}
+                      className="sm:col-span-2"
+                    />
+                    <AddressInput
+                      label="상세주소"
+                      value={addressForm.addressDetail}
+                      placeholder="동, 호수 등 상세주소"
+                      onChange={(value) => handleAddressFormChange("addressDetail", value)}
+                      className="sm:col-span-2"
+                    />
+                  </div>
+                  {addressSaveError && (
+                    <p className="text-sm font-semibold text-rose-600">{addressSaveError}</p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={isAddressSaving}
+                    className="w-full rounded-lg bg-primary px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isAddressSaving ? "등록 중..." : "배송지 등록하기"}
+                  </button>
+                </form>
+              ) : (
+                <div className="space-y-3">
+                  {addresses.map((address) => {
+                    const isSelected = selectedAddress?.addressId === address.addressId;
 
-                  return (
-                    <button
-                      key={address.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedAddress(address);
-                        setShowAddressModal(false);
-                      }}
-                      className={`w-full rounded-xl border p-4 text-left transition ${
-                        isSelected
-                          ? "border-primary bg-secondary/70"
-                          : "border-slate-200 bg-white hover:border-primary/40 hover:bg-slate-50"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-bold text-slate-950">{address.label}</p>
-                            {address.isDefault && (
-                              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
-                                기본
-                              </span>
-                            )}
+                    return (
+                      <button
+                        key={address.addressId}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAddress(address);
+                          setShowAddressModal(false);
+                        }}
+                        className={`w-full rounded-xl border p-4 text-left transition ${
+                          isSelected
+                            ? "border-primary bg-secondary/70"
+                            : "border-slate-200 bg-white hover:border-primary/40 hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-bold text-slate-950">{address.addressName}</p>
+                              {address.isDefault && (
+                                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+                                  기본
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-1 text-sm leading-6 text-slate-500">
+                              [{address.zipcode}] {address.address} {address.addressDetail}
+                            </p>
                           </div>
-                          <p className="mt-2 text-sm font-semibold text-slate-800">
-                            {address.receiverName} / {address.receiverPhone}
-                          </p>
-                          <p className="mt-1 text-sm leading-6 text-slate-500">
-                            [{address.zipcode}] {address.address} {address.addressDetail}
-                          </p>
+                          <span
+                            className={`mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
+                              isSelected ? "border-primary bg-primary text-white" : "border-slate-200 text-transparent"
+                            }`}
+                          >
+                            <CheckCircle size={15} />
+                          </span>
                         </div>
-                        <span
-                          className={`mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
-                            isSelected ? "border-primary bg-primary text-white" : "border-slate-200 text-transparent"
-                          }`}
-                        >
-                          <CheckCircle size={15} />
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500">
-                실제 서비스에서는 회사 주소록 API에서 배송지 목록을 불러오고, 결제 시 선택한 주소를 주문 수령 정보로 저장하면 됩니다.
+                결제 시 선택한 배송지가 주문 수령 정보로 저장됩니다.
               </div>
             </div>
           </div>
@@ -669,6 +760,32 @@ function InfoRow({
       <p className="text-xs font-bold text-slate-500">{label}</p>
       <p className="mt-0.5 font-semibold text-slate-900">{value}</p>
     </div>
+  );
+}
+
+function AddressInput({
+  label,
+  value,
+  placeholder,
+  onChange,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  return (
+    <label className={className}>
+      <span className="mb-1.5 block text-xs font-bold text-slate-600">{label}</span>
+      <input
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10"
+      />
+    </label>
   );
 }
 

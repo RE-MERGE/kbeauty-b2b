@@ -1,6 +1,6 @@
 package kr.remerge.stylehub.domain.order.checkout.service;
 
-import kr.remerge.stylehub.domain.cart.dto.CartResponse;
+import jakarta.validation.Valid;
 import kr.remerge.stylehub.domain.cart.entity.CartItem;
 import kr.remerge.stylehub.domain.cart.enumtype.CartType;
 import kr.remerge.stylehub.domain.cart.repository.CartRepository;
@@ -15,9 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Map;
-
-import static java.util.stream.Collectors.groupingBy;
 
 @Service
 @Transactional(readOnly = true)
@@ -26,57 +23,40 @@ public class CheckoutService {
 
     private final CartRepository cartRepository;
 
-    public CheckoutResponse getCheckout(Integer userId, CheckoutRequest request) {
-        List<CartItem> cartItems = findCartItems(userId, request);
+    public CheckoutResponse getCheckout(Integer userId, CheckoutRequest checkoutRequest) {
 
-        cartItems.forEach(this::validateCartItem);
-
-        List<CartResponse> items = cartItems.stream()
-                .map(CartResponse::from)
-                .toList();
-
-        long productAmount = items.stream()
-                .mapToLong(CartResponse::totalPrice)
-                .sum();
-
-        long shippingFee = calculateShippingFee(items);
-
-        return new CheckoutResponse(
-                request.cartType(),
-                items,
-                productAmount,
-                shippingFee,
-                productAmount + shippingFee
-        );
-    }
-
-    private List<CartItem> findCartItems(Integer userId, CheckoutRequest request) {
-        List<Integer> cartItemIds = request.cartItemIds().stream()
+        List<Integer> cartItemIds = checkoutRequest.cartItemIds().stream()
                 .distinct()
                 .toList();
 
-        List<CartItem> cartItems = cartRepository
-                .findByCartItemIdInAndUser_UserIdAndCartType(
-                        cartItemIds,
-                        userId,
-                        request.cartType()
-                );
+        List<CartItem> cartItems = cartRepository.findByCartItemIdInAndUser_UserIdAndCartType(
+                cartItemIds,
+                userId,
+                checkoutRequest.cartType()
+        );
 
         if (cartItems.size() != cartItemIds.size()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
 
-        return cartItems;
+        for (CartItem cartItem : cartItems) {
+            validateCartItem(cartItem);
+        }
+
+        return null;
+
     }
 
     private void validateCartItem(CartItem cartItem) {
-
         ProductOption productOption = cartItem.getProductOption();
         Product product = productOption.getProduct();
-
         int quantity = cartItem.getQuantity();
 
-        if (!productOption.getIsActive() || quantity > productOption.getStockQuantity()) {
+        if (!productOption.getIsActive()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        if (quantity > productOption.getStockQuantity()) {
             throw new BusinessException(ErrorCode.OUT_OF_STOCK);
         }
 
@@ -85,36 +65,17 @@ public class CheckoutService {
         }
 
         if (cartItem.getCartType() == CartType.SAMPLE) {
-            if (!product.getSampleAvailable()
-                    || productOption.getSamplePrice() == null
-                    || productOption.getSampleMaxQuantity() == null
-                    || quantity > productOption.getSampleMaxQuantity()) {
+            if (!product.getSampleAvailable()) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
+
+            if (productOption.getSamplePrice() == null || productOption.getSampleMaxQuantity() == null) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
+
+            if (quantity > productOption.getSampleMaxQuantity()) {
                 throw new BusinessException(ErrorCode.INVALID_INPUT);
             }
         }
-    }
-
-    private long calculateShippingFee(List<CartResponse> items) {
-        Map<Integer, List<CartResponse>> itemsByCompany = items.stream()
-                .collect(groupingBy(CartResponse::companyId));
-
-        long shippingFee = 0L;
-
-        for (List<CartResponse> companyItems : itemsByCompany.values()) {
-            CartResponse firstItem = companyItems.get(0);
-            long companyProductAmount = companyItems.stream()
-                    .mapToLong(CartResponse::totalPrice)
-                    .sum();
-
-            Long freeShippingThreshold = firstItem.freeShippingThreshold();
-            boolean isFreeShipping = freeShippingThreshold != null
-                    && companyProductAmount >= freeShippingThreshold;
-
-            if (!isFreeShipping) {
-                shippingFee += firstItem.baseShippingFee();
-            }
-        }
-
-        return shippingFee;
     }
 }

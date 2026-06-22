@@ -12,7 +12,7 @@ public class Payment {
     @Id
     private String paymentKey;
 
-    private String orderId;
+    private Long orderId; // 서비스 단과 맞추기 위해 String에서 Long(또는 상응하는 타입)으로 통일 권장
 
     @Enumerated(EnumType.STRING)
     private PaymentStatus status;
@@ -25,11 +25,16 @@ public class Payment {
     private Long version;
 
     @Builder
-    public Payment(String paymentKey, String orderId, PaymentStatus status, Long amount, String method) {
+    public Payment(String paymentKey, Long orderId, PaymentStatus status, Long amount, String method, LocalDateTime approvedAt) {
         this.paymentKey = paymentKey;
         this.orderId = orderId;
         this.status = status;
         this.amount = amount;
         this.method = method;
+        this.approvedAt = approvedAt; // 빌더에 추가
+    }
+
+    public void updateStatus(PaymentStatus status) {
+        this.status = status;
     }
 }

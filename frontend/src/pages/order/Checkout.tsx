@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
+import { loadTossPayments } from "@tosspayments/tosspayments-sdk";
 import api from "@/api/axios";
 import {
   AlertCircle,
@@ -44,6 +45,11 @@ type CheckoutPreviewResponse = {
   }>;
   productAmount: number;
   shippingFee: number;
+  totalAmount: number;
+};
+
+type OrderCreateResponse = {
+  orderNos: string[];
   totalAmount: number;
 };
 
@@ -140,6 +146,7 @@ export function Checkout() {
   const [addressForm, setAddressForm] = useState<AddressCreateRequest>(EMPTY_ADDRESS_FORM);
   const [isAddressSaving, setIsAddressSaving] = useState(false);
   const [addressSaveError, setAddressSaveError] = useState("");
+  const [showAddressForm, setShowAddressForm] = useState(false);
 
   useEffect(() => {
     if (isCustom) {
@@ -209,7 +216,11 @@ export function Checkout() {
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showAddressModal, setShowAddressModal] = useState(false);
-  const [orderNumber, setOrderNumber] = useState("");
+  const [isPaymentLoading, setIsPaymentLoading] = useState(false);
+  const [createdOrderNumbers, setCreatedOrderNumbers] = useState<string[]>([]);
+  const [createdOrderTotal, setCreatedOrderTotal] = useState(0);
+  const [isTestOrderLoading, setIsTestOrderLoading] = useState(false);
+  const [testOrderError, setTestOrderError] = useState("");
 
   const subtotal = checkoutPreview?.productAmount
     ?? orderItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -263,6 +274,7 @@ export function Checkout() {
       setAddresses((previous) => [...previous, response.data]);
       setSelectedAddress(response.data);
       setAddressForm(EMPTY_ADDRESS_FORM);
+      setShowAddressForm(false);
       setShowAddressModal(false);
     } catch (error) {
       console.error("배송지 등록 실패", error);
@@ -273,36 +285,68 @@ export function Checkout() {
   };
 
   const handlePayment = async () => {
-    if (!agreeTerms || !isSigned || !selectedAddress) return;
+    if (!agreeTerms || !isSigned || !selectedAddress || isPaymentLoading) return;
 
-    const newOrderNumber = `ORD-${new Date().getFullYear()}-${String(
-      Math.floor(Math.random() * 9000) + 1000
-    )}`;
-    setOrderNumber(newOrderNumber);
+    const newOrderNumber = `STYLEHUB${Date.now()}`;
 
-    // try {
-    // //   const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY);
-    //   // const payment = tossPayments.payment({ customerKey: "ANONYMOUS" });
-    //   const methodType = paymentMethod === "card" ? "CARD" : "VIRTUAL_ACCOUNT";
-    //   const orderName =
-    //     orderItems.length > 1 ? `${orderItems[0].name} 외 ${orderItems.length - 1}건` : orderItems[0].name;
+    try {
+      setIsPaymentLoading(true);
 
-    //   await payment.requestPayment({
-    //     method: methodType,
-    //     amount: {
-    //       currency: "KRW",
-    //       value: total,
-    //     },
-    //     orderId: newOrderNumber,
-    //     orderName,
-    //     successUrl: `${window.location.origin}/payment/success?type=${orderType}&orderId=${orderId}`,
-    //     failUrl: `${window.location.origin}/payment/fail`,
-    //     customerName: "홍길동",
-    //   } as any);
-    // } catch (error) {
-    //   console.error("결제창 호출 오류:", error);
-    //   alert("결제창을 여는 중 오류가 발생했습니다.");
-    // }
+      const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY);
+      const payment = tossPayments.payment({ customerKey: "ANONYMOUS" });
+      const orderName = orderItems.length > 1
+        ? `${orderItems[0].name} 외 ${orderItems.length - 1}건`
+        : orderItems[0].name;
+      const commonRequest = {
+        amount: { currency: "KRW" as const, value: total },
+        orderId: newOrderNumber,
+        orderName,
+        successUrl: `${window.location.origin}/payment/success`,
+        failUrl: `${window.location.origin}/payment/fail`,
+        customerName: "구매 담당자",
+      };
+
+      if (paymentMethod === "card") {
+        await payment.requestPayment({
+          method: "CARD",
+          ...commonRequest,
+        });
+        return;
+      }
+
+      await payment.requestPayment({
+        method: "VIRTUAL_ACCOUNT",
+        ...commonRequest,
+      });
+    } catch (error) {
+      console.error("토스 결제창 호출 실패", error);
+      alert("결제창을 열지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      setIsPaymentLoading(false);
+    }
+  };
+
+  const handleTestOrder = async () => {
+    if (!checkoutState?.cartItemIds.length || !selectedAddress || isTestOrderLoading) return;
+
+    try {
+      setIsTestOrderLoading(true);
+      setTestOrderError("");
+
+      const response = await api.post<OrderCreateResponse>("/orders", {
+        cartItemIds: checkoutState.cartItemIds,
+        addressId: selectedAddress.addressId,
+        cartType: checkoutState.cartType,
+      });
+
+      setCreatedOrderNumbers(response.data.orderNos);
+      setCreatedOrderTotal(response.data.totalAmount);
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error("임시 주문 생성 실패", error);
+      setTestOrderError("주문 생성에 실패했습니다. 백엔드 로그를 확인해 주세요.");
+    } finally {
+      setIsTestOrderLoading(false);
+    }
   };
 
   return (
@@ -530,16 +574,18 @@ export function Checkout() {
 
               <button
                 type="button"
-                disabled={!agreeTerms || !selectedAddress || (isCustom && !isSigned)}
+                disabled={!agreeTerms || !selectedAddress || (isCustom && !isSigned) || isPaymentLoading}
                 onClick={handlePayment}
                 className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3.5 text-sm font-bold transition ${
-                  agreeTerms && selectedAddress && (!isCustom || isSigned)
+                  agreeTerms && selectedAddress && (!isCustom || isSigned) && !isPaymentLoading
                     ? "bg-primary text-white hover:bg-primary/90"
                     : "cursor-not-allowed bg-slate-100 text-slate-400"
                 }`}
               >
                 <LockKeyhole size={15} />
-                {!agreeTerms
+                {isPaymentLoading
+                  ? "결제창을 불러오는 중..."
+                  : !agreeTerms
                   ? "약관에 동의해 주세요"
                   : !selectedAddress
                     ? "배송지를 선택해 주세요"
@@ -547,6 +593,27 @@ export function Checkout() {
                     ? "전자서명 후 결제 가능"
                     : `${formatPrice(total)} 결제하기`}
               </button>
+
+              {import.meta.env.DEV && !isCustom && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    disabled={!selectedAddress || isTestOrderLoading || createdOrderNumbers.length > 0}
+                    onClick={handleTestOrder}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-primary/40 bg-secondary/50 px-4 py-2.5 text-xs font-bold text-primary transition hover:border-primary hover:bg-secondary disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    <ReceiptText size={14} />
+                    {isTestOrderLoading
+                      ? "주문 생성 중..."
+                      : createdOrderNumbers.length > 0
+                        ? "주문 생성 완료"
+                        : "개발용: 결제 없이 주문 생성"}
+                  </button>
+                  {testOrderError && (
+                    <p className="mt-2 text-center text-xs font-medium text-rose-600">{testOrderError}</p>
+                  )}
+                </div>
+              )}
 
               <div className="mt-4 rounded-lg border border-primary/15 bg-white px-3 py-3 text-xs leading-5 text-slate-500">
                 <div className="mb-1 flex items-center gap-1.5 font-bold text-slate-700">
@@ -572,18 +639,27 @@ export function Checkout() {
               <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-secondary">
                 <CheckCircle size={48} className="text-primary" />
               </div>
-              <h2 className="mb-2 text-center text-2xl font-bold text-slate-950">결제가 완료되었습니다</h2>
-              <p className="mb-6 text-center text-sm text-slate-500">주문이 성공적으로 접수되었습니다.</p>
+              <h2 className="mb-2 text-center text-2xl font-bold text-slate-950">주문 생성 완료</h2>
+              <p className="mb-6 text-center text-sm text-slate-500">
+                판매사별로 {createdOrderNumbers.length}개의 주문이 생성되었습니다.
+              </p>
               <div className="mb-6 rounded-xl border border-primary/20 bg-secondary/60 p-5 text-sm">
-                <SummaryRow label="주문번호" value={orderNumber} />
+                <p className="mb-2 text-xs font-bold text-slate-500">생성된 주문번호</p>
+                <div className="space-y-2">
+                  {createdOrderNumbers.map((createdOrderNumber) => (
+                    <div
+                      key={createdOrderNumber}
+                      className="rounded-lg border border-primary/15 bg-white px-3 py-2 font-bold text-slate-900"
+                    >
+                      {createdOrderNumber}
+                    </div>
+                  ))}
+                </div>
                 <div className="mt-3">
                   <SummaryRow label="주문 타입" value={orderTypeLabel} />
                 </div>
-                <div className="mt-3">
-                  <SummaryRow label="결제 방식" value={paymentMethod === "wire" ? "무통장 입금" : "법인카드 결제"} />
-                </div>
                 <div className="mt-3 border-t border-primary/20 pt-3">
-                  <SummaryRow label="최종 결제 금액" value={formatPrice(total)} />
+                  <SummaryRow label="주문 총액" value={formatPrice(createdOrderTotal)} />
                 </div>
               </div>
               <div className="flex gap-3">
@@ -612,7 +688,11 @@ export function Checkout() {
             <div className="relative w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
               <button
                 type="button"
-                onClick={() => setShowAddressModal(false)}
+                onClick={() => {
+                  setShowAddressForm(false);
+                  setAddressSaveError("");
+                  setShowAddressModal(false);
+                }}
                 className="absolute right-5 top-5 text-slate-400 transition hover:text-slate-900"
               >
                 <X size={20} />
@@ -624,7 +704,9 @@ export function Checkout() {
                   배송지 변경
                 </div>
                 <h2 className="text-xl font-black text-slate-950">
-                  {addresses.length === 0 ? "배송지를 등록하세요" : "회사 배송지를 선택하세요"}
+                  {addresses.length === 0 || showAddressForm
+                    ? "배송지를 등록하세요"
+                    : "회사 배송지를 선택하세요"}
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
                   {addresses.length === 0
@@ -633,8 +715,20 @@ export function Checkout() {
                 </p>
               </div>
 
-              {addresses.length === 0 ? (
+              {addresses.length === 0 || showAddressForm ? (
                 <form className="space-y-4" onSubmit={handleAddressSubmit}>
+                  {addresses.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddressForm(false);
+                        setAddressSaveError("");
+                      }}
+                      className="text-sm font-bold text-primary transition hover:text-primary/80"
+                    >
+                      배송지 목록으로 돌아가기
+                    </button>
+                  )}
                   <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     등록된 배송지가 없습니다. 이번 주문에 사용할 배송지를 등록해 주세요.
                   </div>
@@ -679,6 +773,17 @@ export function Checkout() {
                 </form>
               ) : (
                 <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddressForm(EMPTY_ADDRESS_FORM);
+                      setAddressSaveError("");
+                      setShowAddressForm(true);
+                    }}
+                    className="w-full rounded-lg border border-dashed border-primary/40 bg-secondary/40 px-4 py-3 text-sm font-bold text-primary transition hover:border-primary hover:bg-secondary"
+                  >
+                    새 배송지 등록
+                  </button>
                   {addresses.map((address) => {
                     const isSelected = selectedAddress?.addressId === address.addressId;
 
@@ -688,6 +793,7 @@ export function Checkout() {
                         type="button"
                         onClick={() => {
                           setSelectedAddress(address);
+                          setShowAddressForm(false);
                           setShowAddressModal(false);
                         }}
                         className={`w-full rounded-xl border p-4 text-left transition ${

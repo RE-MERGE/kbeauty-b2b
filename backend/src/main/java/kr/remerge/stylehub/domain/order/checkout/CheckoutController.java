@@ -9,7 +9,6 @@ import kr.remerge.stylehub.domain.order.checkout.service.CheckoutService;
 import kr.remerge.stylehub.global.auth.dto.AuthUser;
 import kr.remerge.stylehub.global.auth.security.LoginUser;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.java.Log;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -47,8 +46,9 @@ public class CheckoutController {
     @PostMapping("/address")
     public ResponseEntity<?> createAddress(
             @LoginUser AuthUser authUser,
-            AddressCreateRequest request
+            @Valid @RequestBody AddressCreateRequest request
     ) {
+
         AddressResponse addressResponse =
                 checkoutService.createAddress(authUser.userId(), request);
 

@@ -106,7 +106,7 @@ public class CheckoutService {
             }
 
             // ERroCode에 다음 내용으로 추가해달라고 해
-            // SAMPLE_OPTION_NOT_CONFIGURED(400, "선택한 옵션은 현재 샘플 주문을 이용할 수 없습니다."),
+            // 민재 : SAMPLE_OPTION_NOT_CONFIGURED(400, "선택한 옵션은 현재 샘플 주문을 이용할 수 없습니다."),
 
             if (quantity > option.getSampleMaxQuantity()) {
                 throw new BusinessException(ErrorCode.INVALID_INPUT);

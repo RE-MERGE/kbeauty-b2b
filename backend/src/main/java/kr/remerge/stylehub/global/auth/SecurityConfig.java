@@ -49,10 +49,11 @@ public ApiResponse<?> getUsers() { ... }
 public class SecurityConfig {
 
     private static final String[] PUBLIC_URLS = {
-            "/api/auth/**",         // 로그인, 회원가입, 토큰 재발급
-            "/api/cart/**",
-            "/swagger-ui/**",       // Swagger UI
-            "/v3/api-docs/**",      // Swagger API 문서
+            "/api/**",
+            //"/api/auth/**",         // 로그인, 회원가입, 토큰 재발급
+            // "/api/cart/**",
+            //"/swagger-ui/**",       // Swagger UI
+            // "/v3/api-docs/**",      // Swagger API 문서
     };
     private final JwtFilter jwtFilter;
 //    private final CustomOAuth2UserService customOAuth2UserService;

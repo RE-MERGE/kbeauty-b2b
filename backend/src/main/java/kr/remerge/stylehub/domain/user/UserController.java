@@ -1,21 +1,23 @@
 package kr.remerge.stylehub.domain.user;
 
 import jakarta.validation.Valid;
+import kr.remerge.stylehub.domain.user.dto.request.BuyerSignUpRequest;
+import kr.remerge.stylehub.domain.user.dto.request.EmployeeSignUpRequest;
+import kr.remerge.stylehub.domain.user.dto.request.SellerSignUpRequest;
+import kr.remerge.stylehub.domain.user.dto.request.UpdateUserRequest;
+import kr.remerge.stylehub.domain.user.dto.response.UserResponse;
+import kr.remerge.stylehub.global.auth.dto.AuthUser;
+import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
+import kr.remerge.stylehub.global.auth.security.LoginUser;
+import kr.remerge.stylehub.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import kr.remerge.stylehub.domain.user.dto.request.SignUpRequest;
-import kr.remerge.stylehub.domain.user.dto.request.UpdateUserRequest;
-import kr.remerge.stylehub.domain.user.dto.response.UserResponse;
-import kr.remerge.stylehub.global.response.ApiResponse;
-import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
-
-// 유저 관련 API 엔드포인트
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api/users")
 @RequiredArgsConstructor
 public class UserController {
 
@@ -24,19 +26,40 @@ public class UserController {
     // ───────────────────────────────────────────
     // 회원가입
     // ───────────────────────────────────────────
+    // ───────────────────────────────────────────
+    // 바이어 대표자 가입
+    // ───────────────────────────────────────────
 
-    // POST /api/users/signup
-    // 인증 없이 접근 가능 (SecurityConfig에서 permitAll)
-    @PostMapping("/signup")
-    public ResponseEntity<ApiResponse<UserResponse>> signUp(
-            @Valid @RequestBody SignUpRequest request) {
+    @PostMapping("/signup/buyer")
+    public ResponseEntity<ApiResponse<Void>> signUpBuyer(
+            @Valid @RequestBody BuyerSignUpRequest request) {
+        userService.signUpBuyer(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("바이어 가입 신청이 완료되었습니다."));
+    }
 
-        UserResponse response = userService.signUp(request);
+    // ───────────────────────────────────────────
+    // 셀러 대표자 가입
+    // ───────────────────────────────────────────
 
-        // 201 Created 반환
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(ApiResponse.success(response));
+    @PostMapping("/signup/seller")
+    public ResponseEntity<ApiResponse<Void>> signUpSeller(
+            @Valid @RequestBody SellerSignUpRequest request) {
+        userService.signUpSeller(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("셀러 가입 신청이 완료되었습니다."));
+    }
+
+    // ───────────────────────────────────────────
+    // 직원 가입
+    // ───────────────────────────────────────────
+
+    @PostMapping("/signup/employee")
+    public ResponseEntity<ApiResponse<Void>> signUpEmployee(
+            @Valid @RequestBody EmployeeSignUpRequest request) {
+        userService.signUpEmployee(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("직원 가입 신청이 완료되었습니다."));
     }
 
     // ───────────────────────────────────────────
@@ -48,9 +71,13 @@ public class UserController {
     // @AuthenticationPrincipal : JwtFilter에서 SecurityContext에 저장한 유저 꺼내기
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getMe(
-            @AuthenticationPrincipal CustomUserDetails userDetails) {
+            @LoginUser AuthUser user) {
 
-        UserResponse response = userService.getMe(userDetails.getUserId());
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        UserResponse response = userService.getMe(user.userId());
 
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -79,9 +106,9 @@ public class UserController {
     // JWT 인증 필요
     @DeleteMapping("/me")
     public ResponseEntity<ApiResponse<Void>> deleteMe(
-            @AuthenticationPrincipal CustomUserDetails userDetails) {
+            @LoginUser AuthUser user) {
 
-        userService.deleteMe(userDetails.getUserId());
+        userService.deleteMe(user.userId());
 
         return ResponseEntity.ok(ApiResponse.success("회원 탈퇴가 완료되었습니다."));
     }

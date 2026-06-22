@@ -1,7 +1,5 @@
 package kr.remerge.stylehub.global.auth.jwt;
 
-import lombok.Getter;
-import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -12,6 +10,7 @@ import org.springframework.stereotype.Component;
 @Component
 @ConfigurationProperties(prefix = "jwt")
 public class JwtProperties {
+
     // Getter / Setter
     // @ConfigurationProperties는 Setter로 값을 주입하기 때문에 반드시 필요
     // jwt.secret = "your-secret-key" 값이 여기에 주입됨
@@ -25,5 +24,6 @@ public class JwtProperties {
     // jwt.refresh-token-expiration = 1209600000 (14일, ms 단위)
     // 리프레시 토큰 만료 시간
     private long refreshTokenExpiration;
+
 }
 

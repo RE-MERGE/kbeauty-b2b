@@ -14,6 +14,8 @@ const api = axios.create({
 // 응답 인터셉터
 // ───────────────────────────────────────────
 
+let isRedirecting = false;
+
 // 401 응답(액세스 토큰 만료) 시 자동으로 리프레시 토큰으로 재발급 시도
 api.interceptors.response.use(
 
@@ -41,10 +43,21 @@ api.interceptors.response.use(
                 return api(originalRequest);
 
             } catch (refreshError) {
-                // 리프레시 토큰도 만료 → 로그인 페이지로 이동
+                // 리프레시 토큰도 만료되었을 때 처리
+
+                // 1. 이미 로그인 페이지에 있거나, 이미 튕기는 중(isRedirecting)이라면 뒤이은 요청들은 알림 없이 튕겨냅니다.
+                if (window.location.pathname === "/auth/login" || isRedirecting) {
+                    return Promise.reject(refreshError);
+                }
+
+                isRedirecting = true; // 플래그를 켜서 다른 요청들이 alert를 못 띄우게 막음
                 alert("세션이 만료되었습니다. 다시 로그인해주세요.");
+
+                // 2. SPA 환경이라면 주소를 새로고침하는 href 대신 라우터를 쓰는 게 베스트지만,
+                // href를 유지할 경우 뒤의 요청이 에러를 전파하지 못하도록 흐름을 완전히 끊어줍니다.
                 window.location.href = "/auth/login";
-                return Promise.reject(refreshError);
+
+                return new Promise(() => {}); // 중요: pending 상태의 프로미스를 반환하여 뒤이은 JS 에러 전파를 차단
             }
         }
         // 토큰 재시도마저 실패했거나, 다른 비즈니스 에러(ex: 사업자 중복)인 경우 처리

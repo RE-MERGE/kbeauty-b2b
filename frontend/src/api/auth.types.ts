@@ -1,27 +1,4 @@
 // ───────────────────────────────────────────
-// 요청 타입
-// ───────────────────────────────────────────
-
-export interface LoginRequest {
-    email: string;
-    password: string;
-}
-
-export interface BuyerSignUpRequest {
-    email: string;
-    password: string;
-    name: string;
-    phone?: string;
-    businessNumber: string;
-    companyName: string;
-    representativeName: string;
-    address?: string;
-    addressDetail?: string;
-    businessLicenseUrl?: string; // S3 업로드 후 받은 URL
-    preferredCategoryIds: number[]; // 디비 스펙에 맞춘 숫자 배열 (JPA Long과 매핑)
-}
-
-// ───────────────────────────────────────────
 // 요청 타입 (Request Interfaces)
 // ───────────────────────────────────────────
 
@@ -56,13 +33,13 @@ export interface SellerSignUpRequest {
     addressDetail?: string;
     businessLicenseUrl?: string;
     websiteUrl?: string;
-    storeType: "OFFLINE" | "ONLINE" | "BOTH"; // 백엔드 Java Enum 대문자 싱크
+    storeType: "OFFLINE" | "ONLINE" | "BOTH";
     brandName?: string;
     bankName: string;
     accountNumber: string;
     accountHolder: string;
-    preferredCategoryIds: number[]; // 정수형 배열 변환본 받아오기
-    handledCategoryIds: number[];   // 정수형 배열 변환본 받아오기
+    preferredCategoryIds: number[];
+    handledCategoryIds: number[];
 }
 
 export interface EmployeeSignUpRequest {
@@ -70,9 +47,48 @@ export interface EmployeeSignUpRequest {
     password: string;
     name: string;
     phone: string;
-    businessNumber: string; // 하이픈 제거된 10자리 숫자 문자열
-    businessRole: "BUYER" | "SELLER"; // Java Enum 대응 대문자 싱크
-    preferredCategoryIds?: number[]; // 선택 사항이므로 optional 처리 및 숫자 배열
+    businessNumber: string;
+    businessRole: "BUYER" | "SELLER";
+    preferredCategoryIds?: number[];
+}
+
+// ───────────────────────────────────────────
+// 아이디 찾기 (휴대폰 본인인증)
+// ───────────────────────────────────────────
+
+/**
+ * 인증번호(OTP) 발송 요청. 재전송도 동일 타입을 사용합니다.
+ */
+export interface FindIdSendOtpRequest {
+    name: string;
+    phone: string; // 하이픈 제거된 숫자만 (ex. "01012345678")
+}
+
+/**
+ * 발송된 인증번호 검증 요청.
+ */
+export interface FindIdVerifyOtpRequest {
+    name: string;
+    phone: string;
+    code: string; // 6자리 숫자 문자열
+}
+
+/**
+ * 인증 성공 시 백엔드가 내려주는 결과.
+ * 보안을 위해 이메일은 마스킹된 형태로 내려줍니다 (ex. "fa***ion@example.com").
+ */
+export interface FindIdResponse {
+    maskedEmail: string;
+    createdAt: string; // 가입일 (ISO 문자열)
+}
+
+// ───────────────────────────────────────────
+// 비밀번호 찾기
+// ───────────────────────────────────────────
+
+export interface FindPwRequest {
+    email: string;
+    name: string;
 }
 
 // ───────────────────────────────────────────

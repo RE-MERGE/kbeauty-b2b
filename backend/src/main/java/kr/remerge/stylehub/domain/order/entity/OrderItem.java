@@ -66,4 +66,9 @@ public class OrderItem {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    @PrePersist
+    void setCreatedAt() {
+        this.createdAt = LocalDateTime.now();
+    }
 }

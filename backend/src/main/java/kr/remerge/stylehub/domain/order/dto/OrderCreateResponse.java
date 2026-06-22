@@ -1,4 +1,9 @@
 package kr.remerge.stylehub.domain.order.dto;
 
-public record OrderCreateResponse() {
+import java.util.List;
+
+public record OrderCreateResponse(
+        List<String> orderNos,
+        Long totalAmount
+) {
 }

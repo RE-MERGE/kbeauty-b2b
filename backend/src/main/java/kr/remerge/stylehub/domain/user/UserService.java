@@ -79,6 +79,11 @@ public class UserService {
     public void signUpBuyer(BuyerSignUpRequest request) {
         validateEmail(request.email());
 
+        // 사업자 번호 중복 검사
+        if (companyRepository.existsByBusinessNumber(request.businessNumber())) {
+            throw new BusinessException(ErrorCode.DUPLICATE_BUSINESS_NUMBER);
+        }
+
         // 1. 회사 생성 및 저장
         Company company = companyRepository.save(request.toCompanyEntity());
 
@@ -88,7 +93,6 @@ public class UserService {
 
         // 3. 선호 카테고리 저장
         saveUserPreferredCategories(user, request.preferredCategoryIds());
-
     }
 
     // ───────────────────────────────────────────
@@ -97,6 +101,11 @@ public class UserService {
     @Transactional
     public void signUpSeller(SellerSignUpRequest request) {
         validateEmail(request.email());
+
+        // 사업자 번호 중복 검사
+        if (companyRepository.existsByBusinessNumber(request.businessNumber())) {
+            throw new BusinessException(ErrorCode.DUPLICATE_BUSINESS_NUMBER);
+        }
 
         // 1. 회사 생성 및 저장
         Company company = companyRepository.save(request.toCompanyEntity());
@@ -142,8 +151,6 @@ public class UserService {
     // ───────────────────────────────────────────
     // 공통 내부 메서드
     // ───────────────────────────────────────────
-
-
     private void validateEmail(String email) {
         if (userRepository.existsByEmail(email)) {
             throw new BusinessException(ErrorCode.DUPLICATE_EMAIL);

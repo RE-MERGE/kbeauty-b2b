@@ -54,7 +54,7 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, accessTokenCookie.toString())
                 .header(HttpHeaders.SET_COOKIE, refreshTokenCookie.toString())
-                .body(ApiResponse.success("로그인 되었습니다."));
+                .body(ApiResponse.successWithMessage("로그인 되었습니다."));
     }
 
     // ───────────────────────────────────────────
@@ -79,7 +79,7 @@ public class AuthController {
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, accessTokenCookie.toString())
-                .body(ApiResponse.success("토큰이 재발급되었습니다."));
+                .body(ApiResponse.successWithMessage("토큰이 재발급되었습니다."));
     }
 
     // ───────────────────────────────────────────
@@ -97,7 +97,7 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, deleteAccessToken.toString())
                 .header(HttpHeaders.SET_COOKIE, deleteRefreshToken.toString())
-                .body(ApiResponse.success("로그아웃 되었습니다."));
+                .body(ApiResponse.successWithMessage("로그아웃 되었습니다."));
     }
 
     // ───────────────────────────────────────────

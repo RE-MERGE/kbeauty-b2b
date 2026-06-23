@@ -1,8 +1,8 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router";
-import { ArrowRight, Eye, EyeOff, ShoppingBag, TrendingUp, Users } from "lucide-react";
-import { useAuthStore } from "@/store/useAuthStore";
-import { getMe, login } from "@/api/auth";
+import {useState} from "react";
+import {Link, useNavigate} from "react-router";
+import {ArrowRight, Eye, EyeOff, ShoppingBag, TrendingUp, Users} from "lucide-react";
+import {useAuthStore} from "@/store/useAuthStore";
+import {getMe, login} from "@/api/auth";
 
 const STATS = [
     { icon: <ShoppingBag size={16} />, value: "2,400+", label: "입점 브랜드" },
@@ -21,10 +21,8 @@ export function Login() {
     const navigate = useNavigate();
     const setUser = useAuthStore((state) => state.setUser);
 
-    // 💡 변경: e 인자를 받고 React.FormEvent 타입 지정
     const handleLogin = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-
         setError(null);
 
         if (!form.email.trim() || !form.password.trim()) {
@@ -33,33 +31,25 @@ export function Login() {
         }
 
         setLoading(true);
-
         try {
             await login({ email: form.email, password: form.password });
             const user = await getMe();
             setUser(user);
 
-            // 역할별 분기 처리
-            if (user.role === "ADMIN") {
-                navigate("/admin");
-            } else if (user.businessRole === "SELLER") {
-                navigate("/seller");
-            } else {
-                // BUYER 또는 기타 일반 유저
-                navigate("/");
-            }
+            if (user.role === "ADMIN") navigate("/admin");
+            else if (user.businessRole === "SELLER") navigate("/seller");
+            else navigate("/");
         } catch (err: any) {
-            const message = err.response?.data?.message ?? "로그인에 실패했습니다.";
-            setError(message);
+            setError(err.response?.data?.message ?? "로그인에 실패했습니다.");
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="h-screen overflow-hidden flex flex-col lg:flex-row">
+        <div className="max-h-[750px] flex flex-col lg:flex-row overflow-hidden">
 
-            {/* ── Left: Branding panel ─────────────────────────── */}
+            {/* ── Left: Branding panel ── */}
             <div className="hidden lg:flex lg:w-[44%] bg-[#0c0c0c] flex-col relative overflow-hidden select-none">
                 <div
                     className="absolute inset-0 opacity-[0.035]"
@@ -117,8 +107,8 @@ export function Login() {
                 </div>
             </div>
 
-            {/* ── Right: Form panel ──────────────────────────────── */}
-            <div className="flex-1 flex flex-col bg-white h-screen overflow-y-auto">
+            {/* ── Right: Form panel ── */}
+            <div className="flex-1 flex flex-col bg-white overflow-y-auto">
                 <div className="lg:hidden flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
                     <div className="text-xl font-bold">
                         Style<span className="text-primary">Hub</span>
@@ -129,16 +119,12 @@ export function Login() {
                 </div>
 
                 <div className="flex-1 flex items-center justify-center px-8 py-8">
-                    {/* 💡 form 시작 */}
                     <form onSubmit={handleLogin} className="w-full max-w-[360px]">
-
-                        {/* Greeting */}
                         <div className="mb-6">
                             <h3 className="text-1xl font-bold text-foreground mb-2">사장님! 다른 플랫폼에서 방황하지 마세요.</h3>
                             <p className="text-sm text-muted-foreground">도매상품을 스타일 허브에서 만나보세요!</p>
                         </div>
 
-                        {/* Form Inputs */}
                         <div className="space-y-4">
                             <input
                                 type="email"
@@ -147,7 +133,6 @@ export function Login() {
                                 placeholder="이메일"
                                 className="w-full border border-border rounded-lg px-4 py-3 text-sm outline-none focus:border-primary transition-colors bg-white"
                             />
-
                             <div className="relative">
                                 <input
                                     type={showPassword ? "text" : "password"}
@@ -167,7 +152,6 @@ export function Login() {
                             {error && <p className="text-xs text-red-500 mt-1.5">{error}</p>}
                         </div>
 
-                        {/* Options (Remember me / Find links) */}
                         <div className="flex items-center justify-between mt-4">
                             <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground">
                                 <input
@@ -178,7 +162,6 @@ export function Login() {
                                 />
                                 로그인 상태 유지
                             </label>
-
                             <div className="flex items-center gap-1">
                                 <Link to="/auth/find-id" className="text-xs text-primary hover:underline">아이디 찾기</Link>
                                 <span className="text-xs">/</span>
@@ -186,7 +169,6 @@ export function Login() {
                             </div>
                         </div>
 
-                        {/* Submit Button */}
                         <button
                             type="submit"
                             disabled={loading}
@@ -195,42 +177,33 @@ export function Login() {
                             {loading ? "로그인 중..." : "로그인"} <ArrowRight size={15} />
                         </button>
 
-                        {/* Bottom CTA */}
                         <div className="mt-6 pt-5 border-t border-border">
                             <p className="text-center text-sm text-muted-foreground mb-3">아직 계정이 없으신가요?</p>
-                            <div className="grid grid-cols-1 gap-2">
-                                <Link
-                                    to="/auth/register"
-                                    className="border border-gray-300 text-gray-600 text-sm font-medium py-2.5 rounded-lg text-center hover:border-primary hover:text-primary transition-all"
-                                >
-                                    회원 가입
-                                </Link>
-                            </div>
+                            <Link
+                                to="/auth/register"
+                                className="block border border-gray-300 text-gray-600 text-sm font-medium py-2.5 rounded-lg text-center hover:border-primary hover:text-primary transition-all"
+                            >
+                                회원 가입
+                            </Link>
                         </div>
 
-                        {/* Social Login */}
                         <div className="flex justify-center gap-4 mt-4">
-                            <div className="w-12 h-12" id="lSnsLinkNaver">
-                                <Link to="/ssl/member/snsLogin/mem_snsBridge.php?provider=naver" title="네이버로그인">
-                                    <img src="https://cdn1.domeggook.com/image/member/btn_naver.png" alt="네이버로그인" width="48" height="48" />
-                                </Link>
-                            </div>
-                            <div className="w-12 h-12" id="lSnsLinkKakao">
-                                <Link to="/ssl/member/snsLogin/mem_snsBridge.php?provider=kakao" title="카카오로그인">
-                                    <img src="https://cdn1.domeggook.com/image/member/btn_kakao.png" alt="카카오로그인" width="48" height="48" />
-                                </Link>
-                            </div>
-                            <div className="w-12 h-12" id="lSnsLinkApple">
-                                <Link to="/ssl/member/snsLogin/mem_snsBridge.php?provider=apple" title="애플로그인">
-                                    <img src="https://cdn1.domeggook.com/image/member/btn_apple.png" alt="애플로그인" width="48" height="48" />
-                                </Link>
-                            </div>
+                            <Link to="/ssl/member/snsLogin/mem_snsBridge.php?provider=naver" title="네이버로그인">
+                                <img src="https://cdn1.domeggook.com/image/member/btn_naver.png" alt="네이버로그인" width="48"
+                                     height="48"/>
+                            </Link>
+                            <Link to="/ssl/member/snsLogin/mem_snsBridge.php?provider=kakao" title="카카오로그인">
+                                <img src="https://cdn1.domeggook.com/image/member/btn_kakao.png" alt="카카오로그인" width="48"
+                                     height="48"/>
+                            </Link>
+                            <Link to="/ssl/member/snsLogin/mem_snsBridge.php?provider=apple" title="애플로그인">
+                                <img src="https://cdn1.domeggook.com/image/member/btn_apple.png" alt="애플로그인" width="48"
+                                     height="48"/>
+                            </Link>
                         </div>
-
-                    </form> {/* form 끝 */}
+                    </form>
                 </div>
 
-                {/* Footer */}
                 <div className="px-6 py-4 border-t border-border text-center mt-auto">
                     <p className="text-xs text-muted-foreground">
                         © 2026 StyleHub. All rights reserved. ·{" "}

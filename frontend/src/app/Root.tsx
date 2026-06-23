@@ -4,7 +4,8 @@ import {
     CheckCircle,
     ChevronDown,
     ClipboardList,
-    Info, LogOut,
+    Info,
+    LogOut,
     MapPin,
     Package,
     Search,
@@ -18,6 +19,7 @@ import {
 import {useEffect, useRef, useState} from "react";
 import {useAuthStore} from "@/store/useAuthStore";
 import {logout as apiLogout} from "@/api/auth";
+import logoSvg from "@/assets/style_hub_logo.svg";
 
 const hotKeywords = ["여성 린넨 블라우스", "와이드 슬랙스", "플로럴 원피스", "오버핏 자켓", "스포츠 레깅스"];
 
@@ -339,22 +341,18 @@ export function Root() {
             </div>
             )}
             {/* Main Header */}
-            <header className="bg-white shadow-sm sticky top-0 z-50 flex-shrink-0 py-4">
-                <div className="max-w-[1280px] mx-auto px-4 py-3 flex justify-between">
+            <header className="bg-white shadow-sm sticky top-0 z-50 flex-shrink-0 py-2">
+                <div className="max-w-[1280px] mx-auto px-4 py-3 flex justify-between items-center">
                     {/* Logo */}
-                    <Link to="/" className="flex-shrink-0">
-                        <div className="text-4xl font-bold tracking-tight py-1">
-                            <span className="text-primary">Style</span>
-                            <span className="text-foreground">Hub</span>
-                            <div
-                                className="text-[11px] font-normal text-muted-foreground tracking-widest uppercase mt-1">
-                                국내 패션 B2B 도매 플랫폼
-                            </div>
-                        </div>
+                    <Link to="/">
+                        <img
+                            src={logoSvg}
+                            alt="StyleHub 로고"
+                            className="h-18 w-auto object-contain transform translate-y-[5px]"
+                        />
                     </Link>
-
                     {/* Search Bar */}
-                    <div className="flex-1 max-w-[700px]">
+                    <div className="flex-1 max-w-[700px] transform translate-y-[8px]">
                         {/* [수정] overflow-hidden 제거 (드롭다운 잘림 방지) */}
                         <div className="flex border-2 border-primary rounded">
                             {/* [수정] 탭 드롭다운 - 별도 ref로 분리 */}

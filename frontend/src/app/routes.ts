@@ -1,5 +1,4 @@
 import {createBrowserRouter} from "react-router";
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 import {Root} from "./Root";
 import {ProtectedLayout} from "./ProtectedLayout";
@@ -83,7 +82,6 @@ export const router = createBrowserRouter([
         Component: AuthLayout,
         children: [
             {index: true, Component: Login},
-            {path: "login", Component: Login},
             {path: "register", Component: Register},
             {path: "register/buyer", Component: RegisterBuyer},
             {path: "register/seller", Component: RegisterSeller},
@@ -93,7 +91,6 @@ export const router = createBrowserRouter([
             {path: "find-pw", Component: FindPw},
         ],
     },
-
     // ─────────────────────────────────────────
     // auth를 제외한 모든 페이지 - ProtectedLayout으로 한 번에 감쌈
     // 로그인 안 했으면 자동으로 /auth/login으로 리다이렉트

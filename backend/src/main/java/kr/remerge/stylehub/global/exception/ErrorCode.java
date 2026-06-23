@@ -15,7 +15,6 @@ public enum ErrorCode {
     // ───────────────────────────────────────────
     // 인증 / 인가 (AUTH)
     // ───────────────────────────────────────────
-    ADDRESS_NOT_FOUND(HttpStatus.BAD_REQUEST, "1", "오류"),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "AUTH_001", "로그인이 필요합니다."),
     FORBIDDEN(HttpStatus.FORBIDDEN, "AUTH_002", "접근 권한이 없습니다."),
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_003", "유효하지 않은 토큰입니다."),
@@ -34,12 +33,14 @@ public enum ErrorCode {
     USER_PENDING(HttpStatus.FORBIDDEN, "USER_005", "승인 대기 중인 계정입니다."),
     USER_SUSPENDED(HttpStatus.FORBIDDEN, "USER_006", "정지된 계정입니다."),
     USER_DELETED(HttpStatus.FORBIDDEN, "USER_007", "탈퇴한 계정입니다."),
+    INVALID_BUSINESS_ROLE(HttpStatus.BAD_REQUEST, "USER_008", "유효하지 않은 비즈니스 역할입니다."),
 
     // ───────────────────────────────────────────
     // 회사 (COMPANY)
     // ───────────────────────────────────────────
     COMPANY_NOT_FOUND(HttpStatus.NOT_FOUND, "COMPANY_001", "회사를 찾을 수 없습니다."),
     DUPLICATE_BUSINESS_NUMBER(HttpStatus.CONFLICT, "COMPANY_002", "이미 등록된 사업자등록번호입니다."),
+    COMPANY_NOT_APPROVED(HttpStatus.FORBIDDEN, "COMPANY_003", "승인되지 않은 공급업체입니다."),
 
     // ───────────────────────────────────────────
     // 상품 (PRODUCT)
@@ -47,6 +48,12 @@ public enum ErrorCode {
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "PRODUCT_001", "상품을 찾을 수 없습니다."),
     PRODUCT_OPTION_NOT_FOUND(HttpStatus.NOT_FOUND, "PRODUCT_002", "상품 옵션을 찾을 수 없습니다."),
     OUT_OF_STOCK(HttpStatus.BAD_REQUEST, "PRODUCT_003", "재고가 부족합니다."),
+
+    // ───────────────────────────────────────────
+    // 장바구니 (CART)
+    // ───────────────────────────────────────────
+    CART_ITEM_EMPTY(HttpStatus.BAD_REQUEST, "CART_001", "선택된 장바구니 상품이 없습니다."),
+    INVALID_CART_TYPE(HttpStatus.BAD_REQUEST, "CART_002", "장바구니 타입이 올바르지 않습니다."),
 
     // ───────────────────────────────────────────
     // 주문 (ORDER)
@@ -78,6 +85,11 @@ public enum ErrorCode {
     // ───────────────────────────────────────────
     CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "CATEGORY_001", "카테고리를 찾을 수 없습니다."),
     INVALID_CATEGORY_COUNT(HttpStatus.BAD_REQUEST, "CATEGORY_002", "선호 카테고리는 3개에서 5개 사이여야 합니다."),
+
+    // ───────────────────────────────────────────
+    // 주소 (ADDRESS)
+    // ───────────────────────────────────────────
+    ADDRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "ADDRESS_001", "주소를 찾을 수 없습니다."),
 
     // ───────────────────────────────────────────
     // 공통 (COMMON)

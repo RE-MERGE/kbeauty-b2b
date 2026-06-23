@@ -4,6 +4,8 @@ import kr.remerge.stylehub.domain.category.entity.Category;
 import kr.remerge.stylehub.domain.category.repository.CategoryRepository;
 import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.company.entity.CompanyHandledCategory;
+import kr.remerge.stylehub.domain.company.enumtype.CompanyStoreType;
+import kr.remerge.stylehub.domain.company.enumtype.SellerStatus;
 import kr.remerge.stylehub.domain.company.repository.BrandRepository;
 import kr.remerge.stylehub.domain.company.repository.CompanyBankAccountRepository;
 import kr.remerge.stylehub.domain.company.repository.CompanyHandledCategoryRepository;
@@ -13,6 +15,8 @@ import kr.remerge.stylehub.domain.user.dto.response.FindIdResponse;
 import kr.remerge.stylehub.domain.user.dto.response.UserResponse;
 import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.entity.UserPreferredCategory;
+import kr.remerge.stylehub.domain.user.enumtype.BusinessRole;
+import kr.remerge.stylehub.domain.user.enumtype.UserRole;
 import kr.remerge.stylehub.domain.user.repository.UserPreferredCategoryRepository;
 import kr.remerge.stylehub.domain.user.repository.UserRepository;
 import kr.remerge.stylehub.global.auth.jwt.JwtProvider;
@@ -67,7 +71,8 @@ public class UserService {
 
         // 2. 유저 생성 및 저장
         String encodedPassword = passwordEncoder.encode(request.password());
-        User user = userRepository.save(request.toUserEntity(company, encodedPassword));
+        User user = request.toUserEntity(company, encodedPassword, UserRole.PRESIDENT, BusinessRole.BUYER);
+        userRepository.save(user);
 
         // 3. 선호 카테고리 저장
         saveUserPreferredCategories(user, request.preferredCategoryIds());
@@ -95,7 +100,8 @@ public class UserService {
 
         // 3. 유저 생성 및 저장
         String encodedPassword = passwordEncoder.encode(request.password());
-        User user = userRepository.save(request.toUserEntity(company, encodedPassword));
+        User user = request.toUserEntity(company, encodedPassword, UserRole.PRESIDENT, BusinessRole.BOTH);
+        userRepository.save(user);
 
         // 4. 회사 정산 계좌 저장
         companyBankAccountRepository.save(request.toBankAccountEntity(company));
@@ -116,9 +122,19 @@ public class UserService {
         Company company = companyRepository.findByBusinessNumber(request.businessNumber())
                 .orElseThrow(() -> new BusinessException(ErrorCode.COMPANY_NOT_FOUND));
 
+        if (company.getSellerStatus() != SellerStatus.APPROVED) {
+            throw new BusinessException(ErrorCode.COMPANY_NOT_APPROVED); // 💡 승인되지 않은 회사 예외
+        }
+
+        BusinessRole requestedRole = request.businessRole();
+        if (requestedRole != BusinessRole.SELLER && requestedRole != BusinessRole.BUYER) {
+            throw new BusinessException(ErrorCode.INVALID_BUSINESS_ROLE);
+        }
+
         // 2. 직원 유저 생성 및 저장
         String encodedPassword = passwordEncoder.encode(request.password());
-        User user = userRepository.save(request.toUserEntity(company, encodedPassword));
+        User user = request.toUserEntity(company, encodedPassword, UserRole.EMPLOYEE, request.businessRole());
+        userRepository.save(user);
 
         // 3. 직원 개인 선호 카테고리 저장 (선택 사항)
         if (request.preferredCategoryIds() != null && !request.preferredCategoryIds().isEmpty()) {
@@ -187,7 +203,7 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public UserResponse getMe(Integer userId) {
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdWithCompany(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         return UserResponse.from(user);

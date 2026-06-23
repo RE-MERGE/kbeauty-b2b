@@ -51,7 +51,7 @@ export const useAuthStore = create<AuthState>()(
         }),
         {
             name: "auth-storage", // 로컬스토리지에 저장될 키 이름
-            storage: createJSONStorage(() => localStorage), // 👈 3. 안전하게 스토리지 엔진 명시 (기본값이 localStorage)
+            storage: createJSONStorage(() => localStorage), // 3. 안전하게 스토리지 엔진 명시 (기본값이 localStorage)
         }
     )
 );

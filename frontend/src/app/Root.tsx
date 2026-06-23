@@ -1,4 +1,4 @@
-import {Link, Outlet, useLocation, useNavigate} from "react-router";
+import {Link, Outlet, useNavigate} from "react-router";
 import {
     Bell,
     CheckCircle,
@@ -254,11 +254,10 @@ const searchDummyBrands = [
 ];
 
 export function Root() {
-    const location = useLocation();
     const [searchQuery, setSearchQuery] = useState("");
     const [notifOpen, setNotifOpen] = useState(false);
     const [readIds, setReadIds] = useState<number[]>([]);
-    const [dismissedIds, setDismissedIds] = useState<number[]>([]);
+    const [, setDismissedIds] = useState<number[]>([]);
     const notifRef = useRef<HTMLDivElement>(null);
     // [추가] 탭 드롭다운과 검색결과 드롭다운 state 분리
     const [searchTab, setSearchTab] = useState<"product" | "category" | "brand">("product");
@@ -267,8 +266,10 @@ export function Root() {
     const tabDropRef = useRef<HTMLDivElement>(null);
     const resultDropRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
+    const user = useAuthStore((state) => state.user);
     const clearUser = useAuthStore((state) => state.clearUser);
-
+    // 유저가 존재하고, 역할이 PRESIDENT이면서, BusinessRole이 BUYER인 경우에만 true
+    const isBuyerPresident = user?.role === "PRESIDENT" && user?.businessRole === "BUYER";
     const handleLogout = async () => {
         try {
             // 1. 백엔드 호출해서 토큰 쿠키 만료시키기
@@ -328,14 +329,15 @@ export function Root() {
     return ( //폰트변경
         <div className="min-h-screen bg-background font-[Pretendard,sans-serif] flex flex-col">
             {/* [추가] 셀러 등록 상단 바 */}
-            <div
+            {isBuyerPresident && (<div
                 className="bg-primary/10 border-b border-primary/20 py-1.5 text-center text-xs text-primary flex items-center justify-center gap-3">
-                <span>🏷️ 지금 셀러로 등록하고 전국 바이어와 연결되세요!</span>
+                <span>🏷️ {user?.name}님! 셀러로 등록하고 전국 바이어와 연결되세요!</span>
                 <Link to="/auth?tab=signup&role=seller"
                       className="bg-primary text-white text-[11px] font-semibold px-3 py-0.5 rounded-full hover:bg-primary/80 transition-colors">
                     셀러 등록하기 →
                 </Link>
             </div>
+            )}
             {/* Main Header */}
             <header className="bg-white shadow-sm sticky top-0 z-50 flex-shrink-0 py-4">
                 <div className="max-w-[1280px] mx-auto px-4 py-3 flex justify-between">
@@ -615,14 +617,14 @@ export function Root() {
                         <Link to="/buyer"
                               className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors">
                             <ClipboardList size={25}/>
-                            <span className="text-[11px]">회사이름</span>
+                            <span className="text-[11px]">대시보드</span>
                         </Link>
 
                         {/* 마이 페이지 */}
                         <Link to="/mypage"
                               className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors">
                             <User size={25}/>
-                            <span className="text-[11px]">이름</span>
+                            <span className="text-[11px]">{user?.name}</span>
                         </Link>
 
                         {/* 마이 페이지 */}

@@ -96,8 +96,9 @@ export interface FindPwRequest {
 // ───────────────────────────────────────────
 
 export interface UserResponse {
-    userId: number
-    companyId: number
+    userId: number;
+    companyId: number;
+    companyName: string;
     email: string;
     name: string;
     phone: string | null;

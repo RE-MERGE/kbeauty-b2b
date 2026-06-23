@@ -40,12 +40,14 @@ export function Login() {
             setUser(user);
 
             // 역할별 분기 처리
-            if (user.businessRole === "SELLER") {
+            if (user.role === "ADMIN") {
+                navigate("/admin");
+            } else if (user.businessRole === "SELLER") {
                 navigate("/seller");
             } else {
+                // BUYER 또는 기타 일반 유저
                 navigate("/");
             }
-
         } catch (err: any) {
             const message = err.response?.data?.message ?? "로그인에 실패했습니다.";
             setError(message);
@@ -231,7 +233,7 @@ export function Login() {
                 {/* Footer */}
                 <div className="px-6 py-4 border-t border-border text-center mt-auto">
                     <p className="text-xs text-muted-foreground">
-                        © 2025 StyleHub. All rights reserved. ·{" "}
+                        © 2026 StyleHub. All rights reserved. ·{" "}
                         <a href="#" className="hover:text-foreground transition-colors">이용약관</a>
                         {" · "}
                         <a href="#" className="hover:text-foreground transition-colors">개인정보처리방침</a>

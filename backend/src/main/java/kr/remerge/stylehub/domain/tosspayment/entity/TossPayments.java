@@ -29,7 +29,7 @@ public class TossPayments {
 
     // 연관관계 매핑
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", nullable = false)
+    // @JoinColumn(name = "order_id", nullable = false)
     private Order order; // 비즈니스 주문 ID
 
     @Column(length = 30)
@@ -63,4 +63,9 @@ public class TossPayments {
     public void updateStatus(PaymentStatus paymentStatus) {
         this.status = paymentStatus.name();
     }
+
+    public void completePayment(String tossPaymentKey, java.time.LocalDateTime approvedAt) {
+    this.tossPaymentKey = tossPaymentKey; // 토스가 준 결제 키 저장
+    this.approvedAt = approvedAt;         // 실제 승인 시간 저장
+}
 }

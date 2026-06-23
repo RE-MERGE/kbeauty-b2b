@@ -3,11 +3,20 @@ import {useAuthStore} from "@/store/useAuthStore";
 import {useEffect} from "react";
 import {getMe} from "@/api/auth";
 
+// ───────────────────────────────────────────
+// 인증 보호 레이아웃
+// auth/* 경로를 제외한 모든 페이지를 감싸는 인증 가드
+// 로그인 여부 확인 → 권한 체크 → 페이지 렌더링 순서로 동작
+// ───────────────────────────────────────────
 export function ProtectedLayout() {
     const {user, isLoading, setLoading, setUser, clearUser} = useAuthStore();
     const matches = useMatches();
 
-    // 1. 동기식 스토리지 검사 (렌더링 차단용 흔적 확인)
+    // ───────────────────────────────────────────
+    // Step 1. 로컬스토리지에서 로그인 흔적 확인 (동기)
+    // zustand-persist가 저장한 isAuthenticated 값으로 빠르게 판단
+    // 흔적이 없으면 getMe() 호출 없이 즉시 비로그인으로 처리
+    // ───────────────────────────────────────────
     const storageStr = localStorage.getItem("auth-storage");
     let hasToken = false;
 
@@ -22,36 +31,43 @@ export function ProtectedLayout() {
         }
     }
 
-    // 2. 비동기 유저 검증 (Hook 규칙을 위해 조건문보다 항상 최상단에 위치)
+    // ───────────────────────────────────────────
+    // Step 2. 서버에 실제 로그인 상태 검증 (비동기)
+    // 로컬 흔적이 있을 때만 getMe()를 호출해서 쿠키(토큰) 유효성 확인
+    // 성공 → user 정보 store에 저장
+    // 실패 → 세션 만료로 판단하고 store 초기화
+    // ───────────────────────────────────────────
     useEffect(() => {
         const initAuth = async () => {
             try {
                 const me = await getMe();
                 setUser(me);
             } catch (error) {
-                // 흔적(hasToken)이 있었는데 백엔드 검증에 실패했다는 것은
-                // 잘 쓰다가 토큰이 만료되었거나 쿠키를 강제로 지운 상황입니다.
+                // 흔적은 있는데 서버 검증 실패 → 토큰 만료 또는 강제 삭제
                 if (hasToken) {
                     alert("세션이 만료되었습니다. 다시 로그인해주세요.");
                 }
                 clearUser();
             } finally {
-                setLoading(false); // 🚨 무한 로딩 탈출 장치! 실패하든 성공하든 로딩은 끝내줍니다.
+                // 성공/실패 무관하게 로딩 종료 (무한 로딩 방지)
+                setLoading(false);
             }
         };
 
         if (hasToken) {
             void initAuth();
         } else {
-            setLoading(false); // 흔적조차 없는 쌩 비로그인은 즉시 로딩 종료 (아래에서 말없이 튕김)
+            // 흔적 자체가 없으면 getMe() 호출 없이 즉시 로딩 종료
+            // 아래 !user 조건에서 로그인 페이지로 리다이렉트
+            setLoading(false);
         }
     }, [hasToken, setUser, clearUser, setLoading]);
 
-    // ─────────────────────────────────────────────────────────────
-    // 3. 화면 흐름 제어 조건문 (순서 정석화)
-    // ─────────────────────────────────────────────────────────────
+    // ───────────────────────────────────────────
+    // Step 3. 화면 흐름 제어
+    // ───────────────────────────────────────────
 
-    // 검증이 완료될 때까지는 안전하게 로딩 화면으로 묶어둡니다.
+    // 서버 검증 완료 전까지 로딩 화면 유지
     if (isLoading) {
         return (
             <div
@@ -61,12 +77,16 @@ export function ProtectedLayout() {
         );
     }
 
-    // 로딩이 끝났는데 유저 정보가 없다면 (쌩 비로그인이거나 만료되어 튕긴 경우)
+    // 비로그인 상태 → 로그인 페이지로 리다이렉트
     if (!user) {
         return <Navigate to="/auth" replace/>;
     }
 
-    // 권한 체크 (어드민 / 바이어 / 셀러)
+    // ───────────────────────────────────────────
+    // Step 4. 역할(role) 기반 접근 제어
+    // 라우터의 handle: { role: "BUYER" | "SELLER" } 설정을 읽어서 권한 체크
+    // ADMIN은 모든 경로 접근 허용
+    // ───────────────────────────────────────────
     const requiredRole = matches
         .map((m) => (m.handle as any)?.role)
         .find(Boolean);
@@ -75,6 +95,6 @@ export function ProtectedLayout() {
         return <Navigate to="/" replace/>;
     }
 
-    // 모든 관문을 통과하면 실제 페이지를 보여줍니다.
+    // 모든 검증 통과 → 실제 페이지 렌더링
     return <Outlet/>;
 }

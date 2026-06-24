@@ -292,36 +292,24 @@ export function Checkout() {
 
   const handlePayment = async () => {
     if (!agreeTerms || !isSigned || !selectedAddress || isPaymentLoading) return;
+    if (!checkoutState?.cartItemIds.length) return;
 
     try {
       setIsPaymentLoading(true);
 
-      // 1. 백엔드 주문 생성 API 호출
-      const orderResponse = await axios.post('/api/v1/orders', {
-        orderItems: orderItems,
-        totalAmount: total,
-        receiverName: selectedAddress.receiverName,
-        receiverZipcode: selectedAddress.zipcode,
-        receiverAddress: selectedAddress.address,
-        receiverAddressDetail: selectedAddress.addressDetail
+      const orderResponse = await api.post<OrderCreateResponse>("/orders", {
+        cartItemIds: checkoutState.cartItemIds,
+        addressId: selectedAddress.addressId,
+        cartType: checkoutState.cartType,
       });
 
-      // 2. 🚨 디버깅 로그 확인 (F12 콘솔에서 구조를 꼭 확인하세요!)
-      console.log("[디버깅] 백엔드 응답 객체:", orderResponse.data);
+      const realOrderNumber = orderResponse.orderNos[0];
 
-      // 백엔드 구조에 맞춰 아래 경로를 정확히 지정해야 합니다.
-      // 만약 응답 구조가 ResultResponse.success(order) 형태라면 orderResponse.data.data.orderNo 일 수 있습니다.
-      console.log("백엔드 주문 생성 전체 응답:", orderResponse);
-      console.log("백엔드 실제 데이터 내부:", orderResponse.data);
-      const realOrderNumber = orderResponse.data.orderNo || orderResponse.data.data.orderNo;
-
-      // 🚨 안전 장치: 주문 번호가 비어있으면 토스 창을 띄우지 않고 에러로 보냅니다.
       if (!realOrderNumber) {
-        alert("주문 번호를 발급받지 못했습니다. 데이터 구조를 확인해 주세요.");
+        alert("주문 번호를 발급받지 못했습니다.");
         return;
       }
 
-      // 3. 토스페이먼츠 SDK 세팅 및 결제 요청
       const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY);
       const payment = tossPayments.payment({ customerKey: "ANONYMOUS" });
 
@@ -331,7 +319,7 @@ export function Checkout() {
 
       const commonRequest = {
         amount: { currency: "KRW" as const, value: total },
-        orderId: realOrderNumber, // 💡 이제 무조건 백엔드가 준 진짜 번호가 들어갑니다.
+        orderId: realOrderNumber,
         orderName,
         successUrl: `${window.location.origin}/payment/success`,
         failUrl: `${window.location.origin}/payment/fail`,
@@ -343,17 +331,16 @@ export function Checkout() {
           method: "CARD",
           ...commonRequest,
         });
-        return;
+      } else {
+        await payment.requestPayment({
+          method: "VIRTUAL_ACCOUNT",
+          ...commonRequest,
+        });
       }
-
-      await payment.requestPayment({
-        method: "VIRTUAL_ACCOUNT",
-        ...commonRequest,
-      });
 
     } catch (error) {
       console.error("주문 생성 또는 결제 요청 실패:", error);
-      alert("결제 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+      alert("결제 처리 중 오류가 발생했습니다.");
     } finally {
       setIsPaymentLoading(false);
     }

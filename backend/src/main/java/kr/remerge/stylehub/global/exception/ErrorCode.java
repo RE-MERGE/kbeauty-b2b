@@ -22,6 +22,8 @@ public enum ErrorCode {
     REFRESH_TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "AUTH_005", "리프레시 토큰이 만료되었습니다."),
     OTP_EXPIRED(HttpStatus.BAD_REQUEST, "AUTH_006", "인증 시간이 만료되었습니다. 다시 시도해 주세요."),
     INVALID_OTP_CODE(HttpStatus.BAD_REQUEST, "AUTH_007", "인증번호가 일치하지 않습니다."),
+    UNVERIFIED_EMAIL(HttpStatus.BAD_REQUEST, "AUTH_008", "인증되지 않은 이메일입니다."),
+    UNVERIFIED_PHONE(HttpStatus.BAD_REQUEST, "AUTH_009", "인증되지 않은 휴대폰 번호입니다."),
 
     // ───────────────────────────────────────────
     // 유저 (USER)
@@ -54,6 +56,7 @@ public enum ErrorCode {
     // ───────────────────────────────────────────
     CART_ITEM_EMPTY(HttpStatus.BAD_REQUEST, "CART_001", "선택된 장바구니 상품이 없습니다."),
     INVALID_CART_TYPE(HttpStatus.BAD_REQUEST, "CART_002", "장바구니 타입이 올바르지 않습니다."),
+    CART_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "CART_003", "주문할 수 없는 장바구니 상품이 포함되어 있습니다."),
 
     // ───────────────────────────────────────────
     // 주문 (ORDER)
@@ -97,8 +100,7 @@ public enum ErrorCode {
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "COMMON_001", "잘못된 입력값입니다."),
     EMPTY_FILE(HttpStatus.BAD_REQUEST, "COMMON_002", "업로드한 파일이 비어있습니다."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON_003", "서버 오류가 발생했습니다."),
-    FILE_UPLOAD_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON_004", "파일 업로드 중 오류가 발생했습니다."),
-    ADDRESS_NOT_FOUND(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON_004", "파일 업로드 중 오류가 발생했습니다.");
+    FILE_UPLOAD_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON_004", "파일 업로드 중 오류가 발생했습니다.");
     private final HttpStatus httpStatus; // 💡 400, 500 대신 HttpStatus 객체로 명확히 관리
     private final String code;           // 💡 프론트엔드가 식별할 비즈니스 커스텀 에러 코드 (ex: COMPANY_002)
     private final String message;        // 에러 메시지

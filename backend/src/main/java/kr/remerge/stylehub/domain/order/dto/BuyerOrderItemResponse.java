@@ -1,5 +1,7 @@
 package kr.remerge.stylehub.domain.order.dto;
 
+import kr.remerge.stylehub.domain.order.entity.OrderItem;
+
 public record BuyerOrderItemResponse(
 
         Integer orderItemId,
@@ -12,4 +14,19 @@ public record BuyerOrderItemResponse(
         Long additionalPrice,
         Long totalPrice
 ) {
+
+    public static BuyerOrderItemResponse from(OrderItem orderItem) {
+
+        return new BuyerOrderItemResponse(
+                orderItem.getOrderItemId(),
+                orderItem.getProductName(),
+                orderItem.getOptionSummary(),
+
+                orderItem.getQuantity(),
+
+                orderItem.getUnitPrice(),
+                orderItem.getAdditionalPrice(),
+                orderItem.getTotalPrice()
+        );
+    }
 }

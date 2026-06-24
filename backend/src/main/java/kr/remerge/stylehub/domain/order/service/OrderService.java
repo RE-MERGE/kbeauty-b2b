@@ -6,10 +6,9 @@ import kr.remerge.stylehub.domain.cart.repository.CartRepository;
 import kr.remerge.stylehub.domain.company.entity.Address;
 import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.company.repository.AddressRepository;
-import kr.remerge.stylehub.domain.order.dto.BuyerOrderListResponse;
+import kr.remerge.stylehub.domain.order.dto.*;
+import kr.remerge.stylehub.domain.order.enumtype.PaymentMethod;
 import kr.remerge.stylehub.domain.order.repository.OrderRepository;
-import kr.remerge.stylehub.domain.order.dto.OrderCreateRequest;
-import kr.remerge.stylehub.domain.order.dto.OrderCreateResponse;
 import kr.remerge.stylehub.domain.order.entity.Order;
 import kr.remerge.stylehub.domain.order.entity.OrderItem;
 import kr.remerge.stylehub.domain.order.enumtype.OrderStatus;
@@ -53,7 +52,7 @@ public class OrderService {
         Map<Integer, List<CartItem>> itemsByCompany = getItemsByCompany(cartItems);
 
         Address address = addressRepository.findById(request.addressId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.SAMPLE_OPTION_NOT_CONFIGURED));
+                .orElseThrow(() -> new BusinessException(ErrorCode.ADDRESS_NOT_FOUND));
 
         ArrayList<String> orderNos = new ArrayList<>();
         long checkoutTotalAmount = 0L;
@@ -164,6 +163,7 @@ public class OrderService {
                 .subtotalAmount(subtotalAmount)
                 .shippingFee(shippingFee)
                 .totalAmount(subtotalAmount + shippingFee)
+                .paymentMethod(PaymentMethod.CORP_CARD) //TODO 요청값대체
                 .receiverName(buyer.getName())
                 .receiverPhone(buyer.getPhone())
                 .receiverZipcode(address.getZipcode())
@@ -186,11 +186,18 @@ public class OrderService {
             //민재 추가해달라고 해
         }
 
-        return cartRepository.findByCartItemIdInAndUser_UserIdAndCartType(
+        List<CartItem> cartItems = cartRepository.findByCartItemIdInAndUser_UserIdAndCartType(
                 request.cartItemIds(),
                 userId,
                 request.cartType()
         );
+
+        if (cartItems.size() != request.cartItemIds().size()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+//            민재 : throw new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND);
+        }
+
+        return cartItems;
 
     }
 
@@ -231,4 +238,29 @@ public class OrderService {
                 .toList();
     }
 
+    public BuyerOrderOverviewResponse getOrderOverview(Integer userId, Integer orderId) {
+
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        Order order = orderRepository.findByOrderIdAndBuyer_UserId(orderId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+
+        BuyerOrderSummaryResponse orderAmountSummaryResponse
+                = BuyerOrderSummaryResponse.from(order);
+
+        List<OrderItem> orderItems =
+                orderItemRepository.findByOrder_OrderId(order.getOrderId());
+
+        List<BuyerOrderItemResponse> orderItemResponseList = orderItems.stream()
+                .map(BuyerOrderItemResponse::from)
+                .toList();
+
+        return new BuyerOrderOverviewResponse(
+                orderItemResponseList,
+                orderAmountSummaryResponse,
+                order.getStatus()
+        );
+    }
 }

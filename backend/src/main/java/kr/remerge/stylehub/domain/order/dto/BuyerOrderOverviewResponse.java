@@ -7,7 +7,7 @@ import java.util.List;
 public record BuyerOrderOverviewResponse(
 
         List<BuyerOrderItemResponse> items,
-        BuyerOrderAmountSummaryResponse amountSummary,
+        BuyerOrderSummaryResponse amountSummary,
         OrderStatus orderStatus
 ){
 }

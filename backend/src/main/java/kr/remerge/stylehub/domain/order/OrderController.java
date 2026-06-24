@@ -1,5 +1,6 @@
 package kr.remerge.stylehub.domain.order;
 
+import kr.remerge.stylehub.domain.order.dto.BuyerOrderOverviewResponse;
 import kr.remerge.stylehub.domain.order.dto.OrderCreateRequest;
 import kr.remerge.stylehub.domain.order.dto.OrderCreateResponse;
 import kr.remerge.stylehub.domain.order.dto.BuyerOrderListResponse;
@@ -31,7 +32,17 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success(orders));
     }
 
+    @GetMapping("/{orderId}")
+    public ResponseEntity<ApiResponse<BuyerOrderOverviewResponse>> getOrderOverview(
+            @LoginUser AuthUser authUser,
+            @PathVariable Integer orderId
+    ) {
 
+        BuyerOrderOverviewResponse overviewResponse =
+                orderService.getOrderOverview(authUser.userId(), orderId);
+
+        return ResponseEntity.ok(ApiResponse.success(overviewResponse));
+    }
 
     @PostMapping
     public ResponseEntity<ApiResponse<OrderCreateResponse>> createOrder(

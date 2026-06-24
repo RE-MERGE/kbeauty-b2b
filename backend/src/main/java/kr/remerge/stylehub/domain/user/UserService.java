@@ -4,7 +4,6 @@ import kr.remerge.stylehub.domain.category.entity.Category;
 import kr.remerge.stylehub.domain.category.repository.CategoryRepository;
 import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.company.entity.CompanyHandledCategory;
-import kr.remerge.stylehub.domain.company.enumtype.CompanyStoreType;
 import kr.remerge.stylehub.domain.company.enumtype.SellerStatus;
 import kr.remerge.stylehub.domain.company.repository.BrandRepository;
 import kr.remerge.stylehub.domain.company.repository.CompanyBankAccountRepository;
@@ -19,18 +18,17 @@ import kr.remerge.stylehub.domain.user.enumtype.BusinessRole;
 import kr.remerge.stylehub.domain.user.enumtype.UserRole;
 import kr.remerge.stylehub.domain.user.repository.UserPreferredCategoryRepository;
 import kr.remerge.stylehub.domain.user.repository.UserRepository;
+import kr.remerge.stylehub.global.auth.AuthService;
 import kr.remerge.stylehub.global.auth.jwt.JwtProvider;
 import kr.remerge.stylehub.global.common.service.EmailService;
 import kr.remerge.stylehub.global.common.service.SmsService;
 import kr.remerge.stylehub.global.exception.BusinessException;
 import kr.remerge.stylehub.global.exception.ErrorCode;
-import kr.remerge.stylehub.global.common.RedisRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Random;
 
@@ -47,7 +45,7 @@ public class UserService {
     private final BrandRepository brandRepository;
     private final CategoryRepository categoryRepository;
 
-    private final RedisRepository redisRepository; // Redis 캐시 레포지토리 (만료 시간 설정용)
+    private final AuthService authService;
     private final SmsService smsService;             // 알림톡 또는 SMS 발송 서비스
     private final EmailService emailService;         // 이메일 발송 서비스
     private final JwtProvider jwtProvider; // 임시 비밀번호 재설정용 토큰 공급자
@@ -212,13 +210,34 @@ public class UserService {
     // ───────────────────────────────────────────
     // 내 정보 수정
     // ───────────────────────────────────────────
+    @Transactional(readOnly = true)
+    public void verifyPassword(Integer userId, VerifyPasswordRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        // 입력받은 비밀번호와 DB의 해시화된 비밀번호 비교
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+            throw new BusinessException(ErrorCode.INVALID_PASSWORD);
+        }
+    }
 
     @Transactional
     public UserResponse updateMe(Integer userId, UpdateUserRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        user.update(request.name(), request.phone(), request.profileImageUrl());
+        // 이메일을 변경하는 경우 중복 체크
+        if (!user.getEmail().equals(request.email()) && userRepository.existsByEmail(request.email())) {
+            throw new BusinessException(ErrorCode.DUPLICATE_EMAIL);
+        }
+        if (!request.email().equals(user.getEmail())) {
+            if (!authService.isVerified(request.email())) {
+                throw new BusinessException(ErrorCode.UNVERIFIED_EMAIL);
+            }
+            authService.invalidateVerification(request.email());
+        }
+
+        user.update(request.email(), request.phone(), request.profileImageUrl());
 
         return UserResponse.from(user);
     }
@@ -240,20 +259,17 @@ public class UserService {
     // ───────────────────────────────────────────
     @Transactional
     public void sendFindIdOtp(FindIdSendOtpRequest request) {
-        // 1. 이름과 휴대폰 번호가 일치하는 유저가 존재하는지 검증
-        boolean isExist = userRepository.existsByNameAndPhone(request.name(), request.phone());
-        if (!isExist) {
-            throw new BusinessException(ErrorCode.USER_NOT_FOUND); // 혹은 "입력 정보가 일치하지 않습니다" 전용 에러코드
+        // 1. 유저 존재 여부 확인
+        if (!userRepository.existsByNameAndPhone(request.name(), request.phone())) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
 
-        // 2. 6자리 보안 난수 생성
+        // 2. 인증번호 생성 및 발송 위임
         String otpCode = String.format("%06d", new Random().nextInt(1000000));
+        authService.sendFindIdOtp(request.phone(), otpCode);
 
-        // 3. Redis 캐시에 휴대폰 번호를 Key로 삼아 3분(180초) 동안 저장
-        redisRepository.save(request.phone(), otpCode, Duration.ofMinutes(3));
-
-        // 4. 외부 SMS 유틸을 이용해 발송
-        smsService.sendSms(request.phone(), "[StyleHub] 본인확인 인증번호 [" + otpCode + "]를 입력해주세요. (3분 내 제한)");
+        // 3. 발송 (SmsService는 유지)
+        smsService.sendSms(request.phone(), "[StyleHub] 인증번호 [" + otpCode + "]");
     }
 
     // ───────────────────────────────────────────
@@ -261,29 +277,15 @@ public class UserService {
     // ───────────────────────────────────────────
     @Transactional
     public FindIdResponse verifyFindIdOtp(FindIdVerifyOtpRequest request) {
-        // 1. 캐시 저장소에서 해당 번호의 OTP 코드 조회
-        String savedCode = redisRepository.get(request.phone());
+        // 1. 인증 위임 (성공 시 삭제까지 여기서 처리됨)
+        authService.verifyOtpAndClear(request.phone(), request.code());
 
-        if (savedCode == null) {
-            throw new BusinessException(ErrorCode.OTP_EXPIRED); // 인증 시간 만료 예외 처리
-        }
-
-        if (!savedCode.equals(request.code())) {
-            throw new BusinessException(ErrorCode.INVALID_OTP_CODE); // 인증번호 불일치 예외 처리
-        }
-
-        // 2. 일치할 경우 유저 정보 획득
+        // 2. 유저 정보 조회
         User user = userRepository.findByNameAndPhone(request.name(), request.phone())
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        // 3. 검증 완료 후 OTP 코드는 보관함에서 즉시 파기 (보안)
-        redisRepository.delete(request.phone());
-
-        // 4. 이메일(아이디) 마스킹 처리
-        String maskedEmail = maskEmail(user.getEmail());
-
-        // 프론트엔드가 요구하는 { maskedEmail, createdAt } 스펙 반환
-        return new FindIdResponse(maskedEmail, user.getCreatedAt().toString());
+        // 3. 이메일 마스킹 처리 후 반환
+        return new FindIdResponse(maskEmail(user.getEmail()), user.getCreatedAt().toString());
     }
 
     // ───────────────────────────────────────────

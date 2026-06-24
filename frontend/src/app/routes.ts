@@ -126,11 +126,12 @@ export const router = createBrowserRouter([
                     // Trade Flow
                     {path: "orders/:orderId/negotiations", Component: Negotiations},
                     {path: "orders/:orderId/disputes", Component: Disputes},
+
+                    // ✨ Toss Payments
+                    {path: "payment/success", Component: PaymentSuccessPage},
+                    {path: "payment/ordersuccess", Component: OrderCompletePage},
                 ],
             },
-                    // ✨ Toss Payments
-                {path: "payment/success", Component: PaymentSuccessPage},
-                {path: "payment/ordersuccess", Component: OrderCompletePage},
             {
                 path: "admin",
                 Component: AdminLayout,

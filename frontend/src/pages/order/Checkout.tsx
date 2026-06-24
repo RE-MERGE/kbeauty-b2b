@@ -18,7 +18,7 @@ import {
   Truck,
   X,
 } from "lucide-react";
-import axios from "axios";
+
 
 type OrderItem = {
   id: number;

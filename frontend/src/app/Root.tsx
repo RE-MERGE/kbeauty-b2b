@@ -268,8 +268,24 @@ export function Root() {
     const tabDropRef = useRef<HTMLDivElement>(null);
     const resultDropRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
+
     const user = useAuthStore((state) => state.user);
     const clearUser = useAuthStore((state) => state.clearUser);
+
+    // 💡 유저의 비즈니스 권한에 따라 대시보드 경로를 동적으로 결정
+    // 기본값은 '/' 또는 메인으로 잡고, 권한별 분기 처리
+    let dashboardPath = "/";
+
+    if (user?.businessRole === "BUYER") {
+        dashboardPath = "/buyer";
+    } else if (user?.businessRole === "SELLER") {
+        dashboardPath = "/seller";
+    } else if (user?.businessRole === "BOTH") {
+        // BOTH(통합 관리자)일 경우, 기본적으로 어디를 먼저 보여줄지 기획에 따라 결정하시면 됩니다.
+        // 여기서는 기본값을 '/buyer'로 가되, 필요하면 판매자 대시보드로 전환하는 버튼을 화면에 따로 주는 게 정석입니다.
+        dashboardPath = "/buyer";
+    }
+
     // 유저가 존재하고, 역할이 PRESIDENT이면서, BusinessRole이 BUYER인 경우에만 true
     const isBuyerPresident = user?.role === "PRESIDENT" && user?.businessRole === "BUYER";
     const handleLogout = async () => {
@@ -612,8 +628,10 @@ export function Root() {
                         </Link>
 
                         {/* 대시보드 */}
-                        <Link to="/buyer"
-                              className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors">
+                        <Link
+                            to={dashboardPath}
+                            className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors"
+                        >
                             <ClipboardList size={25}/>
                             <span className="text-[11px]">대시보드</span>
                         </Link>

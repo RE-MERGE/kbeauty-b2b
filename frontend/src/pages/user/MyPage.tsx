@@ -64,7 +64,7 @@ function ProfileCard() {
     return (
         <div className="bg-white border border-border rounded-xl p-5 mb-5 flex flex-col items-center text-center">
             <div
-                className="w-24 h-24 rounded-full bg-primary/10 text-primary font-black text-2xl flex items-center justify-center overflow-hidden mb-4 shadow-sm border border-border/40 flex-shrink-0">
+                className="w-38 h-38 rounded-full bg-primary/10 text-primary font-black text-2xl flex items-center justify-center overflow-hidden mb-4 shadow-sm border border-border/40 flex-shrink-0">
                 {user?.profileImageUrl ? (
                     <img src={user.profileImageUrl} alt={name} className="w-full h-full object-cover"/>
                 ) : (
@@ -74,7 +74,7 @@ function ProfileCard() {
 
             <div className="w-full min-w-0 flex flex-col items-center">
                 <div className="flex items-center justify-center gap-1.5 w-full px-1">
-                    <p className="text-base font-bold text-foreground truncate">{name}</p>
+                    <p className="text-[16px] font-bold text-foreground truncate">{name}</p>
                     {roleLabel && (
                         <span
                             className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full flex-shrink-0">
@@ -86,11 +86,6 @@ function ProfileCard() {
                 <p className="flex items-center justify-center gap-1 text-xs text-muted-foreground font-medium truncate w-full px-1 mt-1">
                     <Building2 size={12} className="text-muted-foreground/70 flex-shrink-0"/>
                     <span className="truncate">{(user as any).companyName ?? "소속 회사"}</span>
-                </p>
-
-                <p className="flex items-center justify-center gap-1 text-xs text-muted-foreground/80 truncate w-full px-1 mt-1.5 pt-2 border-t border-dashed border-border">
-                    <Mail size={11} className="flex-shrink-0"/>
-                    {email}
                 </p>
             </div>
         </div>

@@ -1,20 +1,21 @@
-import {useState} from "react";
+import React, {useState} from "react";
 import {Link, useNavigate} from "react-router";
 import {ArrowRight, Eye, EyeOff, ShoppingBag, TrendingUp, Users} from "lucide-react";
 import {useAuthStore} from "@/store/useAuthStore";
-import {getMe, login} from "@/api/auth";
+import {getMe} from "@/api/user";
+import {login} from "@/api/auth";
 
 const STATS = [
-    { icon: <ShoppingBag size={16} />, value: "2,400+", label: "입점 브랜드" },
-    { icon: <Users size={16} />, value: "18,000+", label: "등록 바이어" },
-    { icon: <TrendingUp size={16} />, value: "월 32억+", label: "거래 금액" },
+    {icon: <ShoppingBag size={16}/>, value: "2,400+", label: "입점 브랜드"},
+    {icon: <Users size={16}/>, value: "18,000+", label: "등록 바이어"},
+    {icon: <TrendingUp size={16}/>, value: "월 32억+", label: "거래 금액"},
 ];
 
 const TAGS = ["여성 캐주얼", "남성 스트릿", "아우터", "데님", "스포츠웨어", "이너웨어", "키즈", "빈티지"];
 
 export function Login() {
     const [showPassword, setShowPassword] = useState(false);
-    const [form, setForm] = useState({ email: "", password: "", remember: false });
+    const [form, setForm] = useState({email: "", password: "", remember: false});
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
@@ -32,7 +33,7 @@ export function Login() {
 
         setLoading(true);
         try {
-            await login({ email: form.email, password: form.password });
+            await login({email: form.email, password: form.password});
             const user = await getMe();
             setUser(user);
 
@@ -53,12 +54,12 @@ export function Login() {
             <div className="hidden lg:flex lg:w-[44%] bg-[#0c0c0c] flex-col relative overflow-hidden select-none">
                 <div
                     className="absolute inset-0 opacity-[0.035]"
-                    style={{ backgroundImage: "repeating-linear-gradient(0deg,#fff 0,#fff 1px,transparent 0,transparent 60px),repeating-linear-gradient(90deg,#fff 0,#fff 1px,transparent 0,transparent 60px)" }}
+                    style={{backgroundImage: "repeating-linear-gradient(0deg,#fff 0,#fff 1px,transparent 0,transparent 60px),repeating-linear-gradient(90deg,#fff 0,#fff 1px,transparent 0,transparent 60px)"}}
                 />
-                <div className="absolute left-0 top-0 w-[3px] h-full bg-primary" />
+                <div className="absolute left-0 top-0 w-[3px] h-full bg-primary"/>
                 <div
                     className="absolute bottom-[-20px] right-[-10px] text-[160px] font-black leading-none pointer-events-none"
-                    style={{ color: "rgba(255,255,255,0.025)", fontStyle: "italic" }}
+                    style={{color: "rgba(255,255,255,0.025)", fontStyle: "italic"}}
                     aria-hidden
                 >
                     B2B
@@ -71,8 +72,8 @@ export function Login() {
                                 — Fashion B2B Platform
                             </p>
                             <h1 className="text-[44px] font-black text-white leading-[1.05] tracking-tight">
-                                패션 B2B<br />
-                                <span className="text-primary italic">새로운</span><br />
+                                패션 B2B<br/>
+                                <span className="text-primary italic">새로운</span><br/>
                                 기준
                             </h1>
                         </div>
@@ -129,7 +130,7 @@ export function Login() {
                             <input
                                 type="email"
                                 value={form.email}
-                                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                                onChange={(e) => setForm({...form, email: e.target.value})}
                                 placeholder="이메일"
                                 className="w-full border border-border rounded-lg px-4 py-3 text-sm outline-none focus:border-primary transition-colors bg-white"
                             />
@@ -137,7 +138,7 @@ export function Login() {
                                 <input
                                     type={showPassword ? "text" : "password"}
                                     value={form.password}
-                                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                                    onChange={(e) => setForm({...form, password: e.target.value})}
                                     placeholder="비밀번호 입력"
                                     className="w-full border border-border rounded-lg px-4 py-3 text-sm outline-none focus:border-primary transition-colors pr-11 bg-white"
                                 />
@@ -146,7 +147,7 @@ export function Login() {
                                     onClick={() => setShowPassword(!showPassword)}
                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                 >
-                                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
                                 </button>
                             </div>
                             {error && <p className="text-xs text-red-500 mt-1.5">{error}</p>}
@@ -157,7 +158,7 @@ export function Login() {
                                 <input
                                     type="checkbox"
                                     checked={form.remember}
-                                    onChange={(e) => setForm({ ...form, remember: e.target.checked })}
+                                    onChange={(e) => setForm({...form, remember: e.target.checked})}
                                     className="rounded"
                                 />
                                 로그인 상태 유지
@@ -174,7 +175,7 @@ export function Login() {
                             disabled={loading}
                             className="w-full bg-primary hover:bg-primary/90 disabled:opacity-50 text-white py-3 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2 mt-4"
                         >
-                            {loading ? "로그인 중..." : "로그인"} <ArrowRight size={15} />
+                            {loading ? "로그인 중..." : "로그인"} <ArrowRight size={15}/>
                         </button>
 
                         <div className="mt-6 pt-5 border-t border-border">

@@ -1,7 +1,7 @@
 import {Navigate, Outlet, useMatches} from "react-router";
 import {useAuthStore} from "@/store/useAuthStore";
 import {useEffect} from "react";
-import {getMe} from "@/api/auth";
+import {getMe} from "@/api/user";
 
 // ───────────────────────────────────────────
 // 인증 보호 레이아웃
@@ -87,12 +87,35 @@ export function ProtectedLayout() {
     // 라우터의 handle: { role: "BUYER" | "SELLER" } 설정을 읽어서 권한 체크
     // ADMIN은 모든 경로 접근 허용
     // ───────────────────────────────────────────
-    const requiredRole = matches
-        .map((m) => (m.handle as any)?.role)
-        .find(Boolean);
+    if (user.role !== "ADMIN") {
 
-    if (requiredRole && user.businessRole !== requiredRole && user.role !== "ADMIN") {
-        return <Navigate to="/" replace/>;
+        // 안전 조치: 하위/상위 매칭된 모든 라우트를 순회하며 handle에 걸려있는 권한 정보 수집
+        const activeRoles = matches
+            .map((m) => (m.handle as any)?.roles)
+            .find((roles) => Array.isArray(roles) && roles.length > 0);
+
+        const activeRole = matches
+            .map((m) => (m.handle as any)?.role)
+            .find((role) => typeof role === "string" && role.trim() !== "");
+
+        // 현재 유저의 비즈니스 역할 권한 범위 (안전하게 fallback 처리)
+        const userBizRole = user.businessRole || "";
+
+        // 1) 배열 형태 권한 설정(roles: ["SELLER", "BOTH"])이 상위/하위 라우트 중 하나라도 발견된 경우
+        if (activeRoles) {
+            if (!activeRoles.includes(userBizRole)) {
+                alert("접근 권한이 없습니다.");
+                return <Navigate to="/" replace />;
+            }
+        }
+
+        // 2) 단일 문자열 형태 권한 설정(role: "SELLER")만 발견된 경우 (기존 코드 하위 호환)
+        else if (activeRole) {
+            if (userBizRole !== activeRole) {
+                alert("접근 권한이 없습니다.");
+                return <Navigate to="/" replace />;
+            }
+        }
     }
 
     // 모든 검증 통과 → 실제 페이지 렌더링

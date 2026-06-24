@@ -124,7 +124,7 @@ export const router = createBrowserRouter([
                     {path: "orders/:orderId/negotiations", Component: Negotiations},
                     {path: "orders/:orderId/disputes", Component: Disputes},
 
-                    // ✨ Toss Payments
+                    // Toss Payments
                     {path: "payment/success", Component: PaymentSuccessPage},
                     {path: "payment/ordersuccess", Component: OrderCompletePage},
                 ],
@@ -147,7 +147,7 @@ export const router = createBrowserRouter([
             {
                 path: "buyer",
                 Component: Root,
-                handle: {role: "BUYER"},
+                handle: {role: ["BUYER", "BOTH"]},
                 children: [
                     {index: true, Component: BuyerDashboard},
                     {path: "quotes", Component: BuyerQuoteList},
@@ -162,7 +162,7 @@ export const router = createBrowserRouter([
             {
                 path: "seller",
                 Component: Root,
-                handle: {role: "SELLER"},
+                handle: {roles: ["SELLER", "BOTH"]},
                 children: [
                     {index: true, Component: SellerDashboard},
                     {path: "products/new", Component: SellerProductRegister},

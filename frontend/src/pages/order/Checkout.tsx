@@ -295,37 +295,48 @@ export function Checkout() {
     if (!checkoutState?.cartItemIds.length) return;
 
     try {
-      setIsPaymentLoading(true);
+        setIsPaymentLoading(true);
 
-      const orderResponse = await api.post<OrderCreateResponse>("/orders", {
-        cartItemIds: checkoutState.cartItemIds,
-        addressId: selectedAddress.addressId,
-        cartType: checkoutState.cartType,
-      });
+        const orderResponse = await api.post<OrderCreateResponse>("/orders", {
+            cartItemIds: checkoutState.cartItemIds,
+            addressId: selectedAddress.addressId,
+            cartType: checkoutState.cartType,
+        });
 
-      const realOrderNumber = orderResponse.orderNos[0];
+        const realOrderNumber = orderResponse.orderNos[0];
 
-      if (!realOrderNumber) {
-        alert("주문 번호를 발급받지 못했습니다.");
-        return;
-      }
+        if (!realOrderNumber) {
+            alert("주문 번호를 발급받지 못했습니다.");
+            return;
+        }
 
-      const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY);
-      const payment = tossPayments.payment({ customerKey: "ANONYMOUS" });
+        const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY);
+        const payment = tossPayments.payment({ customerKey: "ANONYMOUS" });
 
-      const orderName = orderItems.length > 1
-          ? `${orderItems[0].name} 외 ${orderItems.length - 1}건`
-          : orderItems[0].name;
+        const orderName = orderItems.length > 1
+            ? `${orderItems[0].name} 외 ${orderItems.length - 1}건`
+            : orderItems[0].name;
 
-      const commonRequest = {
-        amount: { currency: "KRW" as const, value: total },
-        orderId: realOrderNumber,
-        orderName,
-        successUrl: `${window.location.origin}/payment/success`,
-        failUrl: `${window.location.origin}/payment/fail`,
-        customerName: "구매 담당자",
-      };
+        const commonRequest = {
+            amount: { currency: "KRW" as const, value: total },
+            orderId: realOrderNumber,
+            orderName,
+            successUrl: `${window.location.origin}/payment/success`,
+            failUrl: `${window.location.origin}/payment/fail`,
+            customerName: "구매 담당자",
+        };
 
+        if (paymentMethod === "card") {
+            await payment.requestPayment({
+                method: "CARD",
+                ...commonRequest,
+            });
+        } else {
+            await payment.requestPayment({
+                method: "VIRTUAL_ACCOUNT",
+                ...commonRequest,
+            });
+        }
       if (paymentMethod === "card") {
         await payment.requestPayment({
           method: "CARD",
@@ -339,12 +350,12 @@ export function Checkout() {
       }
 
     } catch (error) {
-      console.error("주문 생성 또는 결제 요청 실패:", error);
-      alert("결제 처리 중 오류가 발생했습니다.");
+        console.error("주문 생성 또는 결제 요청 실패:", error);
+        alert("결제 처리 중 오류가 발생했습니다.");
     } finally {
-      setIsPaymentLoading(false);
+        setIsPaymentLoading(false);
     }
-  };
+};
 
   const handleTestOrder = async () => {
     if (!checkoutState?.cartItemIds.length || !selectedAddress || isTestOrderLoading) return;

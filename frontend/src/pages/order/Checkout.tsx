@@ -18,6 +18,7 @@ import {
   Truck,
   X,
 } from "lucide-react";
+import axios from "axios";
 
 type OrderItem = {
   id: number;
@@ -54,6 +55,7 @@ type OrderCreateResponse = {
 };
 
 type DeliveryAddress = {
+  receiverName: any;
   addressId: number;
   addressName: string;
   zipcode: string;
@@ -291,19 +293,45 @@ export function Checkout() {
   const handlePayment = async () => {
     if (!agreeTerms || !isSigned || !selectedAddress || isPaymentLoading) return;
 
-    const newOrderNumber = `STYLEHUB${Date.now()}`;
-
     try {
       setIsPaymentLoading(true);
 
+      // 1. 백엔드 주문 생성 API 호출
+      const orderResponse = await axios.post('/api/v1/orders', {
+        orderItems: orderItems,
+        totalAmount: total,
+        receiverName: selectedAddress.receiverName,
+        receiverZipcode: selectedAddress.zipcode,
+        receiverAddress: selectedAddress.address,
+        receiverAddressDetail: selectedAddress.addressDetail
+      });
+
+      // 2. 🚨 디버깅 로그 확인 (F12 콘솔에서 구조를 꼭 확인하세요!)
+      console.log("[디버깅] 백엔드 응답 객체:", orderResponse.data);
+
+      // 백엔드 구조에 맞춰 아래 경로를 정확히 지정해야 합니다.
+      // 만약 응답 구조가 ResultResponse.success(order) 형태라면 orderResponse.data.data.orderNo 일 수 있습니다.
+      console.log("백엔드 주문 생성 전체 응답:", orderResponse);
+      console.log("백엔드 실제 데이터 내부:", orderResponse.data);
+      const realOrderNumber = orderResponse.data.orderNo || orderResponse.data.data.orderNo;
+
+      // 🚨 안전 장치: 주문 번호가 비어있으면 토스 창을 띄우지 않고 에러로 보냅니다.
+      if (!realOrderNumber) {
+        alert("주문 번호를 발급받지 못했습니다. 데이터 구조를 확인해 주세요.");
+        return;
+      }
+
+      // 3. 토스페이먼츠 SDK 세팅 및 결제 요청
       const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY);
       const payment = tossPayments.payment({ customerKey: "ANONYMOUS" });
+
       const orderName = orderItems.length > 1
-        ? `${orderItems[0].name} 외 ${orderItems.length - 1}건`
-        : orderItems[0].name;
+          ? `${orderItems[0].name} 외 ${orderItems.length - 1}건`
+          : orderItems[0].name;
+
       const commonRequest = {
         amount: { currency: "KRW" as const, value: total },
-        orderId: newOrderNumber,
+        orderId: realOrderNumber, // 💡 이제 무조건 백엔드가 준 진짜 번호가 들어갑니다.
         orderName,
         successUrl: `${window.location.origin}/payment/success`,
         failUrl: `${window.location.origin}/payment/fail`,
@@ -322,9 +350,11 @@ export function Checkout() {
         method: "VIRTUAL_ACCOUNT",
         ...commonRequest,
       });
+
     } catch (error) {
-      console.error("토스 결제창 호출 실패", error);
-      alert("결제창을 열지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      console.error("주문 생성 또는 결제 요청 실패:", error);
+      alert("결제 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
       setIsPaymentLoading(false);
     }
   };

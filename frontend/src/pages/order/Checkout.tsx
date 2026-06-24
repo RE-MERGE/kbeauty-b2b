@@ -377,6 +377,17 @@ export function Checkout() {
                 ...commonRequest,
             });
         }
+      if (paymentMethod === "card") {
+        await payment.requestPayment({
+          method: "CARD",
+          ...commonRequest,
+        });
+      } else {
+        await payment.requestPayment({
+          method: "VIRTUAL_ACCOUNT",
+          ...commonRequest,
+        });
+      }
 
     } catch (error) {
         console.error("주문 생성 또는 결제 요청 실패:", error);

@@ -74,17 +74,15 @@ public class SupplierStatisticsService {
                 .map(SupplierProfile::getCompanyId)
                 .collect(Collectors.toList());
 
-        if (subCategoryId != null) {
-            List<Integer> categoryMatchIds = companyHandledCategoryRepository
-                    .findCompanyIdsByCategoryId(subCategoryId);
-            companyIds = companyIds.stream()
-                    .filter(categoryMatchIds::contains)
-                    .collect(Collectors.toList());
+        List<Integer> categoryMatchIds = companyHandledCategoryRepository
+                .findCompanyIdsByCategoryId(subCategoryId);
+        companyIds = companyIds.stream()
+                .filter(categoryMatchIds::contains)
+                .collect(Collectors.toList());
 
-            if (companyIds.isEmpty()) {
-                log.warn("[AutoAssign] 카테고리 매칭 공급사 없음 - subCategoryId: {}", subCategoryId);
-                return List.of();
-            }
+        if (companyIds.isEmpty()) {
+            log.warn("[AutoAssign] 카테고리 매칭 공급사 없음 - subCategoryId: {}", subCategoryId);
+            return List.of();
         }
 
         // statistics 조회

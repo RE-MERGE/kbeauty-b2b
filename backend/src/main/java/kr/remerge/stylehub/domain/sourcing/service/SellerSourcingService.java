@@ -1,8 +1,10 @@
 package kr.remerge.stylehub.domain.sourcing.service;
 
 import kr.remerge.stylehub.domain.sourcing.dto.SellerSourcingResponse;
+import kr.remerge.stylehub.domain.sourcing.entity.SourcingRequest;
 import kr.remerge.stylehub.domain.sourcing.entity.SourcingSupplier;
 import kr.remerge.stylehub.domain.sourcing.enumtype.SourcingSupplierStatus;
+import kr.remerge.stylehub.domain.sourcing.repository.SourcingRequestRepository;
 import kr.remerge.stylehub.domain.sourcing.repository.SourcingSupplierRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -10,11 +12,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+import static reactor.netty.http.HttpConnectionLiveness.log;
+
 @Service
 @RequiredArgsConstructor
 public class SellerSourcingService {
 
     private final SourcingSupplierRepository sourcingSupplierRepository;
+    private final SourcingRequestRepository sourcingRequestRepository;
 
     // TODO: 인증 붙으면 company_id를 SecurityContext에서 추출
     private static final Integer DUMMY_COMPANY_ID = 11;
@@ -44,7 +49,7 @@ public class SellerSourcingService {
                 .toList();
     }
 
-    // 거절
+    // 거절 + 전체 DECLINED 시 자동 반려
     @Transactional
     public void decline(Integer sourcingSupplierId, String feedback) {
         SourcingSupplier supplier = sourcingSupplierRepository.findById(sourcingSupplierId)
@@ -56,5 +61,20 @@ public class SellerSourcingService {
         }
 
         supplier.decline(feedback);
+
+        // 해당 소싱 요청의 모든 supplier가 DECLINED인지 체크
+        Integer sourcingRequestId = supplier.getSourcingRequest().getSourcingRequestId();
+        List<SourcingSupplier> allSuppliers = sourcingSupplierRepository
+                .findAllBySourcingRequest_SourcingRequestId(sourcingRequestId);
+
+        boolean allDeclined = allSuppliers.stream()
+                .allMatch(s -> s.getStatus() == SourcingSupplierStatus.DECLINED);
+
+        if (allDeclined) {
+            SourcingRequest sourcingRequest = sourcingRequestRepository.findById(sourcingRequestId)
+                    .orElseThrow(() -> new IllegalArgumentException("소싱 요청 없음: " + sourcingRequestId));
+            sourcingRequest.cancel();
+            log.info("[AutoCancel] 모든 공급사 거절 → 소싱 요청 반려 처리 - sourcingRequestId: {}", sourcingRequestId);
+        }
     }
 }

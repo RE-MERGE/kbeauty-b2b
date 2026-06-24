@@ -742,7 +742,7 @@ export function SourcingRequest() {
                                         value={item.subCategory}
                                         onChange={(e) => {
                                             updateItem(item.id, "subCategory", e.target.value);
-                                            updateItem(item.id, "subCategoryId", null);
+                                            updateItem(item.id, "subCategoryId", 6);
                                         }}
                                         className={inputCls}
                                         disabled={!item.mainCategory}

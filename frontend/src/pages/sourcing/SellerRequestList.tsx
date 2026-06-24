@@ -4,7 +4,7 @@ import {
   Package, X, Zap, AlertTriangle, Calendar,
   Search, Filter, FileText, FlaskConical, Truck,
   CheckCircle, History, ChevronRight, ChevronDown, Plus,
-  CreditCard, BadgeCheck,
+  CreditCard, BadgeCheck, XCircle,
 } from "lucide-react";
 
 // ── 타입 ──────────────────────────────────────────────────────────────
@@ -59,6 +59,15 @@ async function fetchSellerPastRequests(type: SourcingType): Promise<SellerSourci
   return res.json();
 }
 
+async function declineRequest(sourcingSupplierId: number, feedback: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/suppliers/${sourcingSupplierId}/decline`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ feedback }),
+  });
+  if (!res.ok) throw new Error("거절 처리 실패");
+}
+
 // ── 유틸 ──────────────────────────────────────────────────────────────
 const BID_STATUS_STYLE: Record<BidSubmitStatus, string> = {
   "제출됨":       "bg-blue-50 text-blue-600 border-blue-200",
@@ -99,6 +108,87 @@ const ddayColorCls = {
 
 const READY_CATEGORIES = ["전체", "상의", "하의", "원피스/세트", "아우터", "액세서리"];
 const CUSTOM_CATEGORIES = ["전체", "상의", "하의", "아우터", "스포츠/애슬레저", "OEM/자체제작"];
+
+// ── 거절 모달 ─────────────────────────────────────────────────────────
+function DeclineModal({ req, onClose, onConfirm }: {
+  req: SellerSourcingResponse;
+  onClose: () => void;
+  onConfirm: (sourcingSupplierId: number, feedback: string) => Promise<void>;
+}) {
+  const [feedback, setFeedback] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const canConfirm = feedback.trim().length > 0;
+
+  const handleConfirm = async () => {
+    setIsLoading(true);
+    try {
+      await onConfirm(req.sourcingSupplierId, feedback.trim());
+      setDone(true);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={!done ? onClose : undefined} />
+        <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-[420px] overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+            <div className="flex items-center gap-2">
+              <XCircle size={16} className="text-red-500" />
+              <h3 className="font-bold text-foreground">소싱 요청 거절</h3>
+            </div>
+            {!done && <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1"><X size={18} /></button>}
+          </div>
+
+          {done ? (
+              <div className="px-6 py-10 text-center">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <XCircle size={22} className="text-red-500" />
+                </div>
+                <div className="font-bold text-foreground mb-1">거절 처리 완료</div>
+                <div className="text-sm text-muted-foreground mb-6">관리자에게 거절 사유가 전달됩니다.</div>
+                <button onClick={onClose} className="px-6 py-2 bg-primary text-white rounded font-semibold text-sm hover:bg-primary/90 transition-colors">확인</button>
+              </div>
+          ) : (
+              <div className="px-6 py-5 space-y-4">
+                <div className="bg-secondary rounded-lg px-4 py-3">
+                  <div className="text-xs text-muted-foreground mb-0.5 font-mono">{req.sourcingNo}</div>
+                  <div className="font-semibold text-sm text-foreground">{req.productName}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    거절 사유 <span className="text-primary">*</span>
+                  </label>
+                  <textarea
+                      value={feedback}
+                      onChange={(e) => setFeedback(e.target.value)}
+                      rows={4}
+                      placeholder="예: 현재 생산 일정이 맞지 않아 거절합니다."
+                      className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-red-400 transition-colors bg-white resize-none"
+                      autoFocus
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">거절 사유는 관리자에게 전달됩니다.</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors font-medium">취소</button>
+                  <button
+                      onClick={handleConfirm}
+                      disabled={!canConfirm || isLoading}
+                      className={`flex-1 py-2.5 rounded font-bold text-sm transition-colors flex items-center justify-center gap-2 ${canConfirm && !isLoading ? "bg-red-500 hover:bg-red-600 text-white" : "bg-muted text-muted-foreground cursor-not-allowed"}`}
+                  >
+                    <XCircle size={14} /> {isLoading ? "처리 중..." : "거절하기"}
+                  </button>
+                </div>
+              </div>
+          )}
+        </div>
+      </div>
+  );
+}
 
 // ── 소싱 요청 상세 모달 (셀러용) ─────────────────────────────────────
 function SellerSourcingDetailModal({ req, onClose }: { req: SellerSourcingResponse; onClose: () => void }) {
@@ -294,10 +384,7 @@ function BidDetailModal({ bid, requestName, onClose, onShip }: {
                 </div>
             )}
             {bid.status === "샘플결제됨" && onShip && (
-                <button
-                    onClick={() => { onClose(); onShip(bid); }}
-                    className="w-full py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded font-bold text-sm transition-colors flex items-center justify-center gap-2"
-                >
+                <button onClick={() => { onClose(); onShip(bid); }} className="w-full py-2.5 bg-teal-500 hover:bg-teal-600 text-white rounded font-bold text-sm transition-colors flex items-center justify-center gap-2">
                   <Truck size={14} /> 샘플 출고 처리
                 </button>
             )}
@@ -509,68 +596,23 @@ function CustomBidModal({ req, onClose, onSubmit }: { req: SellerSourcingRespons
   );
 }
 
-// ── READY 카드 ────────────────────────────────────────────────────────
-function ReadyCard({ req, myBids, onBid, onDetail }: { req: SellerSourcingResponse; myBids: MyBid[]; onBid: (r: SellerSourcingResponse) => void; onDetail: (r: SellerSourcingResponse) => void }) {
-  const dday = getDday(req.deliveryDate);
-  const latest = myBids[0];
-  return (
-      <div className="bg-white border border-border rounded-lg overflow-hidden hover:border-primary hover:shadow-md transition-all group">
-        <div className="relative h-44 bg-muted overflow-hidden cursor-pointer" onClick={() => onDetail(req)}>
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-            <Package size={32} className="text-muted-foreground/40" />
-            <span className="text-xs text-muted-foreground/50">이미지 없음</span>
-          </div>
-          <div className={`absolute top-3 right-3 flex items-center gap-1 border rounded-full px-2.5 py-1 text-xs font-semibold backdrop-blur-sm ${ddayColorCls[dday.level]}`}>
-            {dday.level === "urgent" ? <Zap size={11} /> : dday.level === "soon" ? <AlertTriangle size={11} /> : <Calendar size={11} />} {dday.label}
-          </div>
-        </div>
-        <div className="p-5">
-          <div className="flex items-start justify-between gap-2 mb-1 cursor-pointer" onClick={() => onDetail(req)}>
-            <span className="text-[10px] text-muted-foreground font-mono">{req.sourcingNo}</span>
-          </div>
-          <h3 className="font-bold text-foreground text-sm leading-tight group-hover:text-primary transition-colors mb-3 cursor-pointer" onClick={() => onDetail(req)}>{req.productName}</h3>
-          <div className="grid grid-cols-2 gap-2 mb-4 cursor-pointer" onClick={() => onDetail(req)}>
-            {[
-              { label: "희망납기일", value: req.deliveryDate.slice(5) },
-              { label: "희망단가(원)", value: req.unitPrice ? req.unitPrice.toLocaleString() : "-" },
-            ].map(({ label, value }) => (
-                <div key={label} className="bg-muted rounded p-2 text-center">
-                  <div className="font-mono font-bold text-sm text-foreground">{value}</div>
-                  <div className="text-[10px] text-muted-foreground">{label}</div>
-                </div>
-            ))}
-          </div>
-          {latest ? (
-              <div className="space-y-2">
-                <div className="w-full flex items-center justify-between bg-green-50 border border-green-200 rounded px-3 py-2">
-                  <span className={`text-xs px-2 py-0.5 rounded-full border font-semibold ${BID_STATUS_STYLE[latest.status]}`}>{latest.status}</span>
-                  <span className="text-xs text-muted-foreground">{myBids.length}건 제출</span>
-                </div>
-                <button onClick={() => onBid(req)} className="w-full border border-primary text-primary hover:bg-primary hover:text-white text-sm py-2 rounded font-semibold transition-colors flex items-center justify-center gap-2">
-                  <Plus size={14} /> 추가 견적 제출
-                </button>
-              </div>
-          ) : (
-              <button onClick={() => onBid(req)} className="w-full bg-primary hover:bg-primary/90 text-white text-sm py-2.5 rounded font-semibold transition-colors flex items-center justify-center gap-2">
-                <Zap size={14} /> 단가 제시하기
-              </button>
-          )}
-        </div>
-      </div>
-  );
-}
-
-// ── CUSTOM 행 ─────────────────────────────────────────────────────────
-function CustomRow({ req, myBids, onAddBid, onViewBid, onShip, onDetail }: {
+// ── 요청 행 (READY / CUSTOM 공통) ────────────────────────────────────
+function RequestRow({ req, myBids, onBid, onDecline, onViewBid, onShip, onDetail }: {
   req: SellerSourcingResponse; myBids: MyBid[];
-  onAddBid: (r: SellerSourcingResponse) => void;
+  onBid: (r: SellerSourcingResponse) => void;
+  onDecline: (r: SellerSourcingResponse) => void;
   onViewBid: (bid: MyBid) => void;
-  onShip: (bid: MyBid) => void;
+  onShip?: (bid: MyBid) => void;
   onDetail: (r: SellerSourcingResponse) => void;
 }) {
+  const isCustom = req.type === "CUSTOM";
   const dday = getDday(req.deliveryDate);
   const [expanded, setExpanded] = useState(myBids.length > 0);
+  const latestBid = myBids[0];
   const hasSamplePaid = myBids.some((b) => b.status === "샘플결제됨");
+  const bidSummary = (bid: MyBid) => isCustom
+      ? `${(Number(bid.totalBudget) / 10000).toLocaleString()}만원`
+      : `${Number(bid.unitPrice).toLocaleString()}원`;
 
   return (
       <div className="bg-white border border-border rounded-lg overflow-hidden hover:border-primary/50 transition-colors">
@@ -579,40 +621,31 @@ function CustomRow({ req, myBids, onAddBid, onViewBid, onShip, onDetail }: {
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className="text-[10px] text-muted-foreground font-mono">{req.sourcingNo}</span>
               <span className={`flex items-center gap-1 text-[10px] border rounded-full px-2 py-0.5 font-semibold ${ddayColorCls[dday.level]}`}>
-              {dday.level === "urgent" ? <Zap size={10} /> : dday.level === "soon" ? <AlertTriangle size={10} /> : <Calendar size={10} />} {dday.label}
-            </span>
-              {hasSamplePaid && (
-                  <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
-                <FlaskConical size={9} /> 샘플결제됨
+                {dday.level === "urgent" ? <Zap size={10} /> : dday.level === "soon" ? <AlertTriangle size={10} /> : <Calendar size={10} />} {dday.label}
               </span>
-              )}
-              {req.supplierStatus === "QUOTED" && (
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${SOURCING_STATUS_STYLE[req.sourcingStatus]}`}>
-                {SOURCING_STATUS_LABEL[req.sourcingStatus]}
-              </span>
-              )}
+              {!isCustom && latestBid && <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${BID_STATUS_STYLE[latestBid.status]}`}>{latestBid.status}</span>}
+              {isCustom && hasSamplePaid && <span className="text-[10px] bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1"><FlaskConical size={9} /> 샘플결제됨</span>}
+              {isCustom && req.supplierStatus === "QUOTED" && <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${SOURCING_STATUS_STYLE[req.sourcingStatus]}`}>{SOURCING_STATUS_LABEL[req.sourcingStatus]}</span>}
             </div>
             <div className="font-semibold text-foreground text-sm truncate cursor-pointer hover:text-primary transition-colors" onClick={() => onDetail(req)}>{req.productName}</div>
           </div>
           <div className="hidden md:flex items-center gap-5 text-center flex-shrink-0">
-            <div><div className="font-mono font-bold text-sm text-foreground">{req.totalBudget ? `${(req.totalBudget / 10000).toLocaleString()}만원` : "-"}</div><div className="text-[10px] text-muted-foreground">전체예산</div></div>
-            <div><div className="font-mono font-bold text-sm text-foreground">{req.deliveryDate.slice(5)}</div><div className="text-[10px] text-muted-foreground">희망납기</div></div>
             <div>
-              <div className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${req.needSample === "Y" ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-secondary text-muted-foreground border-border"}`}>
-                샘플 {req.needSample === "Y" ? "필요" : "불필요"}
+              <div className="font-mono font-bold text-sm text-foreground">
+                {isCustom ? (req.totalBudget ? `${(req.totalBudget / 10000).toLocaleString()}만원` : "-") : (req.unitPrice ? `${req.unitPrice.toLocaleString()}원` : "-")}
               </div>
+              <div className="text-[10px] text-muted-foreground">{isCustom ? "전체예산" : "희망단가"}</div>
             </div>
+            <div><div className="font-mono font-bold text-sm text-foreground">{req.deliveryDate.slice(5)}</div><div className="text-[10px] text-muted-foreground">희망납기</div></div>
+            {isCustom && <div className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${req.needSample === "Y" ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-secondary text-muted-foreground border-border"}`}>샘플 {req.needSample === "Y" ? "필요" : "불필요"}</div>}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <button onClick={() => onAddBid(req)} className="flex items-center gap-1 px-3 py-2 bg-primary hover:bg-primary/90 text-white rounded text-xs font-semibold transition-colors">
-              <Plus size={12} /> 견적 추가
+            <button onClick={() => onDecline(req)} className="flex items-center gap-1 px-3 py-2 border border-red-200 text-red-500 hover:bg-red-50 rounded text-xs font-semibold transition-colors"><XCircle size={12} /> 거절</button>
+            <button onClick={() => onBid(req)} className="flex items-center gap-1 px-3 py-2 bg-primary hover:bg-primary/90 text-white rounded text-xs font-semibold transition-colors">
+              {isCustom ? <><Plus size={12} /> 견적 추가</> : latestBid ? <><Plus size={12} /> 추가 견적</> : <><Zap size={12} /> 단가 제시</>}
             </button>
-            <button
-                onClick={() => setExpanded(!expanded)}
-                className={`flex items-center gap-1 px-3 py-2 border rounded text-xs font-semibold transition-colors ${myBids.length > 0 ? "border-primary text-primary hover:bg-primary/5" : "border-border text-muted-foreground hover:border-primary hover:text-primary"}`}
-            >
-              {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              내 견적 {myBids.length > 0 ? `${myBids.length}건` : "없음"}
+            <button onClick={() => setExpanded(!expanded)} className={`flex items-center gap-1 px-3 py-2 border rounded text-xs font-semibold transition-colors ${myBids.length > 0 ? "border-primary text-primary hover:bg-primary/5" : "border-border text-muted-foreground hover:border-primary hover:text-primary"}`}>
+              {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />} 내 견적 {myBids.length > 0 ? `${myBids.length}건` : "없음"}
             </button>
           </div>
         </div>
@@ -625,25 +658,19 @@ function CustomRow({ req, myBids, onAddBid, onViewBid, onShip, onDetail }: {
                         <span className="text-xs font-semibold text-foreground">{idx === 0 ? "최신" : `이전 ${myBids.length - idx}`}</span>
                         <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${BID_STATUS_STYLE[bid.status]}`}>{bid.status}</span>
                       </div>
-                      <div className="text-xs text-muted-foreground">{bid.submittedAt} 제출 · {(Number(bid.totalBudget) / 10000).toLocaleString()}만원 · {bid.availableDate} 납품</div>
+                      <div className="text-xs text-muted-foreground">{bid.submittedAt} 제출 · {bidSummary(bid)} · {bid.availableDate} 납품</div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      {bid.status === "샘플결제됨" && (
-                          <button onClick={() => onShip(bid)} className="flex items-center gap-1 px-3 py-1.5 bg-teal-500 hover:bg-teal-600 text-white rounded text-xs font-semibold transition-colors">
-                            <Truck size={11} /> 샘플 출고
-                          </button>
+                      {bid.status === "샘플결제됨" && onShip && (
+                          <button onClick={() => onShip(bid)} className="flex items-center gap-1 px-3 py-1.5 bg-teal-500 hover:bg-teal-600 text-white rounded text-xs font-semibold transition-colors"><Truck size={11} /> 샘플 출고</button>
                       )}
-                      <button onClick={() => onViewBid(bid)} className="flex items-center gap-1 px-3 py-1.5 border border-border hover:border-primary text-muted-foreground hover:text-primary rounded text-xs font-semibold transition-colors">
-                        상세보기 <ChevronRight size={11} />
-                      </button>
+                      <button onClick={() => onViewBid(bid)} className="flex items-center gap-1 px-3 py-1.5 border border-border hover:border-primary text-muted-foreground hover:text-primary rounded text-xs font-semibold transition-colors">상세보기 <ChevronRight size={11} /></button>
                     </div>
                   </div>
               ))}
             </div>
         )}
-        {expanded && myBids.length === 0 && (
-            <div className="border-t border-border px-5 py-4 text-center text-xs text-muted-foreground bg-secondary/20">아직 제출한 견적이 없습니다.</div>
-        )}
+        {expanded && myBids.length === 0 && <div className="border-t border-border px-5 py-4 text-center text-xs text-muted-foreground bg-secondary/20">아직 제출한 견적이 없습니다.</div>}
       </div>
   );
 }
@@ -680,40 +707,41 @@ export function SellerRequestList() {
   const [isLoading, setIsLoading] = useState(false);
 
   const [myBids, setMyBids] = useState<Record<number, MyBid[]>>({});
-  const [selectedReq, setSelectedReq] = useState<SellerSourcingResponse | null>(null);
   const [selectedBidReq, setSelectedBidReq] = useState<SellerSourcingResponse | null>(null);
+  const [declineReq, setDeclineReq] = useState<SellerSourcingResponse | null>(null);
   const [viewBid, setViewBid] = useState<{ bid: MyBid; requestName: string } | null>(null);
   const [shipBid, setShipBid] = useState<{ bid: MyBid; requestName: string } | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<SellerSourcingResponse | null>(null);
 
-  // 탭 변경 시 API 호출
-  useEffect(() => {
+  const loadRequests = async () => {
     setIsLoading(true);
     setRequests([]);
-
-    const fetch_ = async () => {
-      try {
-        let data: SellerSourcingResponse[];
-        if (subTab === "current") {
-          data = await fetchSellerRequests(activeTab, "RECOMMENDED");
-        } else if (subTab === "my") {
-          data = await fetchSellerRequests(activeTab, "QUOTED");
-        } else {
-          data = await fetchSellerPastRequests(activeTab);
-        }
-        setRequests(data);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setIsLoading(false);
+    try {
+      let data: SellerSourcingResponse[];
+      if (subTab === "current") {
+        data = await fetchSellerRequests(activeTab, "RECOMMENDED");
+      } else if (subTab === "my") {
+        data = await fetchSellerRequests(activeTab, "QUOTED");
+      } else {
+        data = await fetchSellerPastRequests(activeTab);
       }
-    };
+      setRequests(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    fetch_();
-  }, [activeTab, subTab]);
+  useEffect(() => { loadRequests(); }, [activeTab, subTab]);
 
   const handleBidSubmit = (bid: MyBid) => {
     setMyBids((prev) => ({ ...prev, [bid.requestId]: [bid, ...(prev[bid.requestId] ?? [])] }));
+  };
+
+  const handleDeclineConfirm = async (sourcingSupplierId: number, feedback: string) => {
+    await declineRequest(sourcingSupplierId, feedback);
+    setRequests((prev) => prev.filter((r) => r.sourcingSupplierId !== sourcingSupplierId));
   };
 
   const handleShipConfirm = (requestId: number, bidId: string, trackingNumber: string) => {
@@ -749,7 +777,7 @@ export function SellerRequestList() {
             <p className="text-white/70 mb-6">
               {activeTab === "READY" ? "바이어가 올린 사입 요청서에 단가를 제시하고 거래를 성사시키세요." : "바이어의 주문제작 요청서를 확인하고 제작 견적을 제출하세요."}
             </p>
-            {activeTab === "READY" && urgentCount > 0 && (
+            {urgentCount > 0 && (
                 <div className="inline-flex items-center gap-2 bg-red-500/20 border border-red-400/40 text-red-300 px-4 py-2 rounded-full text-sm font-medium">
                   <Zap size={14} /> 오늘 마감 요청 {urgentCount}건
                 </div>
@@ -790,14 +818,12 @@ export function SellerRequestList() {
                     <Search size={15} className="text-muted-foreground" />
                     <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="상품명, 요구사항 검색..." className="text-sm outline-none flex-1" />
                   </div>
-                  {activeTab === "READY" && (
-                      <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground">
-                        <div onClick={() => setUrgentOnly(!urgentOnly)} className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${urgentOnly ? "bg-red-500" : "bg-[#ddd]"}`}>
-                          <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${urgentOnly ? "translate-x-4" : "translate-x-0.5"}`} />
-                        </div>
-                        <Zap size={13} className={urgentOnly ? "text-red-500" : ""} /> 마감임박만
-                      </label>
-                  )}
+                  <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground">
+                    <div onClick={() => setUrgentOnly(!urgentOnly)} className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${urgentOnly ? "bg-red-500" : "bg-[#ddd]"}`}>
+                      <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${urgentOnly ? "translate-x-4" : "translate-x-0.5"}`} />
+                    </div>
+                    <Zap size={13} className={urgentOnly ? "text-red-500" : ""} /> 마감임박만
+                  </label>
                   <div className="text-xs text-muted-foreground flex items-center gap-1 ml-auto">
                     <Filter size={12} /> {filtered.length}건
                   </div>
@@ -824,21 +850,14 @@ export function SellerRequestList() {
               <div className="text-center py-20 text-muted-foreground">불러오는 중...</div>
           ) : (
               <>
-                {activeTab === "READY" && subTab !== "past" && (
-                    <div className="grid grid-cols-3 gap-4">
-                      {filtered.map((req) => (
-                          <ReadyCard key={req.sourcingRequestId} req={req} myBids={myBids[req.sourcingRequestId] ?? []} onBid={setSelectedBidReq} onDetail={setSelectedDetail} />
-                      ))}
-                      {filtered.length === 0 && <div className="col-span-3 text-center py-20 text-muted-foreground"><div className="text-4xl mb-3">📭</div><div className="font-medium">배정된 요청이 없습니다</div></div>}
-                    </div>
-                )}
-
-                {activeTab === "CUSTOM" && subTab !== "past" && (
+                {subTab !== "past" && (
                     <div className="space-y-3">
                       {filtered.map((req) => (
-                          <CustomRow
-                              key={req.sourcingRequestId} req={req} myBids={myBids[req.sourcingRequestId] ?? []}
-                              onAddBid={setSelectedBidReq}
+                          <RequestRow
+                              key={req.sourcingRequestId} req={req}
+                              myBids={myBids[req.sourcingRequestId] ?? []}
+                              onBid={setSelectedBidReq}
+                              onDecline={setDeclineReq}
                               onViewBid={(bid) => setViewBid({ bid, requestName: req.productName })}
                               onShip={(bid) => setShipBid({ bid, requestName: req.productName })}
                               onDetail={setSelectedDetail}
@@ -861,6 +880,7 @@ export function SellerRequestList() {
         {selectedDetail && <SellerSourcingDetailModal req={selectedDetail} onClose={() => setSelectedDetail(null)} />}
         {selectedBidReq && selectedBidReq.type === "READY" && <ReadyBidModal req={selectedBidReq} onClose={() => setSelectedBidReq(null)} onSubmit={(bid) => { handleBidSubmit(bid); setSelectedBidReq(null); }} />}
         {selectedBidReq && selectedBidReq.type === "CUSTOM" && <CustomBidModal req={selectedBidReq} onClose={() => setSelectedBidReq(null)} onSubmit={(bid) => { handleBidSubmit(bid); setSelectedBidReq(null); }} />}
+        {declineReq && <DeclineModal req={declineReq} onClose={() => setDeclineReq(null)} onConfirm={handleDeclineConfirm} />}
         {viewBid && <BidDetailModal bid={viewBid.bid} requestName={viewBid.requestName} onClose={() => setViewBid(null)} onShip={(bid) => { setViewBid(null); setShipBid({ bid, requestName: viewBid.requestName }); }} />}
         {shipBid && <ShipmentModal bid={shipBid.bid} requestName={shipBid.requestName} onClose={() => setShipBid(null)} onConfirm={handleShipConfirm} />}
       </div>

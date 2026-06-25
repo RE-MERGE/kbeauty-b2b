@@ -10,7 +10,6 @@ import kr.remerge.stylehub.global.common.RedisRepository;
 import kr.remerge.stylehub.global.exception.BusinessException;
 import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,16 +29,13 @@ public class AuthService {
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
-    // 💡 피드백 반영: yaml 파일 설정을 직접 읽어오도록 변경 (밀리초 단위)
-
-
     // ───────────────────────────────────────────
     // 일반 로그인
     // ───────────────────────────────────────────
     @Transactional
     public TokenResponse login(LoginRequest request, String clientIp) {
         User user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_LOGIN_CREDENTIALS));
 
         validateUserStatus(user);
 
@@ -51,7 +47,7 @@ public class AuthService {
 
         if (!passwordMatched) {
             user.onLoginFailed();
-            throw new BusinessException(ErrorCode.INVALID_PASSWORD);
+            throw new BusinessException(ErrorCode.INVALID_LOGIN_CREDENTIALS);
         }
 
         user.onLoginSuccess(clientIp);

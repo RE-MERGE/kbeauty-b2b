@@ -89,6 +89,8 @@ function saveFolderData(folders: Folder[]) {
   localStorage.setItem("wishlistFolders", JSON.stringify(folders));
 }
 
+const PAGE_SIZE = 20;
+
 export function AllProducts() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get("category") || "all");
@@ -110,8 +112,8 @@ export function AllProducts() {
   const [folders, setFolders] = useState<Folder[]>(loadFolderData);
   const [folderModalProductId, setFolderModalProductId] = useState<number | null>(null);
   const [apiProducts, setApiProducts] = useState<ProductSummary[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // 전체 찜 ID (모든 폴더 합산)
   const favorites = [...new Set(folders.flatMap(f => f.productIds))];
 
   useEffect(() => {
@@ -144,6 +146,7 @@ export function AllProducts() {
   const handleCategoryChange = (catId: string) => {
     if (catId === "all") {
       setExpandedCategory(null); setSelectedSubCategory(""); setSelectedCategory("all"); setSearchParams({});
+      setCurrentPage(1);
       return;
     }
     if (expandedCategory === catId) setExpandedCategory(null);
@@ -151,14 +154,15 @@ export function AllProducts() {
     setSelectedCategory(catId);
     setSelectedSubCategory("");
     setSearchParams({ category: catId });
+    setCurrentPage(1);
   };
 
   const handleSubCategoryChange = (subCat: string) => {
     setSelectedSubCategory(subCat);
     setSearchParams({ category: selectedCategory, sub: subCat });
+    setCurrentPage(1);
   };
 
-  // 하트 클릭: 이미 찜했으면 전체 해제, 아니면 폴더 선택 모달
   const handleHeartClick = (productId: number) => {
     if (favorites.includes(productId)) {
       const next = folders.map(f => ({ ...f, productIds: f.productIds.filter(id => id !== productId) }));
@@ -169,7 +173,6 @@ export function AllProducts() {
     }
   };
 
-  // 폴더에 상품 추가
   const addToFolder = (folderId: string) => {
     const productId = folderModalProductId;
     if (productId === null) return;
@@ -183,12 +186,17 @@ export function AllProducts() {
     setFolderModalProductId(null);
   };
 
-  const filteredProducts = apiProducts.filter((p) => {
-    const matchCategory = selectedCategory === "all" || p.categoryName === categoryIdMap[selectedCategory];
-    const matchBrand = !selectedBrand || p.brandName === selectedBrand;
-    const matchSearch = !searchQuery || p.productName.toLowerCase().includes(searchQuery.toLowerCase()) || p.brandName.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCategory && matchBrand && matchSearch;
-  });
+  const filteredProducts = apiProducts
+      .filter((p) => {
+        const matchCategory = selectedCategory === "all" || p.categoryName === categoryIdMap[selectedCategory];
+        const matchBrand = !selectedBrand || p.brandName === selectedBrand;
+        const matchSearch = !searchQuery || p.productName.toLowerCase().includes(searchQuery.toLowerCase()) || p.brandName.toLowerCase().includes(searchQuery.toLowerCase());
+        return matchCategory && matchBrand && matchSearch;
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const totalPages = Math.ceil(filteredProducts.length / PAGE_SIZE);
+  const pagedProducts = filteredProducts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const searchResults = searchQuery.trim().length < 1 ? [] : (() => {
     const q = searchQuery.trim().toLowerCase();
@@ -200,6 +208,49 @@ export function AllProducts() {
 
   const brandFiltered = brandChosung === "전체" ? allBrands : allBrands.filter(b => getChosung(b.name) === brandChosung);
   const brandVisible = brandFiltered.slice(0, brandVisibleCount);
+
+  const Pagination = () => {
+    if (totalPages <= 1) return null;
+    const pages = Array.from({ length: totalPages }, (_, i) => i + 1)
+        .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 2)
+        .reduce<(number | "...")[]>((acc, p, idx, arr) => {
+          if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("...");
+          acc.push(p);
+          return acc;
+        }, []);
+
+    return (
+        <div className="flex items-center justify-center gap-1 mt-8">
+          <button
+              onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              disabled={currentPage === 1}
+              className="px-3 py-2 rounded-lg text-sm border border-border hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            이전
+          </button>
+          {pages.map((p, i) =>
+              p === "..." ? (
+                  <span key={`ellipsis-${i}`} className="px-2 text-muted-foreground">…</span>
+              ) : (
+                  <button
+                      key={p}
+                      onClick={() => { setCurrentPage(p as number); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                      className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${currentPage === p ? "bg-primary text-white" : "border border-border hover:border-primary hover:text-primary"}`}
+                  >
+                    {p}
+                  </button>
+              )
+          )}
+          <button
+              onClick={() => { setCurrentPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              disabled={currentPage === totalPages}
+              className="px-3 py-2 rounded-lg text-sm border border-border hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            다음
+          </button>
+        </div>
+    );
+  };
 
   return (
       <div className="max-w-[1480px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
@@ -275,7 +326,7 @@ export function AllProducts() {
                     type="text"
                     placeholder={searchTab === "product" ? "상품명으로 검색" : searchTab === "category" ? "카테고리명으로 검색" : "브랜드명으로 검색"}
                     value={searchQuery}
-                    onChange={(e) => { setSearchQuery(e.target.value); setResultDropOpen(true); setTabDropOpen(false); }}
+                    onChange={(e) => { setSearchQuery(e.target.value); setResultDropOpen(true); setTabDropOpen(false); setCurrentPage(1); }}
                     onFocus={() => { if (searchQuery.trim().length > 0) setResultDropOpen(true); }}
                     className="w-full pl-9 pr-4 py-2.5 text-sm outline-none bg-white rounded-r-lg"
                 />
@@ -312,7 +363,7 @@ export function AllProducts() {
                       ))
                   ) : (
                       (searchResults as typeof allBrands).map((b) => (
-                          <button key={b.name} onClick={() => { setSelectedBrand(b.name); setResultDropOpen(false); setSearchQuery(""); }}
+                          <button key={b.name} onClick={() => { setSelectedBrand(b.name); setResultDropOpen(false); setSearchQuery(""); setCurrentPage(1); }}
                                   className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-secondary transition-colors border-b border-border last:border-0 text-left">
                             <div className="w-7 h-7 rounded bg-white border border-border flex items-center justify-center flex-shrink-0 overflow-hidden">
                               <img src={b.logo} alt={b.name} className="w-full h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
@@ -373,7 +424,7 @@ export function AllProducts() {
             <div className="relative" ref={brandPanelRef}>
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 px-1">브랜드</p>
               <button
-                  onClick={() => { if (selectedBrand) setSelectedBrand(""); else setBrandPanelOpen(v => !v); }}
+                  onClick={() => { if (selectedBrand) { setSelectedBrand(""); setCurrentPage(1); } else setBrandPanelOpen(v => !v); }}
                   className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border ${selectedBrand ? "bg-primary text-white border-primary" : "bg-white text-foreground border-border hover:border-primary hover:text-primary"}`}
               >
                 <span>{selectedBrand || "브랜드 선택"}</span>
@@ -393,7 +444,7 @@ export function AllProducts() {
                       {brandVisible.length === 0 ? (
                           <div className="text-center py-6 text-xs text-muted-foreground">해당 브랜드가 없습니다</div>
                       ) : brandVisible.map((brand) => (
-                          <button key={brand.name} onClick={() => { setSelectedBrand(brand.name); setBrandPanelOpen(false); }}
+                          <button key={brand.name} onClick={() => { setSelectedBrand(brand.name); setBrandPanelOpen(false); setCurrentPage(1); }}
                                   className={`w-full flex items-center gap-2.5 px-3 py-2 border-b border-border last:border-0 transition-colors text-left ${selectedBrand === brand.name ? "bg-primary/10 text-primary" : "hover:bg-secondary text-foreground"}`}>
                             <div className="w-7 h-7 rounded bg-white border border-border flex items-center justify-center flex-shrink-0 overflow-hidden">
                               <img src={brand.logo} alt={brand.name} className="w-full h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
@@ -416,11 +467,14 @@ export function AllProducts() {
                 {selectedSubCategory && <span className="ml-2 text-primary font-medium">· {selectedSubCategory}</span>}
                 {selectedBrand && <span className="ml-2 text-primary font-medium">· {selectedBrand}</span>}
               </p>
+              {totalPages > 1 && (
+                  <p className="text-xs text-muted-foreground">{currentPage} / {totalPages} 페이지</p>
+              )}
             </div>
 
             {viewMode === "grid" ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                  {filteredProducts.map((product) => (
+                  {pagedProducts.map((product) => (
                       <div key={product.productId} className="bg-white border border-border rounded-lg overflow-hidden hover:shadow-lg hover:border-primary/50 transition-all group">
                         <Link to={`/products/${product.productId}`} className="block relative">
                           <div className="aspect-square overflow-hidden bg-muted">
@@ -458,7 +512,7 @@ export function AllProducts() {
                 </div>
             ) : (
                 <div className="space-y-3">
-                  {filteredProducts.map((product) => (
+                  {pagedProducts.map((product) => (
                       <div key={product.productId} className="bg-white border border-border rounded-lg p-4 hover:shadow-md hover:border-primary/50 transition-all">
                         <div className="flex gap-4">
                           <Link to={`/products/${product.productId}`} className="flex-shrink-0">
@@ -513,6 +567,8 @@ export function AllProducts() {
                   ))}
                 </div>
             )}
+
+            <Pagination />
 
             {filteredProducts.length === 0 && (
                 <div className="text-center py-20">

@@ -57,6 +57,7 @@ public enum ErrorCode {
     CART_ITEM_EMPTY(HttpStatus.BAD_REQUEST, "CART_001", "선택된 장바구니 상품이 없습니다."),
     INVALID_CART_TYPE(HttpStatus.BAD_REQUEST, "CART_002", "장바구니 타입이 올바르지 않습니다."),
     CART_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "CART_003", "주문할 수 없는 장바구니 상품이 포함되어 있습니다."),
+    CHECKOUT_VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "CART_004", "주문할 수 없는 장바구니 상품이 있습니다."),
 
     // ───────────────────────────────────────────
     // 주문 (ORDER)

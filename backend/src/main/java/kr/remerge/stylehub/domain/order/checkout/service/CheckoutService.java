@@ -11,8 +11,11 @@ import kr.remerge.stylehub.domain.order.checkout.dto.AddressCreateRequest;
 import kr.remerge.stylehub.domain.order.checkout.dto.AddressResponse;
 import kr.remerge.stylehub.domain.order.checkout.dto.CartCheckoutRequest;
 import kr.remerge.stylehub.domain.order.checkout.dto.CartCheckoutResponse;
+import kr.remerge.stylehub.domain.order.checkout.dto.CheckoutInvalidItemResponse;
+import kr.remerge.stylehub.domain.order.checkout.dto.CheckoutValidationErrorResponse;
 import kr.remerge.stylehub.domain.order.checkout.dto.OrderCheckoutItemResponse;
 import kr.remerge.stylehub.domain.order.checkout.dto.OrderCheckoutResponse;
+import kr.remerge.stylehub.domain.order.checkout.exception.CheckoutValidationException;
 import kr.remerge.stylehub.domain.order.entity.Order;
 import kr.remerge.stylehub.domain.order.repository.OrderItemRepository;
 import kr.remerge.stylehub.domain.order.repository.OrderRepository;
@@ -26,6 +29,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -59,8 +63,16 @@ public class CheckoutService {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
 
+        List<CheckoutInvalidItemResponse> invalidItems = new ArrayList<>();
+
         for (CartItem cartItem : cartItems) {
-            validateCartItem(cartItem);
+            invalidItems.addAll(validateCartItem(cartItem));
+        }
+
+        if (!invalidItems.isEmpty()) {
+            throw new CheckoutValidationException(
+                    new CheckoutValidationErrorResponse(invalidItems)
+            );
         }
 
         List<CartResponse> items = cartItems.stream()
@@ -84,40 +96,101 @@ public class CheckoutService {
 
     }
 
-    private void validateCartItem(CartItem cartItem) {
+    private List<CheckoutInvalidItemResponse> validateCartItem(CartItem cartItem) {
+        List<CheckoutInvalidItemResponse> invalidItems = new ArrayList<>();
 
         ProductOption option = cartItem.getProductOption();
         Product product = option.getProduct();
 
         int quantity = cartItem.getQuantity();
 
-        if (!option.getIsActive()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        if (Boolean.FALSE.equals(option.getIsActive())) {
+            invalidItems.add(toInvalidItem(
+                    cartItem,
+                    "OPTION_INACTIVE",
+                    "현재 판매 중인 옵션이 아닙니다.",
+                    quantity,
+                    0
+            ));
         }
 
         if (quantity > option.getStockQuantity()) {
-            throw new BusinessException(ErrorCode.OUT_OF_STOCK);
+            invalidItems.add(toInvalidItem(
+                    cartItem,
+                    ErrorCode.OUT_OF_STOCK.name(),
+                    ErrorCode.OUT_OF_STOCK.getMessage(),
+                    quantity,
+                    option.getStockQuantity()
+            ));
         }
 
         if (cartItem.getCartType() == CartType.NORMAL
                 && quantity < product.getMoq()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
+            invalidItems.add(toInvalidItem(
+                    cartItem,
+                    "MOQ_NOT_MET",
+                    "최소 주문 수량을 충족하지 못했습니다.",
+                    quantity,
+                    product.getMoq()
+            ));
         }
 
         if (cartItem.getCartType() == CartType.SAMPLE) {
             if (!product.getSampleAvailable()) {
-                throw new BusinessException(ErrorCode.SAMPLE_OPTION_NOT_CONFIGURED);
+                invalidItems.add(toInvalidItem(
+                        cartItem,
+                        "SAMPLE_NOT_AVAILABLE",
+                        "샘플 주문이 불가능한 상품입니다.",
+                        quantity,
+                        0
+                ));
             }
 
             if (option.getSamplePrice() == null
                     || option.getSampleMaxQuantity() == null) {
-                throw new BusinessException(ErrorCode.SAMPLE_OPTION_NOT_CONFIGURED);
+                invalidItems.add(toInvalidItem(
+                        cartItem,
+                        ErrorCode.SAMPLE_OPTION_NOT_CONFIGURED.name(),
+                        ErrorCode.SAMPLE_OPTION_NOT_CONFIGURED.getMessage(),
+                        quantity,
+                        0
+                ));
             }
 
-            if (quantity > option.getSampleMaxQuantity()) {
-                throw new BusinessException(ErrorCode.SAMPLE_OPTION_NOT_CONFIGURED);
+            if (option.getSampleMaxQuantity() != null
+                    && quantity > option.getSampleMaxQuantity()) {
+                invalidItems.add(toInvalidItem(
+                        cartItem,
+                        "SAMPLE_LIMIT_EXCEEDED",
+                        "샘플 최대 주문 수량을 초과했습니다.",
+                        quantity,
+                        option.getSampleMaxQuantity()
+                ));
             }
         }
+
+        return invalidItems;
+    }
+
+    private CheckoutInvalidItemResponse toInvalidItem(
+            CartItem cartItem,
+            String reasonCode,
+            String message,
+            Integer requestedQuantity,
+            Integer availableQuantity
+    ) {
+        ProductOption option = cartItem.getProductOption();
+        Product product = option.getProduct();
+
+        return new CheckoutInvalidItemResponse(
+                cartItem.getCartItemId(),
+                product.getProductName(),
+                option.getOptionLabel(),
+                reasonCode,
+                message,
+                requestedQuantity,
+                availableQuantity
+        );
     }
 
     private long calculateShippingFee(List<CartResponse> items) {

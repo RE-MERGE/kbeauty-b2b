@@ -66,7 +66,7 @@ public class CartService {
         }
 
         if (request.quantity() > option.getSampleMaxQuantity()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
+            throw new BusinessException(ErrorCode.SAMPLE_OPTION_NOT_CONFIGURED);
         }
 
     }

@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import api from "@/api/axios";
 import {
   AlertCircle,
@@ -49,6 +49,9 @@ type BuyerOrderListResponse = {
   orderStatus: OrderStatus;
   isSample: boolean;
   totalAmount: number;
+  representativeProductName: string;
+  itemCount: number;
+  totalQuantity: number;
   createdAt: string;
   canceledAt: string | null;
   canceledReason: string | null;
@@ -109,6 +112,8 @@ type Order = {
   buyer: string;
   type: OrderType;
   items: OrderItem[];
+  itemCount?: number;
+  totalQuantity?: number;
   status: OrderStatus;
   subtotal: number;
   platformFee: number;
@@ -387,13 +392,15 @@ function mapOrderResponse(order: BuyerOrderListResponse): Order {
     type: mapOrderType(order.orderType, order.isSample),
     items: [
       {
-        name: "주문 상품 상세는 상세 화면에서 확인",
-        quantity: 0,
-        unit: "건",
+        name: order.representativeProductName,
+        quantity: order.totalQuantity,
+        unit: "개",
         price: order.totalAmount ?? 0,
         material: "-",
       },
     ],
+    itemCount: order.itemCount,
+    totalQuantity: order.totalQuantity,
     status: order.orderStatus,
     subtotal: order.totalAmount ?? 0,
     platformFee: 0,
@@ -419,6 +426,8 @@ function applyOrderOverview(order: Order, overview: BuyerOrderOverviewResponse):
       price: item.unitPrice + item.additionalPrice,
       material: item.optionSummary ?? "-",
     })),
+    itemCount: overview.items.length,
+    totalQuantity: overview.items.reduce((total, item) => total + item.quantity, 0),
     status: overview.orderStatus,
     subtotal: summary.subtotalAmount,
     platformFee: summary.platformFee,
@@ -454,11 +463,16 @@ function getOrderTotal(order: Order) {
 }
 
 function getTotalQuantity(order: Order) {
-  return order.items.reduce((total, item) => total + item.quantity, 0);
+  return order.totalQuantity ?? order.items.reduce((total, item) => total + item.quantity, 0);
+}
+
+function getItemCount(order: Order) {
+  return order.itemCount ?? order.items.length;
 }
 
 function getMainItemLabel(order: Order) {
-  return order.items.length > 1 ? `${order.items[0].name} 외 ${order.items.length - 1}건` : order.items[0].name;
+  const itemCount = getItemCount(order);
+  return itemCount > 1 ? `${order.items[0].name} 외 ${itemCount - 1}건` : order.items[0].name;
 }
 
 function getTrackingUrl(carrier: string | undefined, trackingNo: string) {
@@ -570,6 +584,7 @@ function matchesFilter(order: Order, filter: string) {
 }
 
 export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>(exampleOrders);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -584,6 +599,7 @@ export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
   const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
   const [renegotiateTarget, setRenegotiateTarget] = useState<Order | null>(null);
   const [renegotiateText, setRenegotiateText] = useState("");
+  const [selectedPaymentOrderIds, setSelectedPaymentOrderIds] = useState<number[]>([]);
 
   useEffect(() => {
     const loadOrders = async () => {
@@ -601,6 +617,7 @@ export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
 
         setOrders(nextOrders.length > 0 ? nextOrders : exampleOrders);
         setExpandedId(null);
+        setSelectedPaymentOrderIds([]);
       } catch (error) {
         console.error("주문 목록 조회 실패", error);
         setLoadError("주문 목록을 불러오지 못해 예시 데이터를 표시하고 있습니다.");
@@ -653,6 +670,42 @@ export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
       return filterMatched && keywordMatched;
     });
   }, [activeFilter, orders, search, searchType]);
+  const payableOrders = filteredOrders.filter(
+    (order): order is Order & { orderId: number } =>
+      order.status === "PENDING" && order.orderId !== undefined && !order.isExample
+  );
+  const selectedPaymentOrders = orders.filter(
+    (order) => order.orderId !== undefined && selectedPaymentOrderIds.includes(order.orderId)
+  );
+  const allPayableSelected =
+    payableOrders.length > 0
+    && payableOrders.every((order) => selectedPaymentOrderIds.includes(order.orderId));
+  const selectedPaymentTotal = selectedPaymentOrders.reduce(
+    (total, order) => total + getOrderTotal(order),
+    0
+  );
+
+  const togglePaymentOrder = (orderId: number) => {
+    setSelectedPaymentOrderIds((previous) =>
+      previous.includes(orderId)
+        ? previous.filter((selectedId) => selectedId !== orderId)
+        : [...previous, orderId]
+    );
+  };
+
+  const toggleAllPayableOrders = () => {
+    const payableOrderIds = payableOrders.map((order) => order.orderId);
+    setSelectedPaymentOrderIds((previous) =>
+      allPayableSelected
+        ? previous.filter((orderId) => !payableOrderIds.includes(orderId))
+        : [...new Set([...previous, ...payableOrderIds])]
+    );
+  };
+
+  const handleSelectedOrdersCheckout = () => {
+    if (selectedPaymentOrderIds.length === 0) return;
+    navigate(`/checkout?orderIds=${selectedPaymentOrderIds.join(",")}`);
+  };
 
   const stats = useMemo(() => {
     const inProgress = orders.filter((order) =>
@@ -768,6 +821,36 @@ export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
           </div>
         )}
 
+        {payableOrders.length > 0 && (
+          <section className="mb-5 flex flex-col gap-3 rounded-xl border border-primary/20 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <label className="flex cursor-pointer items-center gap-3 text-sm font-bold text-slate-700">
+              <input
+                type="checkbox"
+                checked={allPayableSelected}
+                onChange={toggleAllPayableOrders}
+                className="h-4 w-4 accent-primary"
+              />
+              결제 대기 주문 전체 선택
+              <span className="text-xs font-semibold text-slate-400">
+                {selectedPaymentOrderIds.length}/{payableOrders.length}건
+              </span>
+            </label>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <span className="text-sm font-semibold text-slate-500">
+                선택 금액 <strong className="font-black text-slate-950">{formatPrice(selectedPaymentTotal)}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={handleSelectedOrdersCheckout}
+                disabled={selectedPaymentOrderIds.length === 0}
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-bold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+              >
+                선택 주문 결제하기
+              </button>
+            </div>
+          </section>
+        )}
+
         <main className="space-y-4">
           {filteredOrders.map((order) => (
             <OrderCard
@@ -781,6 +864,8 @@ export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
               onDispute={setDisputeTarget}
               onCancel={setCancelTarget}
               onRenegotiate={setRenegotiateTarget}
+              paymentSelected={order.orderId !== undefined && selectedPaymentOrderIds.includes(order.orderId)}
+              onPaymentSelect={togglePaymentOrder}
             />
           ))}
         </main>
@@ -903,6 +988,8 @@ function OrderCard({
   onDispute,
   onCancel,
   onRenegotiate,
+  paymentSelected,
+  onPaymentSelect,
 }: {
   order: Order;
   expanded: boolean;
@@ -913,6 +1000,8 @@ function OrderCard({
   onDispute: (order: Order) => void;
   onCancel: (order: Order) => void;
   onRenegotiate: (order: Order) => void;
+  paymentSelected: boolean;
+  onPaymentSelect: (orderId: number) => void;
 }) {
   const status = statusConfig[order.status];
   const type = typeConfig[order.type];
@@ -943,7 +1032,7 @@ function OrderCard({
                 <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                   <span>{order.date}</span>
                   <span>{order.supplier}</span>
-                  <span>{order.items.length}개 품목</span>
+                  <span>{getItemCount(order)}개 품목</span>
                   <span>{getTotalQuantity(order).toLocaleString()}개</span>
                 </div>
               </div>
@@ -987,6 +1076,8 @@ function OrderCard({
             onDispute={onDispute}
             onCancel={onCancel}
             onRenegotiate={onRenegotiate}
+            paymentSelected={paymentSelected}
+            onPaymentSelect={onPaymentSelect}
           />
         </div>
       </div>
@@ -1093,21 +1184,36 @@ function OrderActions({
   onDispute,
   onCancel,
   onRenegotiate,
+  paymentSelected,
+  onPaymentSelect,
 }: {
   order: Order;
   onConfirm: (order: Order) => void;
   onDispute: (order: Order) => void;
   onCancel: (order: Order) => void;
   onRenegotiate: (order: Order) => void;
+  paymentSelected: boolean;
+  onPaymentSelect: (orderId: number) => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       {order.status === "PENDING" && (
         <>
           {order.orderId ? (
-            <LinkButton to={`/checkout?orderId=${order.orderId}`} icon={<Clock size={13} />}>결제하러 가기</LinkButton>
+            <>
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={paymentSelected}
+                  onChange={() => onPaymentSelect(order.orderId!)}
+                  className="h-3.5 w-3.5 accent-primary"
+                />
+                함께 결제
+              </label>
+              <LinkButton to={`/checkout?orderIds=${order.orderId}`} icon={<Clock size={13} />}>결제하러 가기</LinkButton>
+            </>
           ) : (
-            <ActionButton tone="ghost" icon={<Clock size={13} />} onClick={() => undefined}>결제 대기</ActionButton>
+            <ActionButton tone="ghost" icon={<Clock size={13} ㅑ/>} onClick={() => undefined}>결제 대기</ActionButton>
           )}
           <ActionButton tone="ghost" icon={<XCircle size={13} />} onClick={() => onCancel(order)}>주문 취소</ActionButton>
         </>

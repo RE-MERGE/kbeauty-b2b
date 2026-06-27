@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import { loadTossPayments } from "@tosspayments/tosspayments-sdk";
 import api from "@/api/axios";
@@ -170,10 +170,19 @@ export function Checkout() {
   const orderType = checkoutState?.cartType === "SAMPLE"
     ? "sample"
     : searchParams.get("type") ?? "ready";
-  const orderId = searchParams.get("orderId") ?? "";
+  const customOrderId = searchParams.get("orderId") ?? "";
+  const orderIdsParam = searchParams.get("orderIds") ?? "";
+  const orderIds = useMemo(
+    () => orderIdsParam
+      .split(",")
+      .map(Number)
+      .filter((orderId) => Number.isInteger(orderId) && orderId > 0),
+    [orderIdsParam]
+  );
+  const orderId = customOrderId || String(orderIds[0] ?? "");
 
   const isCustom = orderType === "custom";
-  const isOrderCheckout = !isCustom && orderId.length > 0;
+  const isOrderCheckout = !isCustom && orderIds.length > 0;
   const isSample = orderType === "sample";
   const isSigned = isCustom ? (isSignedMap[orderId] ?? false) : true;
 
@@ -206,23 +215,29 @@ export function Checkout() {
       try {
         setCheckoutInvalidItems([]);
         if (isOrderCheckout) {
-          const response = await api.get<OrderCheckoutResponse>(`/checkout/preview/${orderId}`);
+          const responses = await Promise.all(
+            orderIds.map((selectedOrderId) =>
+              api.get<OrderCheckoutResponse>(`/checkout/preview/${selectedOrderId}`)
+            )
+          );
 
           setCheckoutPreview({
             cartType: "NORMAL",
-            items: response.items.map((item) => ({
-              cartItemId: item.orderItemId,
-              productName: item.productName,
-              optionLabel: item.optionSummary ?? "옵션 정보 없음",
-              unitPrice: item.unitPrice + item.additionalPrice,
-              quantity: item.quantity,
-              totalPrice: item.totalPrice,
-            })),
-            productAmount: response.productAmount,
-            shippingFee: response.shippingFee,
-            totalAmount: response.totalAmount,
+            items: responses.flatMap((response) =>
+              response.items.map((item) => ({
+                cartItemId: item.orderItemId,
+                productName: item.productName,
+                optionLabel: item.optionSummary ?? "옵션 정보 없음",
+                unitPrice: item.unitPrice + item.additionalPrice,
+                quantity: item.quantity,
+                totalPrice: item.totalPrice,
+              }))
+            ),
+            productAmount: responses.reduce((total, response) => total + response.productAmount, 0),
+            shippingFee: responses.reduce((total, response) => total + response.shippingFee, 0),
+            totalAmount: responses.reduce((total, response) => total + response.totalAmount, 0),
           });
-          setCheckoutOrderNo(response.orderNo);
+          setCheckoutOrderNos(responses.map((response) => response.orderNo));
           return;
         }
 
@@ -260,7 +275,7 @@ export function Checkout() {
     };
 
     void loadCheckoutPreview();
-  }, [checkoutState, isCustom, isOrderCheckout, orderId]);
+  }, [checkoutState, isCustom, isOrderCheckout, orderIds]);
 
   useEffect(() => {
     const loadAddresses = async () => {
@@ -300,7 +315,7 @@ export function Checkout() {
   const [createdOrderTotal, setCreatedOrderTotal] = useState(0);
   const [isTestOrderLoading, setIsTestOrderLoading] = useState(false);
   const [testOrderError, setTestOrderError] = useState("");
-  const [checkoutOrderNo, setCheckoutOrderNo] = useState("");
+  const [checkoutOrderNos, setCheckoutOrderNos] = useState<string[]>([]);
 
   const subtotal = checkoutPreview?.productAmount
     ?? orderItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -501,7 +516,11 @@ export function Checkout() {
 
     setIsTestOrderLoading(true);
     setTestOrderError("");
-    setCreatedOrderNumbers([checkoutOrderNo || `ORDER-${orderId}`]);
+    setCreatedOrderNumbers(
+      checkoutOrderNos.length > 0
+        ? checkoutOrderNos
+        : orderIds.map((selectedOrderId) => `ORDER-${selectedOrderId}`)
+    );
     setCreatedOrderTotal(total);
     setShowSuccessModal(true);
     setIsTestOrderLoading(false);

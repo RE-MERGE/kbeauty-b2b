@@ -304,12 +304,7 @@ export function Cart() {
     const item = items.find((cartItem) => cartItem.cartItemId === id);
     if (!item || updatingQuantityIds.has(id)) return;
 
-    const maximum =
-      type === "sample"
-        ? Math.min(getSampleMaxQuantity(item), item.stockQuantity)
-        : item.stockQuantity;
-    const minimum = type === "bulk" ? Math.min(item.moq, maximum) : 1;
-    if (maximum < 1 || nextQuantity < minimum || nextQuantity > maximum) return;
+    if (nextQuantity < 1) return;
 
     if (isSellerDemo) {
       setItems((prev) =>
@@ -366,7 +361,7 @@ export function Cart() {
     const item = items.find((cartItem) => cartItem.cartItemId === id);
     if (!item) return;
 
-    await updateQtyTo(id, item.quantity + delta, type);
+    await updateQtyTo(id, Math.max(1, item.quantity + delta), type);
   };
 
   const removeItemFromState = (id: number) => {
@@ -804,10 +799,7 @@ function CartProductCard({
   const quantity = item.quantity;
   const amount = unitPrice * quantity;
   const sampleMaxQuantity = getSampleMaxQuantity(item);
-  const maximumQuantity = isSample
-    ? Math.min(sampleMaxQuantity, item.stockQuantity)
-    : item.stockQuantity;
-  const minimumQuantity = isSample ? 1 : Math.min(item.moq, maximumQuantity);
+  const minimumQuantity = 1;
   const moqShortfall = !isSample && item.quantity < item.moq;
   const stockShortfall = isOutOfStock(item);
   const sampleLimitExceeded = isSample && item.quantity > sampleMaxQuantity;
@@ -900,9 +892,8 @@ function CartProductCard({
                 onPlus={() => onQtyChange(isSample ? 1 : 10)}
                 onValueCommit={onQuantityInput}
                 min={minimumQuantity}
-                max={maximumQuantity}
                 minusDisabled={isUpdatingQuantity || quantity <= minimumQuantity}
-                plusDisabled={isUpdatingQuantity || quantity >= maximumQuantity}
+                plusDisabled={isUpdatingQuantity}
               />
             </div>
             <div className="text-right">
@@ -921,7 +912,8 @@ function CartProductCard({
           {stockShortfall && (
             <div className="mt-3 flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
               <AlertCircle size={12} />
-              재고가 부족합니다. 현재 주문 가능 수량은 {item.stockQuantity.toLocaleString()}개입니다.
+              현재 재고보다 {(item.quantity - item.stockQuantity).toLocaleString()}개 더 담았습니다.
+              재고는 {item.stockQuantity.toLocaleString()}개이며, 수량을 조정하기 전에는 주문할 수 없습니다.
             </div>
           )}
 

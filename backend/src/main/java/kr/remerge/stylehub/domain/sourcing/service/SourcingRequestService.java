@@ -12,6 +12,7 @@ import kr.remerge.stylehub.domain.sourcing.repository.SourcingSupplierRepository
 import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.repository.UserRepository;
 import kr.remerge.stylehub.global.common.ImageUploadService;
+import kr.remerge.stylehub.global.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,7 @@ public class SourcingRequestService {
     private final UserRepository userRepository;
     private final SourcingAutoAssignService sourcingAutoAssignService;
     private final ImageUploadService imageUploadService;
+    private final NotificationService notificationService;
 
     // ── 상세 조회 ────────────────────────────────────────────────────
     @Transactional(readOnly = true)
@@ -97,6 +99,7 @@ public class SourcingRequestService {
 
             SourcingRequest saved = sourcingRequestRepository.save(request);
             sourcingAutoAssignService.assign(saved);
+            notificationService.notifyNewSourcingRequest(1L, saved.getProductName(), saved.getSourcingRequestId().longValue());
 
             if (itemDto.getOptions() != null) {
                 for (SourcingRequestDto.OptionRequest opt : itemDto.getOptions()) {

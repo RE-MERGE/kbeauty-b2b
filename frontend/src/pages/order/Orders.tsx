@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import api from "@/api/axios";
 import {
   AlertCircle,
@@ -585,7 +585,9 @@ function matchesFilter(order: Order, filter: string) {
 
 export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
   const navigate = useNavigate();
-  const [orders, setOrders] = useState<Order[]>(exampleOrders);
+  const [searchParams] = useSearchParams();
+  const isOrderDemo = import.meta.env.DEV && searchParams.get("demo") === "orders";
+  const [orders, setOrders] = useState<Order[]>(isOrderDemo ? exampleOrders : []);
   const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -603,6 +605,12 @@ export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
 
   useEffect(() => {
     const loadOrders = async () => {
+      if (isOrderDemo) {
+        setOrders(exampleOrders);
+        setIsLoading(false);
+        return;
+      }
+
       try {
         setIsLoading(true);
         setLoadError(null);
@@ -612,23 +620,23 @@ export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
         const nextOrders = orderResponses.map(mapOrderResponse);
 
         if (!Array.isArray(response)) {
-          setLoadError("주문 목록 응답 형식이 맞지 않아 예시 데이터를 표시하고 있습니다.");
+          setLoadError("주문 목록 응답 형식이 올바르지 않습니다.");
         }
 
-        setOrders(nextOrders.length > 0 ? nextOrders : exampleOrders);
+        setOrders(nextOrders);
         setExpandedId(null);
         setSelectedPaymentOrderIds([]);
       } catch (error) {
         console.error("주문 목록 조회 실패", error);
-        setLoadError("주문 목록을 불러오지 못해 예시 데이터를 표시하고 있습니다.");
-        setOrders(exampleOrders);
+        setLoadError("주문 목록을 불러오지 못했습니다.");
+        setOrders([]);
       } finally {
         setIsLoading(false);
       }
     };
 
     loadOrders();
-  }, []);
+  }, [isOrderDemo]);
 
   const handleToggleOrder = async (order: Order) => {
     const nextExpandedId = expandedId === order.id ? null : order.id;
@@ -870,11 +878,17 @@ export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
           ))}
         </main>
 
-        {filteredOrders.length === 0 && (
+        {!isLoading && !loadError && filteredOrders.length === 0 && (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center">
             <Package size={40} className="mx-auto mb-3 text-slate-300" />
-            <p className="font-bold text-slate-700">조건에 맞는 주문이 없습니다</p>
-            <p className="mt-1 text-sm text-slate-500">검색어를 바꾸거나 다른 상태 필터를 선택해 보세요.</p>
+            <p className="font-bold text-slate-700">
+              {orders.length === 0 ? "아직 주문 내역이 없습니다" : "조건에 맞는 주문이 없습니다"}
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              {orders.length === 0
+                ? "상품을 주문하면 이곳에서 진행 상태를 확인할 수 있습니다."
+                : "검색어를 바꾸거나 다른 상태 필터를 선택해 보세요."}
+            </p>
           </div>
         )}
 

@@ -131,3 +131,21 @@ export interface VerifyPhoneOtpRequest {
     targetValue: string;
     otpCode: string; // 6자리 인증번호
 }
+
+// ───────────────────────────────────────────
+// OCR 및 국세청 검증 관련 타입 추가
+// ───────────────────────────────────────────
+
+export interface OcrResultResponse {
+    businessNumber: string;
+    companyName: string;
+    representativeName: string;
+    openDate: string;
+}
+
+export interface BusinessVerifyRequest {
+    businessNumber: string;
+    companyName: string;
+    representativeName: string;
+    openDate: string;
+}

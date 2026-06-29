@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import {useEffect, useRef, useState} from "react";
 import {useAuthStore} from "@/store/useAuthStore";
-import {logout as apiLogout} from "@/api/auth";
+import {logout as apiLogout} from "@/api/auth/auth.service";
 import logoSvg from "@/assets/style_hub_logo.svg";
 
 const hotKeywords = ["여성 린넨 블라우스", "와이드 슬랙스", "플로럴 원피스", "오버핏 자켓", "스포츠 레깅스"];

@@ -10,7 +10,6 @@ import kr.remerge.stylehub.domain.company.repository.CompanyBankAccountRepositor
 import kr.remerge.stylehub.domain.company.repository.CompanyHandledCategoryRepository;
 import kr.remerge.stylehub.domain.company.repository.CompanyRepository;
 import kr.remerge.stylehub.domain.user.dto.request.*;
-import kr.remerge.stylehub.domain.user.dto.response.FindIdResponse;
 import kr.remerge.stylehub.domain.user.dto.response.UserResponse;
 import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.entity.UserPreferredCategory;
@@ -19,9 +18,9 @@ import kr.remerge.stylehub.domain.user.enumtype.UserRole;
 import kr.remerge.stylehub.domain.user.repository.UserPreferredCategoryRepository;
 import kr.remerge.stylehub.domain.user.repository.UserRepository;
 import kr.remerge.stylehub.global.auth.AuthService;
+import kr.remerge.stylehub.global.auth.dto.FindPwRequest;
 import kr.remerge.stylehub.global.auth.jwt.JwtProvider;
 import kr.remerge.stylehub.global.common.service.EmailService;
-import kr.remerge.stylehub.global.common.service.SmsService;
 import kr.remerge.stylehub.global.exception.BusinessException;
 import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +29,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Random;
 
 @Service
 @RequiredArgsConstructor
@@ -46,7 +44,6 @@ public class UserService {
     private final CategoryRepository categoryRepository;
 
     private final AuthService authService;
-    private final SmsService smsService;             // 알림톡 또는 SMS 발송 서비스
     private final EmailService emailService;         // 이메일 발송 서비스
     private final JwtProvider jwtProvider; // 임시 비밀번호 재설정용 토큰 공급자
     // ───────────────────────────────────────────
@@ -255,40 +252,6 @@ public class UserService {
     }
 
     // ───────────────────────────────────────────
-    // 아이디 찾기 - OTP 인증번호 발송
-    // ───────────────────────────────────────────
-    @Transactional
-    public void sendFindIdOtp(FindIdSendOtpRequest request) {
-        // 1. 유저 존재 여부 확인
-        if (!userRepository.existsByNameAndPhone(request.name(), request.phone())) {
-            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
-        }
-
-        // 2. 인증번호 생성 및 발송 위임
-        String otpCode = String.format("%06d", new Random().nextInt(1000000));
-        authService.sendFindIdOtp(request.phone(), otpCode);
-
-        // 3. 발송 (SmsService는 유지)
-        smsService.sendSms(request.phone(), "[StyleHub] 인증번호 [" + otpCode + "]");
-    }
-
-    // ───────────────────────────────────────────
-    // 아이디 찾기 - OTP 인증번호 검증 및 결과 반환
-    // ───────────────────────────────────────────
-    @Transactional
-    public FindIdResponse verifyFindIdOtp(FindIdVerifyOtpRequest request) {
-        // 1. 인증 위임 (성공 시 삭제까지 여기서 처리됨)
-        authService.verifyOtpAndClear(request.phone(), request.code());
-
-        // 2. 유저 정보 조회
-        User user = userRepository.findByNameAndPhone(request.name(), request.phone())
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-
-        // 3. 이메일 마스킹 처리 후 반환
-        return new FindIdResponse(maskEmail(user.getEmail()), user.getCreatedAt().toString());
-    }
-
-    // ───────────────────────────────────────────
     // 비밀번호 찾기 - 재설정 이메일 발송
     // ───────────────────────────────────────────
     @Transactional
@@ -309,20 +272,5 @@ public class UserService {
                 "<p><a href='" + resetLink + "' style='color: #2563eb; font-weight: bold;'>비밀번호 재설정하러 가기</a></p>";
 
         emailService.sendHtmlEmail(user.getEmail(), "[StyleHub] 비밀번호 재설정 링크 안내", emailContent);
-    }
-
-    // ───────────────────────────────────────────
-    // 이메일 마스킹 헬퍼 메서드
-    // ───────────────────────────────────────────
-    private String maskEmail(String email) {
-        String[] parts = email.split("@");
-        String id = parts[0];
-        String domain = parts[1];
-
-        if (id.length() <= 3) {
-            return id.replaceAll("\\.", "*") + "@" + domain;
-        }
-        // 앞 2자리 유지, 중간 별표, 뒤 2자리 유지 패턴
-        return id.substring(0, 2) + "***" + id.substring(id.length() - 2) + "@" + domain;
     }
 }

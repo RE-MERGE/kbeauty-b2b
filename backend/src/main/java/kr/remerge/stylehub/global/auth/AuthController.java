@@ -3,14 +3,8 @@ package kr.remerge.stylehub.global.auth;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import kr.remerge.stylehub.domain.user.UserService;
-import kr.remerge.stylehub.domain.user.dto.request.FindIdSendOtpRequest;
-import kr.remerge.stylehub.domain.user.dto.request.FindIdVerifyOtpRequest;
-import kr.remerge.stylehub.domain.user.dto.request.FindPwRequest;
 import kr.remerge.stylehub.domain.user.dto.response.FindIdResponse;
-import kr.remerge.stylehub.global.auth.dto.ChangeAuthRequest;
-import kr.remerge.stylehub.global.auth.dto.LoginRequest;
-import kr.remerge.stylehub.global.auth.dto.TokenResponse;
-import kr.remerge.stylehub.global.auth.dto.VerifyChangeAuthRequest;
+import kr.remerge.stylehub.global.auth.dto.*;
 import kr.remerge.stylehub.global.auth.jwt.JwtProperties;
 import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
 import kr.remerge.stylehub.global.exception.BusinessException;
@@ -137,20 +131,30 @@ public class AuthController {
     // ───────────────────────────────────────────
     // 아이디 / 비밀번호 찾기 API
     // ───────────────────────────────────────────
-    @PostMapping("/find-id/otp")
+
+    /**
+     * 1단계: 아이디 찾기 인증번호 발송
+     */
+    @PostMapping("/find-id/send-otp")
     public ResponseEntity<ApiResponse<Void>> sendFindIdOtp(@Valid @RequestBody FindIdSendOtpRequest request) {
-        userService.sendFindIdOtp(request);
+        authService.sendFindIdOtp(request);
         return ResponseEntity.ok()
                 .body(ApiResponse.successWithMessage("인증번호가 발송되었습니다."));
     }
 
-    @PostMapping("/find-id/otp/verify")
+    /**
+     * 2단계: 아이디 찾기 인증번호 검증 및 아이디 반환
+     */
+    @PostMapping("/find-id/verify-otp")
     public ResponseEntity<ApiResponse<FindIdResponse>> verifyFindIdOtp(@Valid @RequestBody FindIdVerifyOtpRequest request) {
-        FindIdResponse response = userService.verifyFindIdOtp(request);
+        FindIdResponse response = authService.verifyFindIdOtp(request);
         return ResponseEntity.ok()
                 .body(ApiResponse.success(response));
     }
 
+    /**
+     * 비밀번호 재설정 요청 (메일 발송)
+     */
     @PostMapping("/find-pw")
     public ResponseEntity<ApiResponse<Void>> requestFindPassword(@Valid @RequestBody FindPwRequest request) {
         userService.requestFindPassword(request);
@@ -158,15 +162,19 @@ public class AuthController {
                 .body(ApiResponse.successWithMessage("비밀번호 재설정 링크가 메일로 발송되었습니다."));
     }
 
+    // ───────────────────────────────────────────
+    // 회원정보 변경 시 이메일/휴대폰 본인 점유인증 (마이페이지 연동용)
+    // ───────────────────────────────────────────
+
     @PostMapping("/request-change-auth")
     public ResponseEntity<ApiResponse<Void>> requestChangeAuth(@Valid @RequestBody ChangeAuthRequest request) {
         authService.sendChangeAuthCode(request.target());
-        return ResponseEntity.ok(ApiResponse.success());
+        return ResponseEntity.ok(ApiResponse.successWithMessage("인증 코드가 발송되었습니다."));
     }
 
     @PostMapping("/verify-change-auth")
     public ResponseEntity<ApiResponse<Void>> verifyChangeAuth(@Valid @RequestBody VerifyChangeAuthRequest request) {
         authService.verifyChangeAuthCode(request.target(), request.code());
-        return ResponseEntity.ok(ApiResponse.success());
+        return ResponseEntity.ok(ApiResponse.successWithMessage("인증이 완료되었습니다."));
     }
 }

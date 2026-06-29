@@ -440,7 +440,7 @@ export function Checkout() {
     try {
         setIsPaymentLoading(true);
 
-        const orderResponse = await api.post<OrderCreateResponse>("/orders", {
+        const orderResponse = await api.post<OrderCreateResponse>("/buyer/orders", {
             cartItemIds: checkoutState.cartItemIds,
             addressId: selectedAddress.addressId,
             cartType: checkoutState.cartType,
@@ -507,7 +507,7 @@ export function Checkout() {
       setIsTestOrderLoading(true);
       setTestOrderError("");
 
-      const response = await api.post<OrderCreateResponse>("/orders", {
+      const response = await api.post<OrderCreateResponse>("/buyer/orders", {
         cartItemIds: checkoutState.cartItemIds,
         addressId: selectedAddress.addressId,
         cartType: checkoutState.cartType,
@@ -588,7 +588,7 @@ export function Checkout() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => navigate(`/orders/custom/${orderId}/sign`)}
+                  onClick={() => navigate(`/buyer/orders/custom/${orderId}/sign`)}
                   className="mt-3 inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-amber-700"
                 >
                   <PenLine size={14} />
@@ -896,7 +896,7 @@ export function Checkout() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => navigate("/orders")}
+                  onClick={() => navigate("/buyer/orders")}
                   className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-3 text-sm font-bold text-white transition hover:bg-primary/90"
                 >
                   <ShoppingBag size={18} />

@@ -578,7 +578,7 @@ export function Root() {
                                     </div>
                                     <div className="px-4 py-2.5 border-t border-border">
                                         <Link
-                                            to="/orders"
+                                            to="/buyer/orders"
                                             onClick={() => setNotifOpen(false)}
                                             className="text-xs text-primary hover:underline font-medium"
                                         >

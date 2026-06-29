@@ -129,7 +129,7 @@ export function QuoteDetail() {
   // ── 완료 화면 ──────────────────────────────────────────────────────
   if (done) {
     const doneConfig = {
-      approved:    { icon: <CheckCircle size={36} className="text-green-500" />, bg: "bg-green-50", title: "견적을 채택했습니다", sub: "공급사에게 알림이 전송되었습니다. 주문이 확정되면 발주 내역에서 확인하세요.", cta: "/orders" , ctaLabel: "발주 내역 확인" },
+      approved:    { icon: <CheckCircle size={36} className="text-green-500" />, bg: "bg-green-50", title: "견적을 채택했습니다", sub: "공급사에게 알림이 전송되었습니다. 주문이 확정되면 발주 내역에서 확인하세요.", cta: "/buyer/orders" , ctaLabel: "발주 내역 확인" },
       rejected:    { icon: <XCircle size={36} className="text-red-500" />,       bg: "bg-red-50",   title: "견적을 거절했습니다", sub: "공급사에게 거절 알림이 전송되었습니다. 다른 견적을 계속 검토하세요.", cta: "/buyer/my-sourcing", ctaLabel: "소싱 목록으로" },
       negotiated:  { icon: <MessageCircle size={36} className="text-purple-500" />, bg: "bg-purple-50", title: "협의 요청을 보냈습니다", sub: "공급사가 검토 후 답변드립니다. 협의 내역은 소싱 요청 상세에서 확인할 수 있습니다.", cta: "/buyer/my-sourcing", ctaLabel: "소싱 목록으로" },
     }[done];

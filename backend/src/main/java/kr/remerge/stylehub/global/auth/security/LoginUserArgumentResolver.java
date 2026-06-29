@@ -1,6 +1,6 @@
 package kr.remerge.stylehub.global.auth.security;
 
-import kr.remerge.stylehub.global.auth.dto.AuthUser;
+import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
 import org.springframework.core.MethodParameter;
 import org.springframework.lang.NonNull;
 import org.springframework.security.core.Authentication;

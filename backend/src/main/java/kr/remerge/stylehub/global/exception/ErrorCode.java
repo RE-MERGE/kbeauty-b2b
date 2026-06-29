@@ -25,6 +25,7 @@ public enum ErrorCode {
     UNVERIFIED_EMAIL(HttpStatus.FORBIDDEN, "AUTH_008", "인증되지 않은 이메일입니다."),
     UNVERIFIED_PHONE(HttpStatus.FORBIDDEN, "AUTH_009", "인증되지 않은 휴대폰 번호입니다."),
     SMS_SEND_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "AUTH_010", "문자 발송 중에 오류가 발생하였습니다."),
+    EMAIL_SEND_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "AUTH_011", "이메일 발송에 실패했습니다. 잠시 후 다시 시도해 주세요."),
 
     // ───────────────────────────────────────────
     // 유저 (USER)

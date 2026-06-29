@@ -4,7 +4,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import kr.remerge.stylehub.domain.user.UserService;
 import kr.remerge.stylehub.domain.user.dto.response.FindIdResponse;
-import kr.remerge.stylehub.global.auth.dto.*;
+import kr.remerge.stylehub.global.auth.dto.change.LoginRequest;
+import kr.remerge.stylehub.global.auth.dto.change.TokenResponse;
+import kr.remerge.stylehub.global.auth.dto.find.*;
+import kr.remerge.stylehub.global.auth.dto.login.ChangeAuthRequest;
+import kr.remerge.stylehub.global.auth.dto.login.VerifyChangeAuthRequest;
 import kr.remerge.stylehub.global.auth.jwt.JwtProperties;
 import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
 import kr.remerge.stylehub.global.exception.BusinessException;
@@ -153,13 +157,39 @@ public class AuthController {
     }
 
     /**
-     * 비밀번호 재설정 요청 (메일 발송)
+     * 비밀번호 찾기 - 1단계: 이메일 인증번호 발송
+     * POST /api/auth/find-pw/send-otp
      */
-    @PostMapping("/find-pw")
-    public ResponseEntity<ApiResponse<Void>> requestFindPassword(@Valid @RequestBody FindPwRequest request) {
-        userService.requestFindPassword(request);
-        return ResponseEntity.ok()
-                .body(ApiResponse.successWithMessage("비밀번호 재설정 링크가 메일로 발송되었습니다."));
+    @PostMapping("/find-pw/send-otp")
+    public ResponseEntity<ApiResponse<Void>> sendFindPwOtp(
+            @RequestBody @Valid FindPwSendOtpRequest request
+    ) {
+        authService.sendFindPwOtp(request);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    /**
+     * 비밀번호 찾기 - 2단계: 인증번호 검증 및 1회성 임시 재설정 토큰 발급
+     * POST /api/auth/find-pw/verify-otp
+     */
+    @PostMapping("/find-pw/verify-otp")
+    public ResponseEntity<ApiResponse<ResetPasswordTokenResponse>> verifyFindPwOtp(
+            @RequestBody @Valid FindPwVerifyOtpRequest request
+    ) {
+        ResetPasswordTokenResponse response = authService.verifyFindPwOtp(request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /**
+     * 비밀번호 찾기 - 3단계: 1회성 토큰 검증 후 새 비밀번호로 최종 변경
+     * POST /api/auth/find-pw/reset
+     */
+    @PostMapping("/find-pw/reset")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @RequestBody @Valid ResetPasswordRequest request
+    ) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     // ───────────────────────────────────────────

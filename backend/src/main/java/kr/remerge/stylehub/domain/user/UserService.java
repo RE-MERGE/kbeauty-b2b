@@ -18,7 +18,6 @@ import kr.remerge.stylehub.domain.user.enumtype.UserRole;
 import kr.remerge.stylehub.domain.user.repository.UserPreferredCategoryRepository;
 import kr.remerge.stylehub.domain.user.repository.UserRepository;
 import kr.remerge.stylehub.global.auth.AuthService;
-import kr.remerge.stylehub.global.auth.dto.FindPwRequest;
 import kr.remerge.stylehub.global.auth.jwt.JwtProvider;
 import kr.remerge.stylehub.global.common.service.EmailService;
 import kr.remerge.stylehub.global.exception.BusinessException;
@@ -249,28 +248,5 @@ public class UserService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         user.delete();
-    }
-
-    // ───────────────────────────────────────────
-    // 비밀번호 찾기 - 재설정 이메일 발송
-    // ───────────────────────────────────────────
-    @Transactional
-    public void requestFindPassword(FindPwRequest request) {
-        // 1. 가입 이메일과 이름이 정확히 일치하는 유저 검증
-        User user = userRepository.findByEmailAndName(request.email(), request.name())
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-
-        // 2. 30분 동안만 유효한 임시 비밀번호 재설정 토큰 생성
-        String resetToken = jwtProvider.createPasswordResetToken(user.getEmail());
-
-        // 3. 사용자가 접근할 프론트엔드 도메인 링크 세팅
-        String resetLink = "https://stylehub.kr/auth/reset-password?token=" + resetToken;
-
-        // 4. HTML 포맷 빌드 및 메일 발송
-        String emailContent = "<h3>안녕하세요, StyleHub입니다.</h3>" +
-                "<p>아래 링크를 클릭하여 30분 이내에 비밀번호를 재설정해 주세요.</p>" +
-                "<p><a href='" + resetLink + "' style='color: #2563eb; font-weight: bold;'>비밀번호 재설정하러 가기</a></p>";
-
-        emailService.sendHtmlEmail(user.getEmail(), "[StyleHub] 비밀번호 재설정 링크 안내", emailContent);
     }
 }

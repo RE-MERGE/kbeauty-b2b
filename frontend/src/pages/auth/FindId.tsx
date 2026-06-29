@@ -1,13 +1,7 @@
-import { useState, useEffect, useRef } from "react";
-import { Link } from "react-router";
-import {
-    ArrowLeft,
-    ArrowRight,
-    CheckCircle,
-    ShieldCheck,
-    RotateCcw,
-} from "lucide-react";
-import { sendFindIdOtp, verifyFindIdOtp } from "@/api/auth";
+import {useEffect, useRef, useState} from "react";
+import {Link} from "react-router";
+import {ArrowLeft, ArrowRight, CheckCircle, RotateCcw, ShieldCheck,} from "lucide-react";
+import {sendFindIdOtp, verifyFindIdOtp} from "@/api/auth/auth.service";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -45,11 +39,17 @@ export function FindId() {
 
     const phoneDigits = digitsOnly(phone);
     const phoneValid  = phoneDigits.length >= 10;
-    const canSendOtp  = name.trim().length > 0 && phoneValid && !sendingOtp;
+
+    // 첫 인증 요청 버튼은 인증번호가 발송되기 전까지만 활성화되도록 유도
+    const canSendOtp = name.trim().length > 0 && phoneValid && !sendingOtp && !otpSent;
     const canVerify   = code.length === 6 && !verifying && timer > 0;
 
     useEffect(() => {
         if (!otpSent) return;
+
+        // 💡 기존 타이머가 남아있다면 확실히 초기화하고 새로 시작 (재전송 시 타이머가 굳는 버그 방지)
+        if (intervalRef.current) clearInterval(intervalRef.current);
+
         intervalRef.current = setInterval(() => {
             setTimer((t) => {
                 if (t <= 1) {
@@ -59,10 +59,11 @@ export function FindId() {
                 return t - 1;
             });
         }, 1000);
+
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
-    }, [otpSent]);
+    }, [otpSent, timer === 180]); // 💡 timer가 180으로 리셋될 때 이펙트가 재실행되도록 감지 추가
 
     const handlePhoneChange = (v: string) => {
         setPhone(v);
@@ -80,9 +81,9 @@ export function FindId() {
         setSendingOtp(true);
         try {
             await sendFindIdOtp({ name: name.trim(), phone: phoneDigits });
+            setTimer(180);
             setOtpSent(true);
             setCode("");
-            setTimer(180);
         } catch (e: any) {
             setError(e.message ?? "인증번호 발송에 실패했습니다. 잠시 후 다시 시도해 주세요.");
         } finally {
@@ -90,13 +91,16 @@ export function FindId() {
         }
     };
 
+    // 💡 [버그 수정] 인증번호 재전송 시 타이머 정상 재가동 및 에러메시지 초기화 연동
     const handleResend = async () => {
         setCode("");
         setError("");
         setSendingOtp(true);
         try {
             await sendFindIdOtp({ name: name.trim(), phone: phoneDigits });
+            // 💡 타이머를 180으로 만들고 otpSent를 다시 true로 명시해주어야 카운트다운이 꼬이지 않습니다.
             setTimer(180);
+            setOtpSent(true);
         } catch (e: any) {
             setError(e.message ?? "인증번호 재전송에 실패했습니다.");
         } finally {
@@ -119,22 +123,10 @@ export function FindId() {
         }
     };
 
-    const handleReset = () => {
-        setStep("form");
-        setName("");
-        setPhone("");
-        setCode("");
-        setOtpSent(false);
-        setError("");
-        setTimer(180);
-        setResult(null);
-    };
-
     return (
         <>
-
             <Link
-                to="/auth/login"
+                to="/auth"
                 className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors mb-4"
             >
                 <ArrowLeft size={12} />
@@ -165,7 +157,7 @@ export function FindId() {
                     </div>
                     <div className="flex gap-2 justify-center">
                         <Link
-                            to="/auth/login"
+                            to="/auth"
                             className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
                         >
                             로그인하기
@@ -182,7 +174,8 @@ export function FindId() {
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             placeholder="가입 시 등록한 이름"
-                            className={inputCls}
+                            disabled={otpSent} // 💡 인증번호 발송 중에는 이름 수정 제한 (실수 방지)
+                            className={`${inputCls} disabled:bg-secondary/40 disabled:text-muted-foreground`}
                         />
                     </div>
 
@@ -205,7 +198,7 @@ export function FindId() {
                                 {sendingOtp ? (
                                     <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                                 ) : otpSent ? (
-                                    "재전송"
+                                    "발송완료"
                                 ) : (
                                     "인증"
                                 )}

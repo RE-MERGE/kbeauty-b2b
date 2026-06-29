@@ -7,17 +7,16 @@ import kr.remerge.stylehub.domain.cart.repository.CartRepository;
 import kr.remerge.stylehub.domain.company.entity.Address;
 import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.company.repository.AddressRepository;
-import kr.remerge.stylehub.domain.order.checkout.dto.AddressCreateRequest;
-import kr.remerge.stylehub.domain.order.checkout.dto.AddressResponse;
-import kr.remerge.stylehub.domain.order.checkout.dto.CartCheckoutRequest;
-import kr.remerge.stylehub.domain.order.checkout.dto.CartCheckoutResponse;
-import kr.remerge.stylehub.domain.order.checkout.dto.CheckoutInvalidItemResponse;
-import kr.remerge.stylehub.domain.order.checkout.dto.CheckoutValidationErrorResponse;
-import kr.remerge.stylehub.domain.order.checkout.dto.OrderCheckoutItemResponse;
-import kr.remerge.stylehub.domain.order.checkout.dto.OrderCheckoutResponse;
+import kr.remerge.stylehub.domain.order.checkout.dto.*;
 import kr.remerge.stylehub.domain.order.checkout.exception.CheckoutValidationException;
 import kr.remerge.stylehub.domain.order.entity.Order;
+import kr.remerge.stylehub.domain.order.entity.OrderItem;
+import kr.remerge.stylehub.domain.order.entity.OrderLog;
+import kr.remerge.stylehub.domain.order.enumtype.OrderLogMemo;
+import kr.remerge.stylehub.domain.order.enumtype.OrderLogType;
+import kr.remerge.stylehub.domain.order.enumtype.OrderStatus;
 import kr.remerge.stylehub.domain.order.repository.OrderItemRepository;
+import kr.remerge.stylehub.domain.order.repository.OrderLogRepository;
 import kr.remerge.stylehub.domain.order.repository.OrderRepository;
 import kr.remerge.stylehub.domain.product.entity.Product;
 import kr.remerge.stylehub.domain.product.entity.ProductOption;
@@ -45,7 +44,7 @@ public class CheckoutService {
     private final AddressRepository addressRepository;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
-
+    private final OrderLogRepository orderLogRepository;
 
     public CartCheckoutResponse getCartCheckout(Integer userId, CartCheckoutRequest cartCheckoutRequest) {
 
@@ -108,8 +107,7 @@ public class CheckoutService {
         if (Boolean.FALSE.equals(option.getIsActive())) {
             invalidItems.add(toInvalidItem(
                     cartItem,
-                    "OPTION_INACTIVE",
-                    "현재 판매 중인 옵션이 아닙니다.",
+                    ErrorCode.OPTION_INACTIVE,
                     quantity,
                     0
             ));
@@ -118,8 +116,7 @@ public class CheckoutService {
         if (quantity > option.getStockQuantity()) {
             invalidItems.add(toInvalidItem(
                     cartItem,
-                    ErrorCode.OUT_OF_STOCK.name(),
-                    ErrorCode.OUT_OF_STOCK.getMessage(),
+                    ErrorCode.OUT_OF_STOCK,
                     quantity,
                     option.getStockQuantity()
             ));
@@ -129,8 +126,7 @@ public class CheckoutService {
                 && quantity < product.getMoq()) {
             invalidItems.add(toInvalidItem(
                     cartItem,
-                    "MOQ_NOT_MET",
-                    "최소 주문 수량을 충족하지 못했습니다.",
+                    ErrorCode.MOQ_NOT_MET,
                     quantity,
                     product.getMoq()
             ));
@@ -140,8 +136,7 @@ public class CheckoutService {
             if (!product.getSampleAvailable()) {
                 invalidItems.add(toInvalidItem(
                         cartItem,
-                        "SAMPLE_NOT_AVAILABLE",
-                        "샘플 주문이 불가능한 상품입니다.",
+                        ErrorCode.SAMPLE_NOT_AVAILABLE,
                         quantity,
                         0
                 ));
@@ -151,8 +146,7 @@ public class CheckoutService {
                     || option.getSampleMaxQuantity() == null) {
                 invalidItems.add(toInvalidItem(
                         cartItem,
-                        ErrorCode.SAMPLE_OPTION_NOT_CONFIGURED.name(),
-                        ErrorCode.SAMPLE_OPTION_NOT_CONFIGURED.getMessage(),
+                        ErrorCode.SAMPLE_OPTION_NOT_CONFIGURED,
                         quantity,
                         0
                 ));
@@ -162,8 +156,7 @@ public class CheckoutService {
                     && quantity > option.getSampleMaxQuantity()) {
                 invalidItems.add(toInvalidItem(
                         cartItem,
-                        "SAMPLE_LIMIT_EXCEEDED",
-                        "샘플 최대 주문 수량을 초과했습니다.",
+                        ErrorCode.SAMPLE_LIMIT_EXCEEDED,
                         quantity,
                         option.getSampleMaxQuantity()
                 ));
@@ -175,8 +168,7 @@ public class CheckoutService {
 
     private CheckoutInvalidItemResponse toInvalidItem(
             CartItem cartItem,
-            String reasonCode,
-            String message,
+            ErrorCode errorCode,
             Integer requestedQuantity,
             Integer availableQuantity
     ) {
@@ -187,8 +179,8 @@ public class CheckoutService {
                 cartItem.getCartItemId(),
                 product.getProductName(),
                 option.getOptionLabel(),
-                reasonCode,
-                message,
+                errorCode.name(),
+                errorCode.getMessage(),
                 requestedQuantity,
                 availableQuantity
         );
@@ -295,5 +287,134 @@ public class CheckoutService {
                 order.getShippingFee(),
                 order.getTotalAmount()
         );
+
+    }
+
+    public MultiOrderCheckoutResponse getMultiOrderCheckout(Integer userId, List<Integer> orderIds) {
+
+        List<Order> orders = findOwnedPendingOrders(userId, orderIds);
+        List<Integer> distinctOrderIds = orders.stream()
+                .map(Order::getOrderId)
+                .toList();
+
+        Map<Integer, List<OrderItem>> itemsByOrderId =
+                orderItemRepository.
+                        findByOrder_OrderIdInOrderByOrderItemIdAsc(distinctOrderIds)
+                        .stream()
+                        .collect(groupingBy(
+                                orderItem -> orderItem.getOrder().getOrderId()
+                        ));
+
+        List<OrderCheckoutResponse> orderResponses = orders.stream()
+                .map(order -> {
+                    List<OrderCheckoutItemResponse> items =
+                            itemsByOrderId.
+                                    getOrDefault(order.getOrderId(), List.of())
+                                    .stream()
+                                    .map(OrderCheckoutItemResponse::from)
+                                    .toList();
+
+                    return new OrderCheckoutResponse(
+                            order.getOrderId(),
+                            order.getOrderNo(),
+                            items,
+                            order.getSubtotalAmount(),
+                            order.getShippingFee(),
+                            order.getTotalAmount()
+                    );
+                })
+                .toList();
+
+        long productAmount = orders.stream()
+                .mapToLong(Order::getSubtotalAmount)
+                .sum();
+
+        long shippingFee = orders.stream()
+                .mapToLong(Order::getShippingFee)
+                .sum();
+
+        long totalAmount = orders.stream()
+                .mapToLong(Order::getTotalAmount)
+                .sum();
+
+        return new MultiOrderCheckoutResponse(
+                orderResponses,
+                productAmount,
+                shippingFee,
+                totalAmount
+        );
+
+    }
+
+    @Transactional
+    public DevOrderPaymentResponse completeDevOrderPayment(
+            Integer userId,
+            List<Integer> orderIds
+    ) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.USER_NOT_FOUND)
+                );
+
+        List<Order> orders = findOwnedPendingOrders(userId, orderIds);
+        List<OrderLog> logs = new ArrayList<>();
+
+        for (Order order : orders) {
+            OrderStatus previousStatus = order.getStatus();
+
+            order.confirmPayment();
+
+            logs.add(OrderLog.createStatusLog(
+                    order,
+                    previousStatus,
+                    order.getStatus(),
+                    user,
+                    OrderLogMemo.PAYMENT_CONFIRMED
+            ));
+        }
+        orderLogRepository.saveAll(logs);
+
+        orders.forEach(Order::confirmPayment);
+        orderRepository.saveAll(orders);
+
+        List<String> orderNos = orders.stream()
+                .map(Order::getOrderNo)
+                .toList();
+
+        long totalAmount = orders.stream()
+                .mapToLong(Order::getTotalAmount)
+                .sum();
+
+        return new DevOrderPaymentResponse(orderNos, totalAmount);
+    }
+
+    private List<Order> findOwnedPendingOrders(
+            Integer userId,
+            List<Integer> orderIds
+    ) {
+
+        userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        List<Integer> distinctOrderIds = orderIds.stream()
+                .distinct()
+                .toList();
+
+        List<Order> orders =
+                orderRepository.findByOrderIdInAndBuyer_UserId(distinctOrderIds, userId);
+
+        if (orders.size() != distinctOrderIds.size()) {
+            throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
+        }
+
+        boolean hasInvalidStatus = orders.stream()
+                .anyMatch(order -> order.getStatus() != OrderStatus.PENDING);
+
+        if (hasInvalidStatus) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        return orders;
     }
 }

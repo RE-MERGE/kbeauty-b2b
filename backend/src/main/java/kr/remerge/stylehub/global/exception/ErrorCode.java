@@ -50,6 +50,10 @@ public enum ErrorCode {
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "PRODUCT_001", "상품을 찾을 수 없습니다."),
     PRODUCT_OPTION_NOT_FOUND(HttpStatus.NOT_FOUND, "PRODUCT_002", "상품 옵션을 찾을 수 없습니다."),
     OUT_OF_STOCK(HttpStatus.BAD_REQUEST, "PRODUCT_003", "재고가 부족합니다."),
+    OPTION_INACTIVE(HttpStatus.BAD_REQUEST, "PRODUCT_004", "현재 판매 중인 옵션이 아닙니다."),
+    MOQ_NOT_MET(HttpStatus.BAD_REQUEST, "PRODUCT_005", "최소 주문 수량을 충족하지 못했습니다."),
+    SAMPLE_NOT_AVAILABLE(HttpStatus.BAD_REQUEST, "PRODUCT_006", "샘플 주문이 불가능한 상품입니다."),
+    SAMPLE_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "PRODUCT_007", "샘플 최대 주문 수량을 초과했습니다."),
 
     // ───────────────────────────────────────────
     // 장바구니 (CART)

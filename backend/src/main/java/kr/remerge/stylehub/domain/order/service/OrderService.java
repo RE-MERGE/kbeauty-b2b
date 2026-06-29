@@ -6,11 +6,17 @@ import kr.remerge.stylehub.domain.cart.repository.CartRepository;
 import kr.remerge.stylehub.domain.company.entity.Address;
 import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.company.repository.AddressRepository;
+import kr.remerge.stylehub.domain.order.dto.BuyerOrderDetailItemResponse;
+import kr.remerge.stylehub.domain.order.dto.BuyerOrderDetailResponse;
+import kr.remerge.stylehub.domain.order.dto.BuyerOrderLogResponse;
 import kr.remerge.stylehub.domain.order.dto.*;
 import kr.remerge.stylehub.domain.order.enumtype.PaymentMethod;
+import kr.remerge.stylehub.domain.order.repository.OrderLogRepository;
 import kr.remerge.stylehub.domain.order.repository.OrderRepository;
 import kr.remerge.stylehub.domain.order.entity.Order;
 import kr.remerge.stylehub.domain.order.entity.OrderItem;
+import kr.remerge.stylehub.domain.order.entity.OrderLog;
+import kr.remerge.stylehub.domain.order.enumtype.OrderLogMemo;
 import kr.remerge.stylehub.domain.order.enumtype.OrderStatus;
 import kr.remerge.stylehub.domain.order.enumtype.OrderType;
 import kr.remerge.stylehub.domain.order.repository.OrderItemRepository;
@@ -40,6 +46,7 @@ public class OrderService {
     private final OrderItemRepository orderItemRepository;
     private final CartRepository cartRepository;
     private final AddressRepository addressRepository;
+    private final OrderLogRepository orderLogRepository;
 
     @Transactional
     public OrderCreateResponse createOrder(Integer userId, OrderCreateRequest request) {
@@ -55,6 +62,7 @@ public class OrderService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.ADDRESS_NOT_FOUND));
 
         ArrayList<String> orderNos = new ArrayList<>();
+        List<OrderLog> orderLogs = new ArrayList<>();
         long checkoutTotalAmount = 0L;
 
         for (List<CartItem> companyItems : itemsByCompany.values()) {
@@ -71,6 +79,14 @@ public class OrderService {
 
             Order order = getOrder(request, buyer, sellerCompany, address, subtotalAmount);
             Order savedOrder = orderRepository.save(order);
+
+            orderLogs.add(OrderLog.createStatusLog(
+                    savedOrder,
+                    null,
+                    OrderStatus.PENDING,
+                    buyer,
+                    OrderLogMemo.ORDER_CREATED
+            ));
 
             orderNos.add(savedOrder.getOrderNo());
             checkoutTotalAmount += savedOrder.getTotalAmount();
@@ -106,6 +122,7 @@ public class OrderService {
             orderItemRepository.saveAll(orderItems);
         }
 
+        orderLogRepository.saveAll(orderLogs);
         cartRepository.deleteAll(cartItems);
 
         return new OrderCreateResponse(orderNos,checkoutTotalAmount);
@@ -274,5 +291,30 @@ public class OrderService {
                 orderAmountSummaryResponse,
                 order.getStatus()
         );
+    }
+
+    public BuyerOrderDetailResponse getOrderDetail(Integer userId, Integer orderId) {
+
+        userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        Order order = orderRepository.findByOrderIdAndBuyer_UserId(orderId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+
+
+        List<BuyerOrderLogResponse> orderLogResponseList =
+                orderLogRepository.findByOrder_OrderIdOrderByCreatedAtAsc(order.getOrderId())
+                        .stream()
+                        .filter(orderLog -> orderLog.getNewStatus() != null)
+                        .map(BuyerOrderLogResponse::from)
+                        .toList();
+
+        List<BuyerOrderDetailItemResponse> orderDetailItemResponseList = orderItemRepository.findByOrder_OrderId(orderId)
+                .stream()
+                .map(BuyerOrderDetailItemResponse::from)
+                .toList();
+
+        return BuyerOrderDetailResponse.from(order, orderDetailItemResponseList, orderLogResponseList);
+
     }
 }

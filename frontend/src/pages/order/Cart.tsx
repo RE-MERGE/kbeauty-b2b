@@ -231,7 +231,7 @@ export function Cart() {
           return;
         }
 
-        const response = await api.get<CartApiItem[]>("/cart");
+        const response = await api.get<CartApiItem[]>("/carts");
         const cartItems = mapCartApiItems(response);
         setItems(cartItems);
         setSelected(
@@ -331,7 +331,7 @@ export function Cart() {
         )
       );
 
-      const response = await api.patch<CartItem>(`/cart/${id}/quantity`, {
+      const response = await api.patch<CartItem>(`/carts/${id}/quantity`, {
         quantity: nextQuantity,
       });
       if (response?.cartItemId === id) {
@@ -377,7 +377,7 @@ export function Cart() {
     }
 
     try {
-      await api.delete(`/cart/${id}`);
+      await api.delete(`/carts/${id}`);
       removeItemFromState(id);
     } catch (error) {
       const apiError = error as { response?: { status?: number; data?: unknown } };
@@ -414,13 +414,13 @@ export function Cart() {
     try {
       setAddingSampleOptionId(item.productOptionId);
 
-      await api.post("/cart", {
+      await api.post("/carts", {
         productOptionId: item.productOptionId,
         quantity: 1,
         cartType: "SAMPLE",
       });
 
-      const response = await api.get<CartApiItem[]>("/cart");
+      const response = await api.get<CartApiItem[]>("/carts");
       const cartItems = mapCartApiItems(response);
       setItems(cartItems);
       setSelectedSample(

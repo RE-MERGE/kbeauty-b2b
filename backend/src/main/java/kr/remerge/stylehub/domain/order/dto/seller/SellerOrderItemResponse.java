@@ -2,8 +2,11 @@ package kr.remerge.stylehub.domain.order.dto.seller;
 
 import kr.remerge.stylehub.domain.order.entity.OrderItem;
 import kr.remerge.stylehub.domain.order.enumtype.OrderItemStatus;
+import kr.remerge.stylehub.domain.user.entity.User;
+import kr.remerge.stylehub.domain.user.enumtype.UserRole;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 public record SellerOrderItemResponse(
         Integer orderItemId,
@@ -14,10 +17,18 @@ public record SellerOrderItemResponse(
         Long totalPrice,
         String productImageUrl,
         OrderItemStatus itemStatus,
-        LocalDateTime preparedAt
+        LocalDateTime preparedAt,
+        boolean assignedToMe,
+        boolean canPrepare
 ) {
 
-    public static SellerOrderItemResponse from(OrderItem orderItem) {
+    public static SellerOrderItemResponse from(OrderItem orderItem, User user) {
+        boolean assignedToMe = Objects.equals(
+                orderItem.getAssignedUser().getUserId(),
+                user.getUserId()
+        );
+        boolean canPrepare =
+                user.getRole() == UserRole.EMPLOYEE && assignedToMe;
 
         return new SellerOrderItemResponse(
                 orderItem.getOrderItemId(),
@@ -28,7 +39,9 @@ public record SellerOrderItemResponse(
                 orderItem.getTotalPrice(),
                 orderItem.getProductImageUrl(),
                 orderItem.getItemStatus(),
-                orderItem.getPreparedAt()
+                orderItem.getPreparedAt(),
+                assignedToMe,
+                canPrepare
         );
     }
 

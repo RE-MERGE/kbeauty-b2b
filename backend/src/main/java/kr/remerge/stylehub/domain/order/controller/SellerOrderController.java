@@ -1,6 +1,8 @@
 package kr.remerge.stylehub.domain.order.controller;
 
 
+import jakarta.validation.Valid;
+import kr.remerge.stylehub.domain.order.dto.seller.OrderShipmentRequest;
 import kr.remerge.stylehub.domain.order.dto.seller.SellerOrderDetailResponse;
 import kr.remerge.stylehub.domain.order.dto.seller.SellerOrderListResponse;
 import kr.remerge.stylehub.domain.order.service.SellerOrderService;
@@ -64,6 +66,18 @@ public class SellerOrderController {
                 authUser.userId(),
                 orderId
         );
+
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @PatchMapping("/{orderId}/shipment")
+    public ResponseEntity<ApiResponse<Void>> registerShipment(
+            @LoginUser AuthUser authUser,
+            @PathVariable Integer orderId,
+            @Valid @RequestBody OrderShipmentRequest request
+    ) {
+
+        sellerOrderService.registerShipment(authUser.userId(), orderId, request);
 
         return ResponseEntity.ok(ApiResponse.success(null));
     }

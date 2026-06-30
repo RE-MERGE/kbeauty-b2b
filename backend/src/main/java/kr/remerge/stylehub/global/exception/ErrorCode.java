@@ -75,6 +75,8 @@ public enum ErrorCode {
     ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "ORDER_001", "주문을 찾을 수 없습니다."),
     INVALID_ORDER_STATUS(HttpStatus.BAD_REQUEST, "ORDER_002", "유효하지 않은 주문 상태입니다."),
     ORDER_CANCEL_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "ORDER_003", "취소할 수 없는 주문입니다."),
+    ORDER_ITEMS_NOT_READY(HttpStatus.CONFLICT, "ORDER_004","모든 주문 상품의 출고 준비가 완료되지 않았습니다."
+    ),
 
     // ───────────────────────────────────────────
     // 견적 (QUOTE)

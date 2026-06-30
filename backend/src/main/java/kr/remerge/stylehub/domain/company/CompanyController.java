@@ -1,8 +1,12 @@
 package kr.remerge.stylehub.domain.company;
 
 import kr.remerge.stylehub.domain.company.dto.request.CompanyVerifyRequest;
+import kr.remerge.stylehub.domain.company.dto.response.CompanyLookupResponse;
 import kr.remerge.stylehub.domain.company.dto.response.OcrParseResponse;
+import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.company.repository.BrandRepository;
+import kr.remerge.stylehub.global.exception.BusinessException;
+import kr.remerge.stylehub.global.exception.ErrorCode;
 import kr.remerge.stylehub.global.response.ApiResponse; // 💡 공통 응답 임포트
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,13 +47,12 @@ public class CompanyController {
     }
 
     /**
-     * 흐름 3: 필수 4종 세트 최종 입력 후 → 국세청 진위확인 및 상태 검증
+     * 흐름 2: 필수 4종 세트 최종 입력 후 → 국세청 진위확인 및 상태 검증
      */
     @PostMapping("/verify")
     public ResponseEntity<ApiResponse<Void>> verifyBusiness(
             @RequestBody CompanyVerifyRequest request
     ) {
-
         log.info("[Front-end Input] businessNumber: '{}', companyName: '{}', representativeName: '{}', openDate: '{}'",
                 request.businessNumber(),
                 request.companyName(),
@@ -67,5 +70,21 @@ public class CompanyController {
 
         // 성공 시 데이터 없이 { "success": true, "data": null } 형태로 리턴
         return ResponseEntity.ok(ApiResponse.success());
+    }
+
+    /**
+     * 흐름 3: 직원 가입 단계 — 사업자번호로 소속 회사 조회 및 역할군 자격 검증
+     * URL 예시: /api/company/lookup?businessNumber=1234567890&businessRole=SELLER
+     */
+    @GetMapping("/lookup")
+    public ResponseEntity<ApiResponse<CompanyLookupResponse>> lookupCompany(
+            @RequestParam("businessNumber") String businessNumber,
+            @RequestParam("businessRole") String businessRole
+    ) {
+        log.info("[Company Lookup Request] businessNumber: {}, businessRole: {}", businessNumber, businessRole);
+
+        CompanyLookupResponse response = companyService.lookupAndValidateCompany(businessNumber, businessRole);
+
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

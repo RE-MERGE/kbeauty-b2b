@@ -15,21 +15,30 @@ import kr.remerge.stylehub.domain.user.enumtype.UserStatus;
 import java.util.List;
 
 public record SellerSignUpRequest(
-        // ─── 계정 정보 ───
-        @Email(message = "올바른 이메일 형식이 아닙니다.")
+        // 계정 정보
         @NotBlank(message = "이메일은 필수 입력 항목입니다.")
+        @Email(message = "올바른 이메일 형식이 아닙니다.")
         String email,
 
         @NotBlank(message = "비밀번호는 필수 입력 항목입니다.")
         @Size(min = 8, message = "비밀번호는 8자 이상이어야 합니다.")
         String password,
 
-        @NotBlank(message = "이름을 입력해주세요.")
+        @NotBlank(message = "이름은 필수 입력 항목입니다.")
+        @Pattern(
+                regexp = "^([가-힣]{1,5}|[a-zA-Z\\s]{2,20})$",
+                message = "이름은 한글 1~5자 또는 영문 2~20자(공백 포함)로 입력해 주세요."
+        )
         String name,
 
+        @NotBlank(message = "휴대폰 번호는 필수 입력 항목입니다.")
+        @Pattern(
+                regexp = "^01(?:0|1|[6-9])(?:\\d{3}|\\d{4})\\d{4}$",
+                message = "올바른 휴대폰 번호 형식이 아닙니다. 숫자만 입력해 주세요."
+        )
         String phone,
 
-        // ─── 사업자 정보 ───
+        // 사업자 정보
         @NotBlank(message = "사업자등록번호를 입력해주세요.")
         String businessNumber,
 
@@ -45,14 +54,16 @@ public record SellerSignUpRequest(
         @NotBlank(message = "사업자등록증 이미지를 업로드해주세요.")
         String businessLicenseUrl,
 
-        // ─── 매장 정보 ───
+        // 매장 정보
         String brandName,
+        String zipCode,
         String websiteUrl,
+        String representativePhone,
 
         @NotNull(message = "매장 타입을 선택해주세요.")
         CompanyStoreType storeType,
 
-        // ─── 정산 계좌 정보 ───
+        // 정산 계좌 정보
         @NotBlank(message = "은행을 선택해주세요.")
         String bankName,
 
@@ -62,13 +73,12 @@ public record SellerSignUpRequest(
         @NotBlank(message = "예금주명을 입력해주세요.")
         String accountHolder,
 
-        // ─── 카테고리 정보 ───
-        @NotEmpty(message = "선호 카테고리를 선택해주세요.")
-        @Size(min = 3, max = 5, message = "선호 카테고리는 3개에서 5개까지 선택 가능합니다.")
+        // 카테고리 정보
+        @Size(max = 5, message = "선호 카테고리는 5개까지 선택 가능합니다.")
         List<Integer> preferredCategoryIds,
 
         @NotEmpty(message = "취급 카테고리를 선택해주세요.")
-        @Size(min = 3, max = 5, message = "취급 카테고리는 3개에서 5개까지 선택 가능합니다.")
+        @Size(min = 1, max = 5, message = "취급 카테고리는 최소 1개에서 5개까지 선택 가능합니다.")
         List<Integer> handledCategoryIds
 ) {
     public Company toCompanyEntity() {
@@ -76,6 +86,7 @@ public record SellerSignUpRequest(
                 .name(companyName)
                 .businessNumber(businessNumber)
                 .representativeName(representativeName)
+                .representativePhone(representativePhone)
                 .address(address)
                 .addressDetail(addressDetail)
                 .businessLicenseUrl(businessLicenseUrl)

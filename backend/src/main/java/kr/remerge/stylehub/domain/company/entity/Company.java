@@ -4,7 +4,10 @@ import jakarta.persistence.*;
 import kr.remerge.stylehub.domain.company.enumtype.CompanyStatus;
 import kr.remerge.stylehub.domain.company.enumtype.CompanyStoreType;
 import kr.remerge.stylehub.domain.company.enumtype.SellerStatus;
+import kr.remerge.stylehub.domain.user.enumtype.BusinessRole;
 import kr.remerge.stylehub.global.entity.BaseEntity;
+import kr.remerge.stylehub.global.exception.BusinessException;
+import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -94,6 +97,35 @@ public class Company extends BaseEntity {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+// ───────────────────────────────────────────
+// 비즈니스 검증 메서드
+// ───────────────────────────────────────────
+    /**
+     * 직원이 해당 역할군(Role)으로 이 회사에 가입 신청할 수 있는지 검증합니다.
+     * @param businessRole 가입 요청한 직원의 역할군 (BUYER 또는 SELLER)
+     */
+    public void validateEmployeeJoinEligibility(BusinessRole businessRole) {
+        // 1. [공통 회사 상태 검증] 회사의 기본 상태가 PENDING이거나 APPROVED가 아니라면 무조건 가입 불가
+        if (this.status != CompanyStatus.PENDING && this.status != CompanyStatus.APPROVED) {
+            throw new BusinessException(ErrorCode.INVALID_COMPANY_STATUS);
+        }
+
+        // 2. [역할군별 세부 심사 상태(SellerStatus) 검증]
+        if (businessRole == BusinessRole.SELLER) {
+            // 셀러 직원은 회사의 심사 상태가 APPROVED도 아니고 'PENDING도 아니라면' 예외 발생 (&& 연산자 적용)
+            if (this.sellerStatus != SellerStatus.APPROVED && this.sellerStatus != SellerStatus.PENDING) {
+                throw new BusinessException(ErrorCode.COMPANY_NOT_APPROVED);
+            }
+        } else if (businessRole == BusinessRole.BUYER) {
+            // 바이어 직원은 회사가 NONE(최초생성 기본값)이거나 APPROVED(정식승인) 상태여야 함
+            if (this.sellerStatus != SellerStatus.NONE && this.sellerStatus != SellerStatus.APPROVED && this.sellerStatus != SellerStatus.PENDING) {
+                throw new BusinessException(ErrorCode.INVALID_COMPANY_STATUS);
+            }
+        } else {
+            throw new BusinessException(ErrorCode.INVALID_JOIN_ROLE);
+        }
+    }
 
     // ───────────────────────────────────────────
     // 상태 변경 메서드

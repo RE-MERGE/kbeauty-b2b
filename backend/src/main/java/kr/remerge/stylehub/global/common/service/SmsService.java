@@ -18,7 +18,6 @@ public class SmsService {
     @Value("${coolsms.api.from}")
     private String fromNumber;
 
-    // 생성자에서 더 이상 StringRedisTemplate을 받지 않습니다. 깔끔하게 제거!
     public SmsService(
             @Value("${coolsms.api.key}") String apiKey,
             @Value("${coolsms.api.secret}") String apiSecret
@@ -31,6 +30,13 @@ public class SmsService {
      * 성공하면 true, 실패하면 false를 리턴하여 UserService가 흐름을 제어할 수 있게 만듭니다.
      */
     public boolean sendSms(String phone, String messageContent) {
+        String cleanPhone = phone.replaceAll("[^0-9]", "");
+        // [테스트 모드] 특정 마스터 번호는 CoolSMS API를 찌르지 않고 무조건 발송 성공 처리
+        if ("01000000000".equals(cleanPhone)) {
+            log.info("[SMS 발송 우회 (테스트)] 수신처: 01000000000, 내용: {}", messageContent);
+            return true; // API 호출 없이 즉시 성공 리턴!
+        }
+
         // 1. CoolSMS 메시지 객체 생성 및 세팅
         Message message = new Message();
         message.setFrom(fromNumber);
@@ -46,5 +52,21 @@ public class SmsService {
             log.error("[SMS 발송 실패] 수신처: {}, 에러 원인: {}", phone, e.getMessage(), e);
             return false;
         }
+    }
+
+    /**
+     * 1. 회원가입 전용 SMS 발송 위임
+     */
+    public void sendSignUpOtpSms(String phone, String otpCode) {
+        String messageContent = "[StyleHub] 회원가입 인증번호 [" + otpCode + "]를 입력해주세요.";
+        this.sendSms(phone, messageContent); // 기존 문자 발송 공통 메서드 호출
+    }
+
+    /**
+     * 2. 아이디 찾기 전용 SMS 발송 위임
+     */
+    public boolean sendFindIdOtpSms(String phone, String otpCode) {
+        String messageContent = "[StyleHub] 아이디 찾기 인증번호 [" + otpCode + "]를 입력해주세요.";
+        return this.sendSms(phone, messageContent);
     }
 }

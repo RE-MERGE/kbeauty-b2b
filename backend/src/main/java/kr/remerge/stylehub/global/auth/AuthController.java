@@ -3,12 +3,12 @@ package kr.remerge.stylehub.global.auth;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import kr.remerge.stylehub.domain.user.UserService;
-import kr.remerge.stylehub.domain.user.dto.response.FindIdResponse;
-import kr.remerge.stylehub.global.auth.dto.change.LoginRequest;
-import kr.remerge.stylehub.global.auth.dto.change.TokenResponse;
+import kr.remerge.stylehub.global.auth.dto.SignUpAuth;
+import kr.remerge.stylehub.global.auth.dto.change.ChangeAuthRequest;
+import kr.remerge.stylehub.global.auth.dto.change.VerifyChangeAuthRequest;
 import kr.remerge.stylehub.global.auth.dto.find.*;
-import kr.remerge.stylehub.global.auth.dto.login.ChangeAuthRequest;
-import kr.remerge.stylehub.global.auth.dto.login.VerifyChangeAuthRequest;
+import kr.remerge.stylehub.global.auth.dto.login.LoginRequest;
+import kr.remerge.stylehub.global.auth.dto.token.TokenResponse;
 import kr.remerge.stylehub.global.auth.jwt.JwtProperties;
 import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
 import kr.remerge.stylehub.global.exception.BusinessException;
@@ -31,7 +31,7 @@ public class AuthController {
     private final JwtProperties jwtProperties;
 
     // ───────────────────────────────────────────
-    // 일반 로그인
+    // 로그인
     // ───────────────────────────────────────────
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<Void>> login(
@@ -80,7 +80,63 @@ public class AuthController {
                 .header(HttpHeaders.SET_COOKIE, accessTokenCookie.toString())
                 .body(ApiResponse.successWithMessage("토큰이 재발급되었습니다."));
     }
+// ───────────────────────────────────────────
+    // 회원가입 (Register Step 1) 전용 이메일/휴대폰 인증
+    // ───────────────────────────────────────────
 
+    /**
+     * 회원가입 - 이메일 중복 확인 (디바운스 대응)
+     * GET /api/auth/email/check?email=...
+     */
+    @GetMapping("/email/check")
+    public ResponseEntity<ApiResponse<Void>> checkEmailDuplicate(@Valid @RequestParam SignUpAuth.EmailCheckRequest request) {
+        authService.checkEmailDuplicateForSignUp(request.email());
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    /**
+     * 회원가입 - 이메일 인증코드 발송
+     * POST /api/auth/email/send
+     */
+    @PostMapping("/email/send")
+    public ResponseEntity<ApiResponse<Void>> sendSignUpEmailOtp(
+            @Valid @RequestBody SignUpAuth.EmailSendRequest request) {
+        authService.sendSignUpEmailOtp(request.email());
+        return ResponseEntity.ok(ApiResponse.successWithMessage("인증 코드가 이메일로 발송되었습니다."));
+    }
+
+    /**
+     * 회원가입 - 이메일 인증코드 검증
+     * POST /api/auth/email/verify
+     */
+    @PostMapping("/email/verify")
+    public ResponseEntity<ApiResponse<Void>> verifySignUpEmailOtp(
+            @Valid @RequestBody SignUpAuth.EmailVerifyRequest request) {
+        authService.verifySignUpEmailOtp(request.email(), request.code());
+        return ResponseEntity.ok(ApiResponse.successWithMessage("이메일 인증이 완료되었습니다."));
+    }
+
+    /**
+     * 회원가입 - 휴대폰 인증번호 발송 (SENS SMS)
+     * POST /api/auth/phone/send
+     */
+    @PostMapping("/phone/send")
+    public ResponseEntity<ApiResponse<Void>> sendSignUpPhoneOtp(
+            @Valid @RequestBody SignUpAuth.PhoneSendRequest request) {
+        authService.sendSignUpPhoneOtp(request.phone());
+        return ResponseEntity.ok(ApiResponse.successWithMessage("인증번호가 문자로 발송되었습니다."));
+    }
+
+    /**
+     * 회원가입 - 휴대폰 인증번호 검증
+     * POST /api/auth/phone/verify
+     */
+    @PostMapping("/phone/verify")
+    public ResponseEntity<ApiResponse<Void>> verifySignUpPhoneOtp(
+            @Valid @RequestBody SignUpAuth.PhoneVerifyRequest request) {
+        authService.verifySignUpPhoneOtp(request.phone(), request.code());
+        return ResponseEntity.ok(ApiResponse.successWithMessage("휴대폰 본인인증이 완료되었습니다."));
+    }
     // ───────────────────────────────────────────
     // 로그아웃
     // ───────────────────────────────────────────
@@ -131,6 +187,7 @@ public class AuthController {
         }
         return ip;
     }
+
 
     // ───────────────────────────────────────────
     // 아이디 / 비밀번호 찾기 API

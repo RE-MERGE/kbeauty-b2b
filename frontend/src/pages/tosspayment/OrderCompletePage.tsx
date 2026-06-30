@@ -48,7 +48,7 @@ export default function OrderCompletePage() {
                 {/* 버튼 영역 */}
                 <div className="flex flex-col gap-2">
                     <button
-                        onClick={() => navigate('/mypage/orders')} // 프로젝트 주문내역 주소에 맞게 수정하세요
+                        onClick={() => navigate('/buyer/orders')}
                         className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 px-4 rounded-xl transition-colors text-sm"
                     >
                         주문 내역 확인하기

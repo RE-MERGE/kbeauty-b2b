@@ -615,7 +615,7 @@ export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
         setIsLoading(true);
         setLoadError(null);
 
-        const response = await api.get<BuyerOrderListResponse[]>("/orders");
+        const response = await api.get<BuyerOrderListResponse[]>("/buyer/orders");
         const orderResponses = Array.isArray(response) ? response : [];
         const nextOrders = orderResponses.map(mapOrderResponse);
 
@@ -649,7 +649,7 @@ export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
 
     try {
       setLoadingOverviewId(order.id);
-      const overview = await api.get<BuyerOrderOverviewResponse>(`/orders/${order.orderId}`);
+      const overview = await api.get<BuyerOrderOverviewResponse>(`/buyer/orders/${order.orderId}`);
 
       setOrders((previous) =>
         previous.map((current) =>
@@ -1293,7 +1293,7 @@ function OrderActions({
       )}
 
       <Link
-        to={order.orderId ? `/orders/${order.orderId}` : `/orders/${order.id}`}
+        to={order.orderId ? `/buyer/orders/${order.orderId}` : `/buyer/orders/${order.id}`}
         className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-500 transition hover:bg-white hover:text-primary"
       >
         <Eye size={13} />

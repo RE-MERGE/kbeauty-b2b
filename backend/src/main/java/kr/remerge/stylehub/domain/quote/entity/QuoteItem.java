@@ -46,4 +46,7 @@ public class QuoteItem {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "is_sample", nullable = false)
+    private Boolean isSample;
 }

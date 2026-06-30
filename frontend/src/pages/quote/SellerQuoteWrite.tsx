@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import {
   AlertCircle,
   Calendar,
@@ -32,6 +32,7 @@ type QuoteInitData = {
   productName: string;
   brandName: string | null;
   material: string | null;
+  deliveryDate: string | null;
   needSample: "Y" | "N";
   items: QuoteInitItem[];
 };
@@ -70,7 +71,6 @@ type QuoteForm = {
 
 // ─── 파싱 유틸 ──────────────────────────────────────────────────────────────
 
-// "색상:블랙/사이즈:M" → [{ optionName: "색상", optionValue: "블랙" }, ...]
 function parseOptionSummary(optionSummary: string): QuoteOptionValueRow[] {
   return optionSummary
       .split("/")
@@ -268,7 +268,10 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 export function SellerQuoteWrite() {
   const { requestId } = useParams<{ requestId: string }>();
-  const [submitted, setSubmitted] = useState(false);
+  const navigate = useNavigate();
+
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [initData, setInitData] = useState<QuoteInitData | null>(null);
 
@@ -405,28 +408,47 @@ export function SellerQuoteWrite() {
           ? `${form.sellerMemo}${form.sellerMemo.trim() ? "\n\n" : ""}[샘플 제공 조건]\n${sampleSummary}`
           : form.sellerMemo;
 
-  const submitPayload = {
-    sourcing_id: requestId,
-    brand_name: form.brandName,
-    product_name: form.productName,
-    category_name: form.categoryName,
-    material: form.material,
-    lead_time_days: toNumber(form.leadTimeDays),
-    delivery_company: form.deliveryCompany,
-    shipping_fee: shippingFee,
-    valid_until: getValidUntil(form.validDays, form.customValidDays),
-    sample_available: form.sampleAvailable,
-    seller_memo: sellerMemoWithSample,
-    subtotal_amount: subtotalAmount,
-    total_amount: totalAmount,
-    status: "SUBMITTED",
-    quote_items: quoteItemSnapshots,
-    sample_items: form.sampleAvailable === "AVAILABLE" ? sampleItemSnapshots : [],
-  };
+  // ── 제출 ─────────────────────────────────────────────────────────────────
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setSubmitError(null);
 
-  const handleSubmit = () => {
-    console.log("견적서 제출 payload", submitPayload);
-    setSubmitted(true);
+    const payload = {
+      sourcing_id: requestId ? Number(requestId) : undefined,
+      brand_name: form.brandName,
+      product_name: form.productName,
+      category_name: form.categoryName,
+      material: form.material,
+      lead_time_days: toNumber(form.leadTimeDays),
+      delivery_company: form.deliveryCompany,
+      shipping_fee: shippingFee,
+      valid_until: getValidUntil(form.validDays, form.customValidDays),
+      sample_available: form.sampleAvailable,
+      seller_memo: sellerMemoWithSample,
+      subtotal_amount: subtotalAmount,
+      total_amount: totalAmount,
+      quote_items: quoteItemSnapshots,
+      sample_items: form.sampleAvailable === "AVAILABLE" ? sampleItemSnapshots : [],
+    };
+
+    try {
+      const res = await fetch("/api/quotes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("견적서 제출에 실패했습니다.");
+
+      const quoteData = await res.json();
+
+      // QuoteDetail로 이동 - quoteData 전체를 location.state로 전달
+      navigate(`/seller/quotes/${quoteData.quote_id}`, { state: { quote: quoteData } });
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // ── 로딩 ─────────────────────────────────────────────────────────────────
@@ -434,42 +456,6 @@ export function SellerQuoteWrite() {
     return (
         <div className="flex min-h-screen items-center justify-center bg-slate-50">
           <p className="text-sm text-slate-500">소싱 요청 정보를 불러오는 중...</p>
-        </div>
-    );
-  }
-
-  // ── 제출 완료 ─────────────────────────────────────────────────────────────
-  if (submitted) {
-    return (
-        <div className="min-h-screen bg-slate-50 px-4 py-16">
-          <div className="mx-auto max-w-[640px] rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
-              <CheckCircle2 size={36} className="text-primary" />
-            </div>
-            <h2 className="mb-3 text-2xl font-bold text-slate-950">견적서가 제출되었습니다</h2>
-            <p className="mb-8 text-sm leading-relaxed text-slate-500">
-              바이어에게 견적서가 전달되었습니다. 채택 또는 협의 요청이 오면 알림으로 안내됩니다.
-            </p>
-            <div className="mb-8 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-left text-xs text-amber-800">
-              <Info size={14} className="mt-0.5 shrink-0" />
-              <span>채택 전까지는 바이어 협의 요청에 따라 수정 견적서를 다시 제출할 수 있습니다.</span>
-            </div>
-            <div className="flex justify-center gap-3">
-              <Link
-                  to="/seller"
-                  className="rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-primary/90"
-              >
-                셀러 대시보드
-              </Link>
-              <button
-                  type="button"
-                  onClick={() => setSubmitted(false)}
-                  className="rounded-lg border border-slate-200 px-6 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-primary hover:text-primary"
-              >
-                작성 화면으로 돌아가기
-              </button>
-            </div>
-          </div>
         </div>
     );
   }
@@ -530,7 +516,7 @@ export function SellerQuoteWrite() {
                           : "-"
                     }
                 />
-                <RequestMetric label="희망 납기" value="-" />
+                <RequestMetric label="희망 납기" value={initData?.deliveryDate ?? "-"} />
                 <RequestMetric label="소재" value={initData?.material ?? "-"} />
               </div>
 
@@ -929,6 +915,16 @@ export function SellerQuoteWrite() {
                 />
               </section>
 
+              {/* 에러 메시지 */}
+              {submitError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                    <div className="flex gap-3 text-xs leading-5 text-red-700">
+                      <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                      <span>{submitError}</span>
+                    </div>
+                  </div>
+              )}
+
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <div className="flex gap-3 text-xs leading-5 text-amber-800">
                   <AlertCircle size={15} className="mt-0.5 shrink-0" />
@@ -977,10 +973,11 @@ export function SellerQuoteWrite() {
                 <button
                     type="button"
                     onClick={handleSubmit}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-bold text-white transition hover:bg-primary/90"
+                    disabled={submitting}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-bold text-white transition hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <Send size={16} />
-                  견적서 제출
+                  {submitting ? "제출 중..." : "견적서 제출"}
                 </button>
 
                 <Link

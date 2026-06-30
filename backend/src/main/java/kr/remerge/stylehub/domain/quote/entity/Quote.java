@@ -123,4 +123,17 @@ public class Quote{
 
     @Column(name = "expired_at")
     private LocalDateTime expiredAt;
+
+    public void changeStatus(String status) {
+        this.status = status;
+        LocalDateTime now = LocalDateTime.now();
+        switch (status) {
+            case "APPROVED" -> this.acceptedAt = now;
+            case "NEGOTIATING" -> this.negotiatedAt = now;
+            case "EXPIRED" -> this.expiredAt = now;
+            default -> {
+                // REJECTED, SAMPLE_REQUESTED는 별도 타임스탬프 없음
+            }
+        }
+    }
 }

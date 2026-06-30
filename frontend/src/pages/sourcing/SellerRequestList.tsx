@@ -29,12 +29,13 @@ interface SellerSourcingResponse {
   detail: string | null;
   supplierStatus: SupplierStatus;
   sourcingStatus: SourcingStatus;
+  myQuote: QuoteSummary | null;
 }
 
 type BidSubmitStatus = "제출됨" | "샘플결제됨" | "샘플출고완료" | "승인" | "거절";
 
 interface MyBid {
-  bidId: string; requestId: number; type: SourcingType;
+  bidId: string; quoteId: number; requestId: number; type: SourcingType;
   unitPrice?: string; totalBudget?: string; samplePrice?: string;
   availableDate?: string; expiryDate?: string;
   quoteFile?: File | null; comment?: string;
@@ -54,6 +55,42 @@ async function fetchSellerPastRequests(type: SourcingType): Promise<SellerSourci
   const res = await fetch(`${BASE_URL}/requests/past?type=${type}`);
   if (!res.ok) throw new Error("이전 요청 조회 실패");
   return res.json();
+}
+
+// 셀러 본인이 제출한 견적 요약 (SellerSourcingResponse.myQuote로 함께 내려옴)
+interface QuoteSummary {
+  quoteId: number;
+  quoteNo: string;
+  unitPrice: number | null;
+  totalAmount: number;
+  leadTimeDays: number;
+  validUntil: string | null;
+  status: string;
+  submittedAt: string | null;
+}
+
+const QUOTE_STATUS_TO_BID_STATUS: Record<string, BidSubmitStatus> = {
+  SUBMITTED: "제출됨",
+  SAMPLE_REQUESTED: "샘플결제됨",
+  APPROVED: "승인",
+  REJECTED: "거절",
+  NEGOTIATING: "제출됨",
+  EXPIRED: "거절",
+};
+
+function toMyBid(q: QuoteSummary, requestId: number, type: SourcingType): MyBid {
+  return {
+    bidId: q.quoteNo,
+    quoteId: q.quoteId,
+    requestId,
+    type,
+    unitPrice: q.unitPrice != null ? String(q.unitPrice) : undefined,
+    totalBudget: q.totalAmount != null ? String(q.totalAmount) : undefined,
+    availableDate: q.validUntil?.slice(0, 10),
+    expiryDate: q.validUntil?.slice(0, 10),
+    status: QUOTE_STATUS_TO_BID_STATUS[q.status] ?? "제출됨",
+    submittedAt: q.submittedAt?.slice(0, 10) ?? "",
+  };
 }
 
 async function declineRequest(sourcingSupplierId: number, feedback: string): Promise<void> {
@@ -436,18 +473,22 @@ function RequestRow({ req, myBids, onDecline, onViewBid, onShip, onDetail }: {
             {isCustom && <div className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${req.needSample === "Y" ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-secondary text-muted-foreground border-border"}`}>샘플 {req.needSample === "Y" ? "필요" : "불필요"}</div>}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-                onClick={() => onDecline(req)}
-                className="flex items-center gap-1 px-3 py-2 border border-red-200 text-red-500 hover:bg-red-50 rounded text-xs font-semibold transition-colors"
-            >
-              <XCircle size={12} /> 거절
-            </button>
-            <button
-                onClick={() => navigate(`/seller/sourcing/${req.sourcingRequestId}/quote`, { state: { request: req } })}
-                className="flex items-center gap-1 px-3 py-2 bg-primary hover:bg-primary/90 text-white rounded text-xs font-semibold transition-colors"
-            >
-              <Zap size={12} /> 견적 제출
-            </button>
+            {myBids.length === 0 && (
+                <>
+                  <button
+                      onClick={() => onDecline(req)}
+                      className="flex items-center gap-1 px-3 py-2 border border-red-200 text-red-500 hover:bg-red-50 rounded text-xs font-semibold transition-colors"
+                  >
+                    <XCircle size={12} /> 거절
+                  </button>
+                  <button
+                      onClick={() => navigate(`/seller/sourcing/${req.sourcingRequestId}/quote`, { state: { request: req } })}
+                      className="flex items-center gap-1 px-3 py-2 bg-primary hover:bg-primary/90 text-white rounded text-xs font-semibold transition-colors"
+                  >
+                    <Zap size={12} /> 견적 제출
+                  </button>
+                </>
+            )}
             <button
                 onClick={() => setExpanded(!expanded)}
                 className={`flex items-center gap-1 px-3 py-2 border rounded text-xs font-semibold transition-colors ${myBids.length > 0 ? "border-primary text-primary hover:bg-primary/5" : "border-border text-muted-foreground hover:border-primary hover:text-primary"}`}
@@ -504,6 +545,7 @@ function PastRow({ req }: { req: SellerSourcingResponse }) {
 
 // ── 메인 ─────────────────────────────────────────────────────────────
 export function SellerRequestList() {
+  const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<SourcingType>("READY");
   const [subTab, setSubTab] = useState<"current" | "my" | "past">("current");
@@ -533,6 +575,12 @@ export function SellerRequestList() {
         data = await fetchSellerPastRequests(activeTab);
       }
       setRequests(data);
+
+      // 목록 응답에 포함된 myQuote로 바로 매핑 (별도 API 호출 없음)
+      const entries = data
+          .filter((req) => req.myQuote)
+          .map((req) => [req.sourcingRequestId, [toMyBid(req.myQuote!, req.sourcingRequestId, activeTab)]] as [number, MyBid[]]);
+      setMyBids(Object.fromEntries(entries));
     } catch (e) {
       console.error(e);
     } finally {
@@ -661,7 +709,7 @@ export function SellerRequestList() {
                               key={req.sourcingRequestId} req={req}
                               myBids={myBids[req.sourcingRequestId] ?? []}
                               onDecline={setDeclineReq}
-                              onViewBid={(bid) => setViewBid({ bid, requestName: req.productName })}
+                              onViewBid={(bid) => navigate(`/seller/quotes/${bid.quoteId}`)}
                               onShip={(bid) => setShipBid({ bid, requestName: req.productName })}
                               onDetail={setSelectedDetail}
                           />

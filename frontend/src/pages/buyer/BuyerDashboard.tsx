@@ -345,7 +345,7 @@ function StatCards() {
     {
       label: "주문 관리", count: COUNTS.receipts,
       icon: <CheckSquare size={16} />,
-      href: "/orders",
+      href: "/buyer/orders",
       urgent: COUNTS.urgentReceipts,
       urgentLabel: "자동확정 임박",
     },

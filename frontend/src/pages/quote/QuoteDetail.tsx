@@ -92,11 +92,9 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
 
   useEffect(() => {
     if (!quoteId) return;
-    // location.state로 받은 데이터가 있어도, 최신 상태(다른 회사 채택 여부 등) 확인을 위해 한 번 더 조회
     fetchQuote(quoteId)
         .then(setQuote)
         .catch((e) => {
-          // state로 받은 데이터가 있으면 조회 실패해도 그걸로 화면은 띄움
           if (!initialQuote) {
             setLoadError(e instanceof Error ? e.message : "견적 조회에 실패했습니다.");
           }

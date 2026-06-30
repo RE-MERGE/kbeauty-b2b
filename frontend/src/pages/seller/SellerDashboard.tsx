@@ -6,6 +6,7 @@ import {
     Bell,
     CheckCircle,
     ChevronRight,
+    ClipboardList,
     Clock,
     FileText,
     Inbox,
@@ -800,6 +801,23 @@ export function SellerDashboard() {
                     </div>
                 </div>
             </header>
+
+            <nav className="mb-5 flex items-center gap-1 border-b border-slate-200">
+                <Link
+                    to="/seller"
+                    className="inline-flex h-11 items-center gap-2 border-b-2 border-primary px-4 text-sm font-bold text-primary"
+                >
+                    <Layers size={15} />
+                    대시보드
+                </Link>
+                <Link
+                    to="/seller/orders"
+                    className="inline-flex h-11 items-center gap-2 border-b-2 border-transparent px-4 text-sm font-bold text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                >
+                    <ClipboardList size={15} />
+                    주문 관리
+                </Link>
+            </nav>
 
             {/* ── 긴급 알림 배너 ── */}
             <AlertBanner />

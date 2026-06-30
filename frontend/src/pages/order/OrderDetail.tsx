@@ -602,7 +602,7 @@ export function OrderDetail() {
         setError("");
 
         const response = await api.get<BuyerOrderDetailResponse>(
-          `/orders/${orderId}/detail`
+          `/buyer/orders/${orderId}/detail`
         );
 
         setOrder(mapOrderDetailResponse(response));
@@ -635,7 +635,7 @@ export function OrderDetail() {
         <h1 className="text-xl font-black text-slate-950">
           {error || "주문을 찾을 수 없습니다"}
         </h1>
-        <Link to="/orders" className="mt-5 inline-flex rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-white">
+        <Link to="/buyer/orders" className="mt-5 inline-flex rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-white">
           주문 목록으로
         </Link>
       </div>
@@ -648,7 +648,7 @@ export function OrderDetail() {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-8">
       <div className="mx-auto max-w-[1240px]">
-        <Link to="/orders" className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-primary">
+        <Link to="/buyer/orders" className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-primary">
           <ArrowLeft size={16} />
           주문 목록으로 돌아가기
         </Link>

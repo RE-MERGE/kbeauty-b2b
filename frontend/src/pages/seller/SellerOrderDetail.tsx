@@ -1,20 +1,19 @@
-import { useState } from "react";
-import { useParams, Link } from "react-router";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Link, useParams } from "react-router";
 import {
+  AlertCircle,
+  CheckCircle,
+  ChevronLeft,
+  Clock,
+  CreditCard,
+  History,
+  MapPin,
   Package,
   Truck,
-  CheckCircle,
-  Clock,
   XCircle,
-  ChevronLeft,
-  AlertCircle,
-  FileText,
-  MessageSquare,
-  MapPin,
-  RotateCcw,
-  Send,
-  Printer,
 } from "lucide-react";
+import api from "@/api/axios";
+import { useAuthStore } from "@/store/useAuthStore";
 
 type OrderStatus =
   | "PENDING"
@@ -22,211 +21,277 @@ type OrderStatus =
   | "PREPARING"
   | "SHIPPED"
   | "DELIVERED"
-  | "CANCELLED";
+  | "COMPLETED"
+  | "DISPUTE"
+  | "CANCELED"
+  | "REFUNDED";
+
+type SellerOrderItemResponse = {
+  orderItemId: number;
+  productName: string;
+  optionSummary: string | null;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  productImageUrl: string | null;
+  itemStatus: "WAITING" | "READY";
+  preparedAt: string | null;
+};
+
+type PaymentMethod = "TRANSFER" | "CORP_CARD";
+type OrderLogType = "STATUS" | "PROCESS";
+
+type SellerOrderAmountResponse = {
+  subtotalAmount: number;
+  shippingFee: number;
+  platformFee: number;
+  totalAmount: number;
+  paymentMethod: PaymentMethod | null;
+};
+
+type SellerOrderDeliveryResponse = {
+  receiverName: string;
+  receiverPhone: string;
+  receiverZipcode: string | null;
+  receiverAddress: string;
+  receiverAddressDetail: string | null;
+  receiverMemo: string | null;
+  carrier: string | null;
+  trackingNumber: string | null;
+  shippedAt: string | null;
+  deliveredAt: string | null;
+};
+
+type SellerOrderLogResponse = {
+  orderLogId: number;
+  logType: OrderLogType;
+  previousStatus: OrderStatus | null;
+  newStatus: OrderStatus | null;
+  processStep: string | null;
+  actorName: string;
+  memo: string | null;
+  createdAt: string;
+};
+
+type SellerOrderDetailResponse = {
+  orderId: number;
+  orderNo: string;
+  buyerCompanyName: string;
+  orderStatus: OrderStatus;
+  isSample: boolean;
+  items: SellerOrderItemResponse[];
+  createdAt: string;
+  amountSummary: SellerOrderAmountResponse;
+  delivery: SellerOrderDeliveryResponse;
+  statusLogs: SellerOrderLogResponse[];
+  preparation: {
+    totalItemCount: number;
+    readyItemCount: number;
+    allItemsReady: boolean;
+  };
+};
 
 const statusConfig: Record<
   OrderStatus,
-  { label: string; color: string; bg: string; icon: React.ReactNode }
+  { label: string; className: string; icon: ReactNode }
 > = {
   PENDING: {
     label: "결제 대기",
-    color: "text-amber-700",
-    bg: "bg-amber-50 border-amber-200",
+    className: "border-amber-200 bg-amber-50 text-amber-700",
     icon: <Clock size={14} />,
   },
   CONFIRMED: {
-    label: "주문 확인",
-    color: "text-blue-700",
-    bg: "bg-blue-50 border-blue-200",
+    label: "결제 완료",
+    className: "border-blue-200 bg-blue-50 text-blue-700",
     icon: <CheckCircle size={14} />,
   },
   PREPARING: {
-    label: "준비 중",
-    color: "text-purple-700",
-    bg: "bg-purple-50 border-purple-200",
+    label: "출고 준비",
+    className: "border-purple-200 bg-purple-50 text-purple-700",
     icon: <Package size={14} />,
   },
   SHIPPED: {
     label: "배송 중",
-    color: "text-primary",
-    bg: "bg-secondary border-primary/20",
+    className: "border-primary/20 bg-secondary text-primary",
     icon: <Truck size={14} />,
   },
   DELIVERED: {
     label: "배송 완료",
-    color: "text-green-700",
-    bg: "bg-green-50 border-green-200",
+    className: "border-green-200 bg-green-50 text-green-700",
     icon: <CheckCircle size={14} />,
   },
-  CANCELLED: {
-    label: "취소됨",
-    color: "text-red-700",
-    bg: "bg-red-50 border-red-200",
+  COMPLETED: {
+    label: "거래 완료",
+    className: "border-green-200 bg-green-50 text-green-700",
+    icon: <CheckCircle size={14} />,
+  },
+  DISPUTE: {
+    label: "이의제기",
+    className: "border-red-200 bg-red-50 text-red-700",
+    icon: <AlertCircle size={14} />,
+  },
+  CANCELED: {
+    label: "주문 취소",
+    className: "border-red-200 bg-red-50 text-red-700",
     icon: <XCircle size={14} />,
   },
+  REFUNDED: {
+    label: "환불 완료",
+    className: "border-slate-200 bg-slate-50 text-slate-700",
+    icon: <CheckCircle size={14} />,
+  },
 };
 
-const SHIPPING_COMPANIES = [
-  "CJ대한통운",
-  "롯데택배",
-  "한진택배",
-  "로젠택배",
-  "우체국택배",
+const formatDate = (value: string) =>
+  new Date(value).toLocaleString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+const paymentMethodLabel: Record<PaymentMethod, string> = {
+  TRANSFER: "무통장 입금",
+  CORP_CARD: "법인카드",
+};
+
+const normalOrderStatuses: OrderStatus[] = [
+  "PENDING",
+  "CONFIRMED",
+  "PREPARING",
+  "SHIPPED",
+  "DELIVERED",
+  "COMPLETED",
 ];
 
-type SizeItem = {
-  size: string;
-  color: string;
-  quantity: number;
-  unitPrice: number;
-};
-
-const ordersData: Record<
-  string,
-  {
-    id: string;
-    date: string;
-    buyerName: string;
-    buyerBusiness: string;
-    buyerPhone: string;
-    status: OrderStatus;
-    trackingNo: string | null;
-    trackingCompany: string | null;
-    items: {
-      productName: string;
-      image: string;
-      sizes: SizeItem[];
-    }[];
-    shippingFee: number;
-    isFreeShipping: boolean;
-    address: {
-      recipient: string;
-      phone: string;
-      address: string;
-      detail: string;
-    };
-    paymentMethod: string;
-    notes?: string;
-    returnRequest?: {
-      type: "반품" | "교환";
-      reason: string;
-      detail: string;
-      requestedAt: string;
-      status: "접수" | "처리중" | "완료";
-    };
-  }
-> = {
-  "ORD-2024-0841": {
-    id: "ORD-2024-0841",
-    date: "2024.05.14",
-    buyerName: "김민재",
-    buyerBusiness: "스타일마켓㈜",
-    buyerPhone: "010-1234-5678",
-    status: "PREPARING",
-    trackingNo: null,
-    trackingCompany: null,
-    items: [
-      {
-        productName: "여성 린넨 오버핏 블라우스",
-        image:
-          "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=160&h=160&fit=crop&auto=format",
-        sizes: [
-          { size: "S", color: "화이트", quantity: 10, unitPrice: 12000 },
-          { size: "M", color: "화이트", quantity: 20, unitPrice: 12000 },
-          { size: "L", color: "화이트", quantity: 15, unitPrice: 12000 },
-          { size: "M", color: "베이지", quantity: 15, unitPrice: 12000 },
-          { size: "L", color: "베이지", quantity: 10, unitPrice: 12000 },
-        ],
-      },
-      {
-        productName: "와이드 린넨 슬랙스",
-        image:
-          "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=160&h=160&fit=crop&auto=format",
-        sizes: [
-          { size: "S", color: "아이보리", quantity: 10, unitPrice: 18000 },
-          { size: "M", color: "아이보리", quantity: 15, unitPrice: 18000 },
-        ],
-      },
-    ],
-    shippingFee: 0,
-    isFreeShipping: true,
-    address: {
-      recipient: "김민재",
-      phone: "010-1234-5678",
-      address: "서울특별시 마포구 합정동 123-4",
-      detail: "스타일마켓㈜ 1층",
-    },
-    paymentMethod: "계좌이체",
-    notes: "포장 꼼꼼하게 부탁드립니다.",
-  },
-  "ORD-2024-0799": {
-    id: "ORD-2024-0799",
-    date: "2024.05.10",
-    buyerName: "박지수",
-    buyerBusiness: "온라인샵 패션픽",
-    buyerPhone: "010-9876-5432",
-    status: "SHIPPED",
-    trackingNo: "598412873021",
-    trackingCompany: "CJ대한통운",
-    items: [
-      {
-        productName: "플리츠 미디 스커트",
-        image:
-          "https://images.unsplash.com/photo-1583496661160-fb5886a13d27?w=160&h=160&fit=crop&auto=format",
-        sizes: [
-          { size: "S", color: "블랙", quantity: 10, unitPrice: 15000 },
-          { size: "M", color: "블랙", quantity: 20, unitPrice: 15000 },
-          { size: "M", color: "그레이", quantity: 15, unitPrice: 15000 },
-        ],
-      },
-    ],
-    shippingFee: 3000,
-    isFreeShipping: false,
-    address: {
-      recipient: "박지수",
-      phone: "010-9876-5432",
-      address: "경기도 성남시 분당구 판교로 235",
-      detail: "패션픽 사무실",
-    },
-    paymentMethod: "기업카드",
-    returnRequest: {
-      type: "교환",
-      reason: "사이즈 불일치",
-      detail:
-        "M 사이즈가 실제로 너무 작게 나온 것 같습니다. L 사이즈로 교환 요청드립니다.",
-      requestedAt: "2024.05.13 14:22",
-      status: "접수",
-    },
-  },
-};
+const exceptionStatuses: OrderStatus[] = [
+  "DISPUTE",
+  "CANCELED",
+  "REFUNDED",
+];
 
 export function SellerOrderDetail() {
   const { id } = useParams<{ id: string }>();
-  const order = id ? ordersData[id] : null;
+  const user = useAuthStore((state) => state.user);
+  const [order, setOrder] = useState<SellerOrderDetailResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
+  const [isUpdatingAll, setIsUpdatingAll] = useState(false);
+  const [actionNotice, setActionNotice] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
-  const [trackingCompany, setTrackingCompany] = useState("");
-  const [trackingNo, setTrackingNo] = useState("");
-  const [showTrackingForm, setShowTrackingForm] = useState(false);
-  const [shipped, setShipped] = useState(false);
+  const loadOrderDetail = useCallback(
+    async (showLoading = true) => {
+      if (!id) {
+        setLoadError("주문 번호가 올바르지 않습니다.");
+        setIsLoading(false);
+        return;
+      }
 
-  const handlePdfPrint = () => {
-    window.print();
+      try {
+        if (showLoading) {
+          setIsLoading(true);
+        }
+        setLoadError("");
+        const response = await api.get<SellerOrderDetailResponse>(
+          `/seller/orders/${id}`
+        );
+        setOrder(response);
+      } catch (error) {
+        console.error("셀러 주문 상세 조회 실패", error);
+        setLoadError(
+          error instanceof Error
+            ? error.message
+            : "주문 상세를 불러오지 못했습니다."
+        );
+      } finally {
+        if (showLoading) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [id]
+  );
+
+  useEffect(() => {
+    void loadOrderDetail();
+  }, [loadOrderDetail]);
+
+  const handleMarkItemReady = async (orderItemId: number) => {
+    try {
+      setUpdatingItemId(orderItemId);
+      setActionNotice(null);
+      await api.patch(`/seller/orders/items/${orderItemId}/ready`);
+      await loadOrderDetail(false);
+      setActionNotice({
+        type: "success",
+        message: "담당 상품을 준비 완료 처리했습니다.",
+      });
+    } catch (error) {
+      setActionNotice({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "상품 준비 상태를 변경하지 못했습니다.",
+      });
+    } finally {
+      setUpdatingItemId(null);
+    }
   };
 
-  if (!order) {
+  const handleMarkAllItemsReady = async () => {
+    if (!id) return;
+
+    try {
+      setIsUpdatingAll(true);
+      setActionNotice(null);
+      await api.patch(`/seller/orders/${id}/items/ready`);
+      await loadOrderDetail(false);
+      setActionNotice({
+        type: "success",
+        message: "주문의 모든 상품을 준비 완료 처리했습니다.",
+      });
+    } catch (error) {
+      setActionNotice({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "전체 상품 준비 상태를 변경하지 못했습니다.",
+      });
+    } finally {
+      setIsUpdatingAll(false);
+    }
+  };
+
+  if (isLoading) {
     return (
-      <div className="max-w-[1280px] mx-auto px-4 py-16 text-center">
-        <Package
-          size={48}
-          className="mx-auto mb-4 opacity-30 text-muted-foreground"
+      <div className="mx-auto max-w-[1180px] px-4 py-16 text-center text-sm text-muted-foreground">
+        주문 상세를 불러오는 중입니다.
+      </div>
+    );
+  }
+
+  if (loadError || !order) {
+    return (
+      <div className="mx-auto max-w-[1180px] px-4 py-16 text-center">
+        <AlertCircle
+          size={42}
+          className="mx-auto mb-4 text-muted-foreground/50"
         />
-        <h2 className="text-xl font-bold text-foreground mb-2">
-          주문을 찾을 수 없습니다
+        <h2 className="mb-2 text-lg font-bold text-foreground">
+          주문 상세를 불러오지 못했습니다.
         </h2>
-        <p className="text-muted-foreground mb-5">주문번호를 확인해 주세요.</p>
+        <p className="mb-5 text-sm text-muted-foreground">{loadError}</p>
         <Link
           to="/seller/orders"
-          className="bg-primary hover:bg-primary/90 text-white px-6 py-2.5 rounded font-semibold text-sm transition-colors"
+          className="inline-flex rounded bg-primary px-5 py-2.5 text-sm font-semibold text-white"
         >
           주문 목록으로
         </Link>
@@ -234,443 +299,372 @@ export function SellerOrderDetail() {
     );
   }
 
-  const status = statusConfig[order.status];
-
-  const totalQty = order.items.reduce(
-    (sum, item) => sum + item.sizes.reduce((s, sz) => s + sz.quantity, 0),
+  const status = statusConfig[order.orderStatus];
+  const totalQuantity = order.items.reduce(
+    (sum, item) => sum + item.quantity,
     0
   );
-
-  const subtotal = order.items.reduce(
-    (sum, item) =>
-      sum + item.sizes.reduce((s, sz) => s + sz.quantity * sz.unitPrice, 0),
-    0
+  const currentNormalStatusIndex = normalOrderStatuses.indexOf(
+    order.orderStatus
   );
-
-  const total = subtotal + (order.isFreeShipping ? 0 : order.shippingFee);
-
-  const handleShip = () => {
-    if (!trackingCompany || !trackingNo) return;
-    setShipped(true);
-    setShowTrackingForm(false);
-  };
+  const isPresident = user?.role === "PRESIDENT";
+  const isEmployee = user?.role === "EMPLOYEE";
+  const canPrepareItems =
+    order.orderStatus === "CONFIRMED" || order.orderStatus === "PREPARING";
+  const exceptionLogs = order.statusLogs.filter(
+    (log) => log.newStatus && exceptionStatuses.includes(log.newStatus)
+  );
 
   return (
-    <div className="max-w-[1280px] mx-auto px-4 py-8">
+    <div className="mx-auto max-w-[1180px] px-4 py-8">
       <Link
         to="/seller/orders"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors mb-5"
+        className="mb-5 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-primary"
       >
-        <ChevronLeft size={14} />
+        <ChevronLeft size={15} />
         주문 목록으로
       </Link>
 
-      <div className="bg-gradient-to-r from-[#1a2e1a] to-[#2d4a35] text-white rounded-lg p-6 mb-5">
-        <div className="flex items-start justify-between gap-4">
+      <section className="mb-5 rounded-lg bg-[#24352d] px-6 py-5 text-white">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-xl font-bold font-mono">{order.id}</h1>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="rounded border border-white/25 px-2 py-1 text-xs">
+                {order.isSample ? "샘플 주문" : "일반 주문"}
+              </span>
               <span
-                className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full border bg-white/90 ${status.color}`}
+                className={`inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-semibold ${status.className}`}
               >
                 {status.icon}
                 {status.label}
               </span>
             </div>
-
-            <div className="flex flex-wrap items-center gap-4 text-sm text-white/70">
-              <span>주문일: {order.date}</span>
-              <span>
-                바이어:{" "}
-                <span className="text-white font-medium">
-                  {order.buyerBusiness}
-                </span>
-              </span>
-              {(order.trackingNo || shipped) && (
-                <span className="font-mono text-white/90">
-                  {order.trackingCompany ?? trackingCompany}{" "}
-                  {order.trackingNo ?? trackingNo}
-                </span>
-              )}
-            </div>
+            <h1 className="font-mono text-xl font-bold">{order.orderNo}</h1>
+            <p className="mt-2 text-sm text-white/65">
+              구매 회사 {order.buyerCompanyName} · 주문일{" "}
+              {formatDate(order.createdAt)}
+            </p>
           </div>
 
           <div className="text-right">
-            <div className="text-2xl font-bold">
-              ₩{total.toLocaleString()}
-            </div>
-            <div className="text-xs text-white/60 mt-0.5">
-              총 {totalQty.toLocaleString()}장
-            </div>
+            <p className="text-2xl font-bold">
+              {order.amountSummary.totalAmount.toLocaleString()}원
+            </p>
+            <p className="mt-1 text-xs text-white/65">
+              총 {totalQuantity.toLocaleString()}개
+            </p>
           </div>
         </div>
-      </div>
+      </section>
 
-      {order.returnRequest && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-5 flex items-start gap-3">
-          <RotateCcw size={16} className="text-red-500 mt-0.5 shrink-0" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-red-800 mb-0.5">
-              {order.returnRequest.type} 요청이 접수되었습니다
-            </p>
-            <p className="text-xs text-red-700">
-              사유: {order.returnRequest.reason} ·{" "}
-              {order.returnRequest.requestedAt}
-            </p>
-            <p className="text-xs text-red-600 mt-1">
-              {order.returnRequest.detail}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button className="text-xs border border-red-300 text-red-600 hover:bg-red-100 px-3 py-1.5 rounded transition-colors font-medium">
-              거절
-            </button>
-            <button className="text-xs bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded transition-colors font-medium">
-              승인 처리
-            </button>
-          </div>
+      {actionNotice && (
+        <div
+          className={`mb-5 flex items-center justify-between gap-3 border px-4 py-3 text-sm font-semibold ${
+            actionNotice.type === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          <span>{actionNotice.message}</span>
+          <button
+            type="button"
+            onClick={() => setActionNotice(null)}
+            className="text-xs font-bold"
+          >
+            닫기
+          </button>
         </div>
       )}
 
-      <div className="grid grid-cols-[1fr_320px] gap-5">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-5">
-          <div className="bg-white border border-border rounded-lg overflow-hidden">
-            <div className="px-5 py-4 border-b border-border">
-              <h2 className="font-bold text-foreground flex items-center gap-2">
-                <Package size={16} className="text-primary" />
-                주문 상품
+          <section className="overflow-hidden rounded-lg border border-border bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
+              <div>
+                <h2 className="flex items-center gap-2 font-bold text-foreground">
+                  <Package size={17} className="text-primary" />
+                  주문 상품
+                </h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  준비 완료 {order.preparation.readyItemCount} /{" "}
+                  {order.preparation.totalItemCount}
+                  {order.preparation.allItemsReady
+                    ? " · 모든 상품 준비 완료"
+                    : " · 출고 준비 진행 중"}
+                </p>
+              </div>
+              {isPresident &&
+                canPrepareItems &&
+                !order.preparation.allItemsReady && (
+                  <button
+                    type="button"
+                    disabled={isUpdatingAll}
+                    onClick={() => void handleMarkAllItemsReady()}
+                    className="h-9 bg-primary px-3 text-xs font-bold text-white transition hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isUpdatingAll ? "처리 중" : "전체 준비 완료"}
+                  </button>
+                )}
+            </div>
+
+            {order.items.length === 0 ? (
+              <div className="px-5 py-12 text-center text-sm text-muted-foreground">
+                조회된 주문 상품이 없습니다.
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {order.items.map((item) => (
+                  <article
+                    key={item.orderItemId}
+                    className="grid gap-4 px-5 py-5 sm:grid-cols-[88px_minmax(0,1fr)_120px]"
+                  >
+                    <div className="flex h-[88px] w-[88px] items-center justify-center overflow-hidden rounded border border-border bg-muted/40">
+                      {item.productImageUrl ? (
+                        <img
+                          src={item.productImageUrl}
+                          alt={item.productName}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <Package
+                          size={28}
+                          className="text-muted-foreground/40"
+                        />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-semibold text-foreground">
+                        {item.productName}
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {item.optionSummary || "기본 옵션"}
+                      </p>
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        {item.quantity.toLocaleString()}개 x{" "}
+                        {item.unitPrice.toLocaleString()}원
+                      </p>
+                    </div>
+                    <div className="self-center text-left sm:text-right">
+                      <span
+                        className={`mb-2 inline-flex border px-2 py-1 text-xs font-semibold ${
+                          item.itemStatus === "READY"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-slate-200 bg-slate-50 text-slate-500"
+                        }`}
+                      >
+                        {item.itemStatus === "READY"
+                          ? "준비 완료"
+                          : "준비 전"}
+                      </span>
+                      <p className="font-bold text-foreground">
+                        {item.totalPrice.toLocaleString()}원
+                      </p>
+                      {item.preparedAt && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {formatDate(item.preparedAt)}
+                        </p>
+                      )}
+                      {isEmployee &&
+                        canPrepareItems &&
+                        item.itemStatus !== "READY" && (
+                          <button
+                            type="button"
+                            disabled={updatingItemId === item.orderItemId}
+                            onClick={() =>
+                              void handleMarkItemReady(item.orderItemId)
+                            }
+                            className="mt-3 h-8 border border-primary px-2.5 text-xs font-bold text-primary transition hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
+                          >
+                            {updatingItemId === item.orderItemId
+                              ? "처리 중"
+                              : "준비 완료"}
+                          </button>
+                        )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-lg border border-border bg-white">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className="flex items-center gap-2 font-bold text-foreground">
+                <History size={17} className="text-primary" />
+                주문 진행 현황
               </h2>
             </div>
-
-            <div className="divide-y divide-border">
-              {order.items.map((item, ii) => {
-                const itemTotal = item.sizes.reduce(
-                  (s, sz) => s + sz.quantity * sz.unitPrice,
-                  0
+            <ol className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-3">
+              {normalOrderStatuses.map((step, index) => {
+                const stepLog = order.statusLogs.find(
+                  (log) => log.newStatus === step
                 );
-                const itemQty = item.sizes.reduce(
-                  (s, sz) => s + sz.quantity,
-                  0
-                );
+                const isCompleted =
+                  index === 0 ||
+                  (currentNormalStatusIndex >= 0 &&
+                    index <= currentNormalStatusIndex) ||
+                  Boolean(stepLog);
+                const isCurrent = order.orderStatus === step;
 
                 return (
-                  <div key={ii} className="px-5 py-4">
-                    <div className="flex items-start gap-4 mb-4">
-                      <img
-                        src={item.image}
-                        alt={item.productName}
-                        className="w-24 h-24 rounded-lg object-cover border border-border flex-shrink-0"
-                      />
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="font-semibold text-foreground text-sm">
-                              {item.productName}
-                            </div>
-                            <div className="text-xs text-muted-foreground mt-1">
-                              컬러·사이즈 옵션 {item.sizes.length}개
-                            </div>
-                          </div>
-
-                          <div className="text-right">
-                            <div className="font-bold text-foreground text-sm">
-                              ₩{itemTotal.toLocaleString()}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {itemQty}장
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                  <li
+                    key={step}
+                    className={`min-h-[108px] border p-3 ${
+                      isCompleted
+                        ? "border-primary/25 bg-secondary/60"
+                        : "border-border bg-muted/20"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`flex h-6 w-6 items-center justify-center rounded-full ${
+                          isCompleted
+                            ? "bg-primary text-white"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {isCompleted ? (
+                          <CheckCircle size={14} />
+                        ) : (
+                          <Clock size={14} />
+                        )}
+                      </span>
+                      <p
+                        className={`text-sm font-semibold ${
+                          isCompleted
+                            ? "text-foreground"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {statusConfig[step].label}
+                        {isCurrent && (
+                          <span className="ml-1.5 text-xs text-primary">
+                            현재
+                          </span>
+                        )}
+                      </p>
                     </div>
-
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-border">
-                            <th className="text-left text-muted-foreground font-medium pb-1.5 pr-4">
-                              컬러
-                            </th>
-                            <th className="text-left text-muted-foreground font-medium pb-1.5 pr-4">
-                              사이즈
-                            </th>
-                            <th className="text-right text-muted-foreground font-medium pb-1.5 pr-4">
-                              수량
-                            </th>
-                            <th className="text-right text-muted-foreground font-medium pb-1.5 pr-4">
-                              단가
-                            </th>
-                            <th className="text-right text-muted-foreground font-medium pb-1.5">
-                              금액
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {item.sizes.map((sz, si) => (
-                            <tr
-                              key={si}
-                              className="border-b border-border/40 last:border-0"
-                            >
-                              <td className="py-1.5 pr-4 text-foreground">
-                                {sz.color}
-                              </td>
-                              <td className="py-1.5 pr-4 font-medium text-foreground">
-                                {sz.size}
-                              </td>
-                              <td className="py-1.5 pr-4 text-right text-foreground">
-                                {sz.quantity}장
-                              </td>
-                              <td className="py-1.5 pr-4 text-right text-muted-foreground">
-                                ₩{sz.unitPrice.toLocaleString()}
-                              </td>
-                              <td className="py-1.5 text-right font-medium text-foreground">
-                                ₩
-                                {(
-                                  sz.quantity * sz.unitPrice
-                                ).toLocaleString()}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      {stepLog
+                        ? formatDate(stepLog.createdAt)
+                        : index === 0
+                          ? formatDate(order.createdAt)
+                          : "진행 전"}
+                    </p>
+                    {stepLog && (
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                        {stepLog.actorName}
+                        {stepLog.memo ? ` · ${stepLog.memo}` : ""}
+                      </p>
+                    )}
+                  </li>
                 );
               })}
-            </div>
+            </ol>
 
-            <div className="bg-muted/30 px-5 py-4 border-t border-border space-y-1.5 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">상품 금액</span>
-                <span>₩{subtotal.toLocaleString()}</span>
-              </div>
-
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  택배비
-                  {order.isFreeShipping && (
-                    <span className="ml-1.5 text-xs text-green-600 font-medium">
-                      무료배송
-                    </span>
-                  )}
-                </span>
-                <span>
-                  {order.isFreeShipping
-                    ? "₩0"
-                    : `₩${order.shippingFee.toLocaleString()}`}
-                </span>
-              </div>
-
-              <div className="flex justify-between font-bold pt-2 border-t border-border text-base">
-                <span className="text-foreground">합계</span>
-                <span className="text-foreground">
-                  ₩{total.toLocaleString()}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {(order.status === "CONFIRMED" || order.status === "PREPARING") &&
-            !shipped && (
-              <div className="bg-white border border-border rounded-lg overflow-hidden">
-                <div className="px-5 py-4 border-b border-border">
-                  <h2 className="font-bold text-foreground flex items-center gap-2">
-                    <Truck size={16} className="text-primary" />
-                    출고 처리
-                  </h2>
-                </div>
-
-                <div className="p-5">
-                  {!showTrackingForm ? (
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-muted-foreground">
-                        포장 완료 후 송장 번호를 입력해 주세요.
-                      </p>
-                      <button
-                        onClick={() => setShowTrackingForm(true)}
-                        className="bg-primary hover:bg-primary/90 text-white text-sm font-semibold px-5 py-2 rounded transition-colors flex items-center gap-2"
-                      >
-                        <Send size={14} />
-                        송장 입력
-                      </button>
+            {exceptionLogs.length > 0 && (
+              <div className="border-t border-border px-5 py-4">
+                <p className="mb-3 text-xs font-semibold text-red-700">
+                  예외 처리 이력
+                </p>
+                <div className="space-y-2">
+                  {exceptionLogs.map((log) => (
+                    <div
+                      key={log.orderLogId}
+                      className="flex flex-wrap items-center justify-between gap-2 border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"
+                    >
+                      <span className="font-semibold">
+                        {log.newStatus
+                          ? statusConfig[log.newStatus].label
+                          : "예외 처리"}
+                      </span>
+                      <span>
+                        {formatDate(log.createdAt)} · {log.actorName}
+                      </span>
                     </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                            택배사
-                          </label>
-                          <select
-                            value={trackingCompany}
-                            onChange={(e) =>
-                              setTrackingCompany(e.target.value)
-                            }
-                            className="w-full border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-primary bg-white"
-                          >
-                            <option value="">선택</option>
-                            {SHIPPING_COMPANIES.map((c) => (
-                              <option key={c} value={c}>
-                                {c}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                            송장 번호
-                          </label>
-                          <input
-                            type="text"
-                            value={trackingNo}
-                            onChange={(e) => setTrackingNo(e.target.value)}
-                            placeholder="숫자만 입력"
-                            className="w-full border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-primary"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2 justify-end">
-                        <button
-                          onClick={() => setShowTrackingForm(false)}
-                          className="border border-border text-foreground hover:border-primary hover:text-primary text-sm px-4 py-2 rounded transition-colors"
-                        >
-                          취소
-                        </button>
-                        <button
-                          onClick={handleShip}
-                          disabled={!trackingCompany || !trackingNo}
-                          className="bg-primary hover:bg-primary/90 disabled:opacity-40 text-white text-sm font-semibold px-5 py-2 rounded transition-colors"
-                        >
-                          발송 처리
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  ))}
                 </div>
               </div>
             )}
+          </section>
+        </div>
 
-          {shipped && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
-              <CheckCircle size={18} className="text-green-600" />
+        <aside className="space-y-5">
+          <section className="rounded-lg border border-border bg-white p-5">
+            <h2 className="mb-4 flex items-center gap-2 font-bold text-foreground">
+              <CreditCard size={17} className="text-primary" />
+              결제 요약
+            </h2>
+            <dl className="space-y-3 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">상품 금액</dt>
+                <dd>{order.amountSummary.subtotalAmount.toLocaleString()}원</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">배송비</dt>
+                <dd>{order.amountSummary.shippingFee.toLocaleString()}원</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">플랫폼 수수료</dt>
+                <dd>{order.amountSummary.platformFee.toLocaleString()}원</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">결제 수단</dt>
+                <dd>
+                  {order.amountSummary.paymentMethod
+                    ? paymentMethodLabel[order.amountSummary.paymentMethod]
+                    : "미등록"}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3 border-t border-border pt-3">
+                <dt className="font-semibold text-foreground">최종 금액</dt>
+                <dd className="font-bold text-primary">
+                  {order.amountSummary.totalAmount.toLocaleString()}원
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="rounded-lg border border-border bg-white p-5">
+            <h2 className="mb-4 flex items-center gap-2 font-bold text-foreground">
+              <MapPin size={17} className="text-primary" />
+              배송 정보
+            </h2>
+            <dl className="space-y-3 text-sm">
               <div>
-                <p className="text-sm font-semibold text-green-800">
-                  발송 처리 완료
-                </p>
-                <p className="text-xs text-green-700 font-mono">
-                  {trackingCompany} {trackingNo}
-                </p>
+                <dt className="mb-1 text-xs text-muted-foreground">수령인</dt>
+                <dd className="font-medium">
+                  {order.delivery.receiverName} · {order.delivery.receiverPhone}
+                </dd>
               </div>
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-4">
-          <div className="bg-white border border-border rounded-lg p-5">
-            <h3 className="font-bold text-foreground mb-4 text-sm">
-              주문 관리
-            </h3>
-
-            <div className="space-y-2">
-              <button
-                onClick={handlePdfPrint}
-                className="w-full bg-primary hover:bg-primary/90 text-white text-sm px-4 py-2.5 rounded font-semibold transition-colors flex items-center justify-center gap-2"
-              >
-                <Printer size={14} />
-                주문 상세 PDF 저장
-              </button>
-
-              <button className="w-full border border-border text-foreground hover:border-primary hover:text-primary text-sm px-4 py-2.5 rounded font-medium transition-colors flex items-center justify-center gap-2">
-                <FileText size={14} />
-                거래명세서 출력
-              </button>
-
-              <button className="w-full border border-border text-foreground hover:border-primary hover:text-primary text-sm px-4 py-2.5 rounded font-medium transition-colors flex items-center justify-center gap-2">
-                <MessageSquare size={14} />
-                바이어 문의
-              </button>
-
-              {order.status === "CONFIRMED" && (
-                <button className="w-full border border-red-300 text-red-600 hover:bg-red-50 text-sm px-4 py-2.5 rounded font-medium transition-colors">
-                  주문 취소 처리
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white border border-border rounded-lg p-5">
-            <h3 className="font-bold text-foreground mb-3 text-sm">
-              바이어 정보
-            </h3>
-            <div className="space-y-1.5 text-sm">
-              <div className="font-semibold text-foreground">
-                {order.buyerBusiness}
+              <div>
+                <dt className="mb-1 text-xs text-muted-foreground">배송지</dt>
+                <dd className="leading-6">
+                  {order.delivery.receiverZipcode &&
+                    `[${order.delivery.receiverZipcode}] `}
+                  {order.delivery.receiverAddress}{" "}
+                  {order.delivery.receiverAddressDetail}
+                </dd>
               </div>
-              <div className="text-muted-foreground">{order.buyerName}</div>
-              <div className="text-muted-foreground">{order.buyerPhone}</div>
-            </div>
-          </div>
-
-          <div className="bg-white border border-border rounded-lg p-5">
-            <h3 className="font-bold text-foreground mb-3 text-sm flex items-center gap-2">
-              <MapPin size={14} className="text-primary" />
-              배송지
-            </h3>
-            <div className="text-sm space-y-1">
-              <div className="font-semibold text-foreground">
-                {order.address.recipient}
+              <div>
+                <dt className="mb-1 text-xs text-muted-foreground">
+                  배송 요청사항
+                </dt>
+                <dd>{order.delivery.receiverMemo || "요청사항 없음"}</dd>
               </div>
-              <div className="text-muted-foreground">{order.address.phone}</div>
-              <div className="text-muted-foreground">
-                {order.address.address}
+              <div className="border-t border-border pt-3">
+                <dt className="mb-1 text-xs text-muted-foreground">
+                  운송 정보
+                </dt>
+                <dd>
+                  {order.delivery.carrier && order.delivery.trackingNumber
+                    ? `${order.delivery.carrier} ${order.delivery.trackingNumber}`
+                    : "운송장 미등록"}
+                </dd>
               </div>
-              <div className="text-xs text-muted-foreground">
-                {order.address.detail}
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white border border-border rounded-lg p-5">
-            <h3 className="font-bold text-foreground mb-3 text-sm">
-              결제 정보
-            </h3>
-
-            <div className="space-y-1.5 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">결제 수단</span>
-                <span className="font-medium text-foreground">
-                  {order.paymentMethod}
-                </span>
-              </div>
-
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">결제 금액</span>
-                <span className="font-medium text-foreground">
-                  ₩{total.toLocaleString()}
-                </span>
-              </div>
-
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">정산 예정</span>
-                <span className="font-medium text-green-700">
-                  구매 확정 후
-                </span>
-              </div>
-            </div>
-
-            {order.notes && (
-              <div className="mt-3 pt-3 border-t border-border">
-                <div className="text-xs text-muted-foreground flex items-start gap-1.5">
-                  <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
-                  {order.notes}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+            </dl>
+          </section>
+        </aside>
       </div>
     </div>
   );

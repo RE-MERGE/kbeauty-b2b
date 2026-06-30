@@ -251,9 +251,16 @@ export function Checkout() {
           return;
         }
 
+        const currentCheckoutState = checkoutState;
+
+        if (!currentCheckoutState?.cartItemIds.length) {
+          setPreviewError("선택한 장바구니 상품이 없습니다.");
+          return;
+        }
+
         const response = await api.post<CheckoutPreviewResponse>("/checkout/preview", {
-          cartItemIds: checkoutState?.cartItemIds ?? [],
-          cartType: checkoutState?.cartType ?? "NORMAL",
+          cartItemIds: currentCheckoutState.cartItemIds,
+          cartType: currentCheckoutState.cartType,
         });
         setCheckoutPreview(response);
       } catch (error) {
@@ -329,7 +336,6 @@ export function Checkout() {
   const [createdOrderTotal, setCreatedOrderTotal] = useState(0);
   const [isTestOrderLoading, setIsTestOrderLoading] = useState(false);
   const [testOrderError, setTestOrderError] = useState("");
-
 
   const subtotal = checkoutPreview?.productAmount
     ?? orderItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -441,17 +447,14 @@ export function Checkout() {
     try {
       setIsPaymentLoading(true);
 
-      // 1. 백엔드에 주문을 생성하고 실제 DB 주문 PK 리스트(orderNos)를 받아옵니다.
-      const orderResponse = await api.post<OrderCreateResponse>("/orders", {
-        cartItemIds: checkoutState.cartItemIds,
-        addressId: selectedAddress.addressId,
-        cartType: checkoutState.cartType,
-      });
+        const orderResponse = await api.post<OrderCreateResponse>("/buyer/orders", {
+            cartItemIds: checkoutState.cartItemIds,
+            addressId: selectedAddress.addressId,
+            cartType: checkoutState.cartType,
+        });
 
-      // 💡 [핵심]: 생성된 진짜 하위 주문 번호 리스트가 존재하는지 검증하고 세션 스토리지에 백업합니다.
       if (orderResponse.orderNos && orderResponse.orderNos.length > 0) {
         sessionStorage.setItem("pending_order_ids", JSON.stringify(orderResponse.orderNos));
-        console.log("▶ [성공페이지 전달용] orderNos 세션 저장 완료:", orderResponse.orderNos);
       }
 
       // 토스 결제창에는 대표로 첫 번째 주문 번호를 던져줍니다. (realOrderNumber)
@@ -462,7 +465,6 @@ export function Checkout() {
         return;
       }
 
-      // 2. 토스페이먼츠 SDK 및 결제 인스턴스 초기화
       const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY);
       const payment = tossPayments.payment({ customerKey: "ANONYMOUS" });
 
@@ -470,7 +472,6 @@ export function Checkout() {
           ? `${orderItems[0].name} 외 ${orderItems.length - 1}건`
           : orderItems[0].name;
 
-      // 공통 결제 요청 데이터 조립
       const commonRequest = {
         amount: { currency: "KRW" as const, value: total },
         orderId: realOrderNumber, // 대표 주문번호
@@ -480,7 +481,6 @@ export function Checkout() {
         customerName: "구매 담당자",
       };
 
-      // 3. 결제 수단별 토스 결제창 호출 (중복 코드 제거 완료)
       if (paymentMethod === "card") {
         await payment.requestPayment({
           method: "CARD",
@@ -508,7 +508,7 @@ export function Checkout() {
       setIsTestOrderLoading(true);
       setTestOrderError("");
 
-      const response = await api.post<OrderCreateResponse>("/orders", {
+      const response = await api.post<OrderCreateResponse>("/buyer/orders", {
         cartItemIds: checkoutState.cartItemIds,
         addressId: selectedAddress.addressId,
         cartType: checkoutState.cartType,
@@ -589,7 +589,7 @@ export function Checkout() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => navigate(`/orders/custom/${orderId}/sign`)}
+                  onClick={() => navigate(`/buyer/orders/custom/${orderId}/sign`)}
                   className="mt-3 inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-amber-700"
                 >
                   <PenLine size={14} />
@@ -897,7 +897,7 @@ export function Checkout() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => navigate("/orders")}
+                  onClick={() => navigate("/buyer/orders")}
                   className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-3 text-sm font-bold text-white transition hover:bg-primary/90"
                 >
                   <ShoppingBag size={18} />

@@ -42,7 +42,7 @@ import {AllProducts} from "@/pages/product/AllProducts";
 import {Wishlist} from "@/pages/product/Wishlist";
 import {SellerProductRegister} from "@/pages/product/SellerProductRegister";
 
-import {QuoteDetail} from "@/pages/quote/QuoteDetail";
+import {QuoteDetailBuyer, QuoteDetailSeller} from "@/pages/quote/QuoteDetailWrappers";
 import {SellerQuoteWrite} from "@/pages/quote/SellerQuoteWrite";
 import BuyerQuoteList from "@/pages/quote/BuyerQuoteList";
 
@@ -67,15 +67,11 @@ import AdminSupport from "@/pages/admin/AdminSupport";
 
 import {SupplierRegister} from "@/pages/company/SupplierRegister";
 
-//토스페이먼츠
 import PaymentSuccessPage from "@/pages/tosspayment/PaymentSuccessPage";
 import OrderCompletePage from "@/pages/tosspayment/OrderCompletePage";
 import {Register} from "@/pages/auth/Register";
 
 export const router = createBrowserRouter([
-    // ─────────────────────────────────────────
-    // auth 그룹 - 인증 불필요
-    // ─────────────────────────────────────────
     {
         path: "auth",
         Component: AuthLayout,
@@ -88,10 +84,6 @@ export const router = createBrowserRouter([
             {path: "find-pw", Component: FindPw},
         ],
     },
-    // ─────────────────────────────────────────
-    // auth를 제외한 모든 페이지 - ProtectedLayout으로 한 번에 감쌈
-    // 로그인 안 했으면 자동으로 /auth/login으로 리다이렉트
-    // ─────────────────────────────────────────
     {
         Component: ProtectedLayout,
         children: [
@@ -107,14 +99,13 @@ export const router = createBrowserRouter([
                     {path: "mypage", Component: MyPage},
                     {path: "settings", Component: CompanySettings},
                     {path: "partner", Component: PartnerPlan},
-                    {path: "quotes/:quoteId", Component: QuoteDetail},
+                    {path: "quotes/:quoteId", Component: QuoteDetailBuyer},
 
                     // Order Flow
                     {path: "cart", Component: Cart},
                     {path: "orders", Component: Orders},
                     {path: "orders/:id", Component: OrderDetail},
                     {path: "checkout", Component: Checkout},
-
 
                     // Trade Flow
                     {path: "orders/:orderId/negotiations", Component: Negotiations},
@@ -167,6 +158,7 @@ export const router = createBrowserRouter([
                     {path: "orders/:id", Component: SellerOrderDetail},
                     {path: "sourcing/:requestId/quote", Component: SellerQuoteWrite},
                     {path: "orders/:orderId/contract-sign", Component: SellerContractSign},
+                    {path: "quotes/:quoteId", Component: QuoteDetailSeller},
                 ],
             },
             {

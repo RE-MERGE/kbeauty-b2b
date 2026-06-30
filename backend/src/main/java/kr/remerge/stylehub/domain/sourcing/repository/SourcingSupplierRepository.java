@@ -15,9 +15,11 @@ public interface SourcingSupplierRepository extends JpaRepository<SourcingSuppli
             Integer sourcingRequestId, SourcingSupplierStatus status);
 
     // 셀러 목록 조회 - company_id + status + type 필터
+    // quote도 함께 fetch하여 목록 화면에서 N+1 없이 견적 요약을 바로 내려줄 수 있게 함
     @Query("""
             SELECT ss FROM SourcingSupplier ss
             JOIN FETCH ss.sourcingRequest sr
+            LEFT JOIN FETCH ss.quote q
             WHERE ss.sellerCompanyId = :companyId
             AND ss.status = :status
             AND sr.type = :type
@@ -33,6 +35,7 @@ public interface SourcingSupplierRepository extends JpaRepository<SourcingSuppli
     @Query("""
             SELECT ss FROM SourcingSupplier ss
             JOIN FETCH ss.sourcingRequest sr
+            LEFT JOIN FETCH ss.quote q
             WHERE ss.sellerCompanyId = :companyId
             AND ss.status IN :statuses
             AND sr.type = :type

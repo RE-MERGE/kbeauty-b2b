@@ -29,6 +29,7 @@ public record CartResponse(
         Long baseShippingFee,
         Long freeShippingThreshold,
 
+
         Boolean sampleAvailable,
         Long samplePrice,
         Integer sampleMaxQuantity,

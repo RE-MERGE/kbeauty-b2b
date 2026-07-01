@@ -1,648 +1,726 @@
-import { type ReactNode, useMemo, useState } from "react";
-import { Link } from "react-router";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import {
-  CheckCircle,
-  ChevronDown,
-  ChevronUp,
-  Clock,
+  Check,
+  CheckCircle2,
+  Clock3,
   Eye,
   FileText,
   FlaskConical,
-  Package,
-  ReceiptText,
   Search,
-  ShieldCheck,
+  X,
   XCircle,
 } from "lucide-react";
+import api from "@/api/axios";
 
 type QuoteStatus =
   | "SUBMITTED"
-  | "UNDER_REVIEW"
-  | "ACCEPTED"
+  | "NEGOTIATING"
+  | "SAMPLE_REQUESTED"
+  | "APPROVED"
   | "REJECTED"
+  | "NOT_SELECTED"
   | "EXPIRED";
 
-type SampleAvailable = "AVAILABLE" | "UNAVAILABLE";
-
-type QuoteItem = {
-  optionSummary: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-};
-
-type Quote = {
+type BuyerQuote = {
   quoteId: number;
   quoteNo: string;
-  sourcingRequestNo: string;
-  sellerName: string;
-  brandName: string;
+  sourcingRequestId: number;
   productName: string;
-  categoryName: string;
-  material: string;
-  leadTimeDays: number;
-  deliveryCompany: string;
-  shippingFee: number | null;
-  validUntil: string;
-  sampleAvailable: SampleAvailable;
-  sellerMemo?: string;
-  subtotalAmount: number;
+  sellerName: string;
+  companyName: string;
   totalAmount: number;
+  leadTimeDays: number;
+  validUntil: string;
+  sampleAvailable: boolean;
   status: QuoteStatus;
-  createdAt: string;
-  items: QuoteItem[];
+  submittedAt: string;
 };
 
-const quotes: Quote[] = [
-  {
-    quoteId: 1,
-    quoteNo: "Q-2024-0901-001",
-    sourcingRequestNo: "SRC-2024-0901",
-    sellerName: "르블랑 어패럴",
-    brandName: "르블랑",
-    productName: "여성 린넨 오버핏 블라우스",
-    categoryName: "블라우스",
-    material: "린넨 55%, 코튼 45%",
-    leadTimeDays: 12,
-    deliveryCompany: "CJ대한통운",
-    shippingFee: null,
-    validUntil: "2026.06.25",
-    sampleAvailable: "AVAILABLE",
-    sellerMemo: "샘플 제작 가능하며 본주문 진행 시 샘플비 차감 가능합니다.",
-    subtotalAmount: 2800000,
-    totalAmount: 2800000,
-    status: "SUBMITTED",
-    createdAt: "2026.06.01",
-    items: [
-      {
-        optionSummary: "색상: 블랙 / 사이즈: M",
-        quantity: 100,
-        unitPrice: 14000,
-        totalPrice: 1400000,
-      },
-      {
-        optionSummary: "색상: 아이보리 / 사이즈: L",
-        quantity: 100,
-        unitPrice: 14000,
-        totalPrice: 1400000,
-      },
-    ],
-  },
-  {
-    quoteId: 2,
-    quoteNo: "Q-2024-0901-002",
-    sourcingRequestNo: "SRC-2024-0901",
-    sellerName: "데일리앤코",
-    brandName: "데일리앤코",
-    productName: "여성 린넨 오버핏 블라우스",
-    categoryName: "블라우스",
-    material: "린넨 혼방",
-    leadTimeDays: 9,
-    deliveryCompany: "한진택배",
-    shippingFee: 3000,
-    validUntil: "2026.06.18",
-    sampleAvailable: "UNAVAILABLE",
-    sellerMemo: "기존 보유 원단으로 빠른 납품 가능합니다.",
-    subtotalAmount: 2700000,
-    totalAmount: 2703000,
-    status: "UNDER_REVIEW",
-    createdAt: "2026.06.02",
-    items: [
-      {
-        optionSummary: "색상: 블랙 / 사이즈: FREE",
-        quantity: 200,
-        unitPrice: 13500,
-        totalPrice: 2700000,
-      },
-    ],
-  },
-  {
-    quoteId: 3,
-    quoteNo: "Q-2024-0901-003",
-    sourcingRequestNo: "SRC-2024-0901",
-    sellerName: "에이블스튜디오",
-    brandName: "에이블",
-    productName: "여성 린넨 오버핏 블라우스",
-    categoryName: "블라우스",
-    material: "린넨 60%, 레이온 40%",
-    leadTimeDays: 15,
-    deliveryCompany: "롯데택배",
-    shippingFee: null,
-    validUntil: "2026.06.10",
-    sampleAvailable: "AVAILABLE",
-    sellerMemo: "원단 변경 시 단가 조정 가능합니다.",
-    subtotalAmount: 3000000,
-    totalAmount: 3000000,
-    status: "EXPIRED",
-    createdAt: "2026.06.03",
-    items: [
-      {
-        optionSummary: "컬러: 베이지 / 사이즈: M",
-        quantity: 120,
-        unitPrice: 15000,
-        totalPrice: 1800000,
-      },
-      {
-        optionSummary: "컬러: 베이지 / 사이즈: L",
-        quantity: 80,
-        unitPrice: 15000,
-        totalPrice: 1200000,
-      },
-    ],
-  },
-];
+type QuoteFilter = "ALL" | "REVIEW" | "APPROVED" | "CLOSED";
 
-const statusConfig: Record<QuoteStatus, { label: string; tone: string; icon: ReactNode }> = {
+type PendingAction = {
+  quote: BuyerQuote;
+  status: "APPROVED" | "REJECTED";
+};
+
+const statusConfig: Record<
+  QuoteStatus,
+  { label: string; className: string; icon: ReactNode }
+> = {
   SUBMITTED: {
-    label: "견적 도착",
-    tone: "border-blue-200 bg-blue-50 text-blue-700",
-    icon: <FileText size={13} />,
+    label: "검토 가능",
+    className: "border-blue-200 bg-blue-50 text-blue-700",
+    icon: <FileText size={12} />,
   },
-  UNDER_REVIEW: {
-    label: "검토 중",
-    tone: "border-amber-200 bg-amber-50 text-amber-700",
-    icon: <Clock size={13} />,
+  NEGOTIATING: {
+    label: "협의 중",
+    className: "border-violet-200 bg-violet-50 text-violet-700",
+    icon: <Clock3 size={12} />,
   },
-  ACCEPTED: {
+  SAMPLE_REQUESTED: {
+    label: "샘플 진행",
+    className: "border-amber-200 bg-amber-50 text-amber-700",
+    icon: <FlaskConical size={12} />,
+  },
+  APPROVED: {
     label: "채택 완료",
-    tone: "border-green-200 bg-green-50 text-green-700",
-    icon: <CheckCircle size={13} />,
+    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    icon: <CheckCircle2 size={12} />,
   },
   REJECTED: {
     label: "거절",
-    tone: "border-slate-300 bg-slate-100 text-slate-600",
-    icon: <XCircle size={13} />,
+    className: "border-slate-200 bg-slate-100 text-slate-600",
+    icon: <XCircle size={12} />,
+  },
+  NOT_SELECTED: {
+    label: "미채택",
+    className: "border-slate-200 bg-slate-100 text-slate-600",
+    icon: <XCircle size={12} />,
   },
   EXPIRED: {
     label: "기간 만료",
-    tone: "border-red-200 bg-red-50 text-red-700",
-    icon: <XCircle size={13} />,
+    className: "border-rose-200 bg-rose-50 text-rose-700",
+    icon: <Clock3 size={12} />,
   },
 };
 
-const searchOptions = [
-  { value: "seller", label: "셀러명" },
-  { value: "product", label: "상품명" },
-  { value: "material", label: "소재" },
-  { value: "category", label: "카테고리" },
-] as const;
-
-type SearchType = (typeof searchOptions)[number]["value"];
+const filters: Array<{ value: QuoteFilter; label: string }> = [
+  { value: "ALL", label: "전체" },
+  { value: "REVIEW", label: "검토 중" },
+  { value: "APPROVED", label: "채택 완료" },
+  { value: "CLOSED", label: "종료" },
+];
 
 function formatPrice(value: number) {
   return `${value.toLocaleString()}원`;
 }
 
-function formatShippingFee(value: number | null) {
-  return value === null ? "착불" : formatPrice(value);
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
 }
 
-function parseDate(date: string) {
-  return new Date(date.replace(/\./g, "-"));
-}
-
-function getValidUntilBadge(validUntil: string) {
+function getRemainingDays(value: string) {
   const today = new Date();
-  const end = parseDate(validUntil);
+  const end = new Date(value);
 
   today.setHours(0, 0, 0, 0);
   end.setHours(0, 0, 0, 0);
 
-  const diff = Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-  if (diff < 0) {
-    return {
-      text: "만료됨",
-      summaryText: `만료됨 · ${validUntil}`,
-      className: "border-red-200 bg-red-50 text-red-700",
-    };
-  }
-
-  if (diff === 0) {
-    return {
-      text: "오늘 만료",
-      summaryText: `오늘 만료 · ${validUntil}까지`,
-      className: "border-red-200 bg-red-50 text-red-700",
-    };
-  }
-
-  if (diff <= 3) {
-    return {
-      text: `D-${diff}`,
-      summaryText: `D-${diff} · ${validUntil}까지`,
-      className: "border-orange-200 bg-orange-50 text-orange-700",
-    };
-  }
-
-  return {
-    text: `D-${diff}`,
-    summaryText: `D-${diff} · ${validUntil}까지`,
-    className: "border-slate-200 bg-slate-100 text-slate-600",
-  };
+  return Math.ceil(
+    (end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  );
 }
 
-function getTotalQuantity(quote: Quote) {
-  return quote.items.reduce((total, item) => total + item.quantity, 0);
-}
-
-function matchesQuoteFilter(quote: Quote, filter: "ALL" | "AVAILABLE" | "ACCEPTED" | "PAST") {
+function matchesFilter(status: QuoteStatus, filter: QuoteFilter) {
   if (filter === "ALL") return true;
-
-  if (filter === "AVAILABLE") {
-    return quote.status === "SUBMITTED" || quote.status === "UNDER_REVIEW";
+  if (filter === "REVIEW") {
+    return (
+      status === "SUBMITTED" ||
+      status === "NEGOTIATING" ||
+      status === "SAMPLE_REQUESTED"
+    );
   }
-
-  if (filter === "ACCEPTED") {
-    return quote.status === "ACCEPTED";
-  }
-
-  if (filter === "PAST") {
-    return quote.status === "REJECTED" || quote.status === "EXPIRED";
-  }
-
-  return true;
+  if (filter === "APPROVED") return status === "APPROVED";
+  return (
+    status === "REJECTED" ||
+    status === "NOT_SELECTED" ||
+    status === "EXPIRED"
+  );
 }
 
-function getLowestUnitPrice(quote: Quote) {
-  return Math.min(...quote.items.map((item) => item.unitPrice));
-}
+export default function BuyerQuoteList() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [quotes, setQuotes] = useState<BuyerQuote[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [actionMessage, setActionMessage] = useState("");
+  const [actionError, setActionError] = useState("");
 
-function BuyerQuoteList() {
-  const [expandedId, setExpandedId] = useState<number | null>(1);
-  const [activeFilter, setActiveFilter] = useState<"ALL" | "AVAILABLE" | "ACCEPTED" | "PAST">("ALL");
-  const [searchType, setSearchType] = useState<SearchType>("seller");
-  const [search, setSearch] = useState("");
+  const requestedFilter = searchParams.get("status") as QuoteFilter | null;
+  const activeFilter = filters.some(
+    (filter) => filter.value === requestedFilter
+  )
+    ? requestedFilter!
+    : "ALL";
 
-  const filteredQuotes = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
+  useEffect(() => {
+    const loadQuotes = async () => {
+      try {
+        setIsLoading(true);
+        setLoadError("");
+        const response =
+          await api.get<BuyerQuote[]>("/buyer/quotes");
+        setQuotes(response);
+      } catch (error) {
+        console.error("바이어 견적 목록 조회 실패", error);
+        setLoadError("견적 목록을 불러오지 못했습니다.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void loadQuotes();
+  }, []);
+
+  const visibleQuotes = useMemo(() => {
+    const keyword = searchQuery.trim().toLowerCase();
 
     return quotes.filter((quote) => {
-    const statusMatched = matchesQuoteFilter(quote, activeFilter);
+      const matchesSearch =
+        keyword.length === 0 ||
+        quote.quoteNo.toLowerCase().includes(keyword) ||
+        quote.productName.toLowerCase().includes(keyword) ||
+        quote.sellerName?.toLowerCase().includes(keyword) ||
+        quote.companyName?.toLowerCase().includes(keyword) ||
+        String(quote.sourcingRequestId).includes(keyword);
 
-      const keywordMatched =
-        !keyword ||
-        (searchType === "seller" && quote.sellerName.toLowerCase().includes(keyword)) ||
-        (searchType === "product" && quote.productName.toLowerCase().includes(keyword)) ||
-        (searchType === "material" && quote.material.toLowerCase().includes(keyword)) ||
-        (searchType === "category" && quote.categoryName.toLowerCase().includes(keyword));
-
-      return statusMatched && keywordMatched;
+      return matchesSearch && matchesFilter(quote.status, activeFilter);
     });
-  }, [activeFilter, search, searchType]);
+  }, [activeFilter, quotes, searchQuery]);
 
-  const stats = [
-    {
-      filter: "ALL" as const,
-      label: "전체 견적",
-      value: `${quotes.length}건`,
-      icon: <ReceiptText size={18} />,
-      tone: "bg-secondary text-primary",
-    },
-    {
-      filter: "AVAILABLE" as const,
-      label: "검토 가능",
-      value: `${
-        quotes.filter(
-          (quote) =>
-            quote.status === "SUBMITTED" ||
-            quote.status === "UNDER_REVIEW"
-        ).length
-      }건`,
-      icon: <FileText size={18} />,
-      tone: "bg-blue-50 text-blue-700",
-    },
-    {
-      filter: "ACCEPTED" as const,
-      label: "채택 완료",
-      value: `${
-        quotes.filter((quote) => quote.status === "ACCEPTED").length
-      }건`,
-      icon: <CheckCircle size={18} />,
-      tone: "bg-green-50 text-green-700",
-    },
-    {
-      filter: "PAST" as const,
-      label: "지난 견적",
-      value: `${
-        quotes.filter(
-          (quote) =>
-            quote.status === "REJECTED" ||
-            quote.status === "EXPIRED"
-        ).length
-      }건`,
-      icon: <Clock size={18} />,
-      tone: "bg-slate-100 text-slate-600",
-    },
-  ];
+  const quoteGroups = useMemo(() => {
+    const groups = new Map<number, BuyerQuote[]>();
+
+    visibleQuotes.forEach((quote) => {
+      const current = groups.get(quote.sourcingRequestId) ?? [];
+      current.push(quote);
+      groups.set(quote.sourcingRequestId, current);
+    });
+
+    return Array.from(groups.entries());
+  }, [visibleQuotes]);
+
+  const counts = {
+    sourcing: new Set(quotes.map((quote) => quote.sourcingRequestId)).size,
+    all: quotes.length,
+    review: quotes.filter((quote) =>
+      matchesFilter(quote.status, "REVIEW")
+    ).length,
+    approved: quotes.filter((quote) => quote.status === "APPROVED").length,
+  };
+
+  const handleFilter = (filter: QuoteFilter) => {
+    const next = new URLSearchParams(searchParams);
+    if (filter === "ALL") next.delete("status");
+    else next.set("status", filter);
+    setSearchParams(next);
+  };
+
+  const handleStatusUpdate = async () => {
+    if (!pendingAction) return;
+
+    const { quote, status } = pendingAction;
+
+    try {
+      setIsUpdating(true);
+      setActionError("");
+
+      await api.patch(`/quotes/${quote.quoteId}/status`, {
+        status,
+      });
+
+      setQuotes((currentQuotes) =>
+        currentQuotes.map((currentQuote) => {
+          if (currentQuote.quoteId === quote.quoteId) {
+            return { ...currentQuote, status };
+          }
+
+          const shouldMarkNotSelected =
+            status === "APPROVED" &&
+            currentQuote.sourcingRequestId === quote.sourcingRequestId &&
+            (
+              currentQuote.status === "SUBMITTED" ||
+              currentQuote.status === "NEGOTIATING" ||
+              currentQuote.status === "SAMPLE_REQUESTED"
+            );
+
+          return shouldMarkNotSelected
+            ? { ...currentQuote, status: "NOT_SELECTED" }
+            : currentQuote;
+        })
+      );
+
+      setActionMessage(
+        status === "APPROVED"
+          ? "견적을 확정했습니다. 셀러가 계약서를 작성한 후 전달할 예정입니다."
+          : "견적을 거절했습니다."
+      );
+      setPendingAction(null);
+    } catch (error) {
+      console.error("견적 상태 변경 실패", error);
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "견적 상태를 변경하지 못했습니다."
+      );
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-8">
-      <div className="mx-auto max-w-[1240px]">
-        <header className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-xs font-bold text-primary">
-                <ShieldCheck size={13} />
-                바이어 견적 관리
-              </div>
-              <h1 className="text-2xl font-black text-slate-950">
-                받은 견적서를 한눈에 비교하세요
-              </h1>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
-                하나의 소싱 요청에 대해 여러 셀러가 보낸 견적 금액, 납기, 샘플 가능 여부를 비교할 수 있습니다.
-              </p>
-            </div>
-
-            <Link
-              to="/buyer/sourcing"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-white transition hover:bg-primary/90"
-            >
-              <Package size={15} />
-              소싱 요청 목록
-            </Link>
+    <div className="min-h-screen bg-slate-50">
+      <main className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
+        <header className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-sm font-bold text-primary">소싱 관리</p>
+            <h1 className="mt-1 text-2xl font-black text-slate-950">
+              받은 견적
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              소싱 요청별로 접수된 견적의 금액과 납기 조건을 비교합니다.
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate("/buyer/my-sourcing")}
+            className="h-10 border border-slate-200 bg-white px-4 text-sm font-bold text-slate-600 shadow-sm transition hover:border-primary hover:text-primary"
+          >
+            소싱 요청 목록
+          </button>
         </header>
 
-        <section className="mb-5 grid gap-3 md:grid-cols-4">
-          {stats.map((stat) => (
-            <button
-              key={stat.label}
-              type="button"
-              onClick={() => setActiveFilter(stat.filter)}
-              className={`rounded-xl border p-4 text-left shadow-sm transition ${
-                activeFilter === stat.filter
-                  ? "border-primary bg-white ring-2 ring-primary/10"
-                  : "border-slate-200 bg-white hover:border-primary/30"
-              }`}
+        <section className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[
+            {
+              label: "소싱 요청",
+              value: counts.sourcing,
+              icon: <FileText size={17} />,
+              tone: "bg-slate-100 text-slate-600",
+            },
+            {
+              label: "접수 견적",
+              value: counts.all,
+              icon: <FileText size={17} />,
+              tone: "bg-blue-50 text-blue-700",
+            },
+            {
+              label: "검토 중",
+              value: counts.review,
+              icon: <Clock3 size={17} />,
+              tone: "bg-amber-50 text-amber-700",
+            },
+            {
+              label: "채택 완료",
+              value: counts.approved,
+              icon: <CheckCircle2 size={17} />,
+              tone: "bg-emerald-50 text-emerald-700",
+            },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="border border-slate-200 bg-white px-4 py-4 shadow-sm"
             >
               <div className="flex items-center justify-between">
-                <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${stat.tone}`}>
-                  {stat.icon}
+                <span className="text-sm font-bold text-slate-500">
+                  {item.label}
                 </span>
-                <span className="text-2xl font-black text-slate-950">{stat.value}</span>
+                <span
+                  className={`flex h-8 w-8 items-center justify-center rounded-md ${item.tone}`}
+                >
+                  {item.icon}
+                </span>
               </div>
-              <p className={`mt-3 text-sm font-bold ${activeFilter === stat.filter ? "text-primary" : "text-slate-600"}`}>
-                {stat.label}
+              <p className="mt-2 text-2xl font-black text-slate-950">
+                {item.value}
+                <span className="ml-1 text-sm font-bold text-slate-400">
+                  건
+                </span>
               </p>
-            </button>
+            </div>
           ))}
         </section>
 
-        <section className="mb-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <select
-              value={searchType}
-              onChange={(event) => setSearchType(event.target.value as SearchType)}
-              className="h-[42px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none transition focus:border-primary"
-            >
-              {searchOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
+        <section className="mb-5 border border-slate-200 bg-white px-4 pt-4 shadow-sm sm:px-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex gap-1 overflow-x-auto">
+              {filters.map((filter) => (
+                <button
+                  key={filter.value}
+                  type="button"
+                  onClick={() => handleFilter(filter.value)}
+                  className={`h-9 shrink-0 border-b-2 px-3 text-sm font-bold transition-colors ${
+                    activeFilter === filter.value
+                      ? "border-primary text-primary"
+                      : "border-transparent text-slate-500 hover:text-slate-900"
+                  }`}
+                >
+                  {filter.label}
+                </button>
               ))}
-            </select>
-
-            <div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-              <Search size={15} className="text-slate-400" />
-              <input
-                type="text"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={`${searchOptions.find((option) => option.value === searchType)?.label} 검색`}
-                className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
-              />
             </div>
+
+            <label className="relative mb-3 block w-full lg:w-96">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="견적번호, 상품명, 공급사, 소싱 요청 ID"
+                className="h-10 w-full border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:bg-white"
+              />
+            </label>
           </div>
         </section>
 
-        <main className="space-y-4">
-          {filteredQuotes.map((quote) => (
-            <QuoteCard
-              key={quote.quoteId}
-              quote={quote}
-              expanded={expandedId === quote.quoteId}
-              onToggle={() => setExpandedId(expandedId === quote.quoteId ? null : quote.quoteId)}
-            />
-          ))}
-        </main>
-
-        {filteredQuotes.length === 0 && (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center">
-            <FileText size={40} className="mx-auto mb-3 text-slate-300" />
-            <p className="font-bold text-slate-700">조건에 맞는 견적서가 없습니다</p>
-            <p className="mt-1 text-sm text-slate-500">검색어를 바꾸거나 다른 상태를 선택해 보세요.</p>
+        {actionMessage && (
+          <div className="mb-4 flex items-center justify-between border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+            <span>{actionMessage}</span>
+            <button
+              type="button"
+              aria-label="알림 닫기"
+              onClick={() => setActionMessage("")}
+              className="text-emerald-700"
+            >
+              <X size={16} />
+            </button>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
 
-function QuoteCard({
-  quote,
-  expanded,
-  onToggle,
-}: {
-  quote: Quote;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const status = statusConfig[quote.status];
-  const validBadge = getValidUntilBadge(quote.validUntil);
-
-  return (
-    <article className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <button type="button" onClick={onToggle} className="block w-full text-left transition hover:bg-slate-50">
-        <div className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-center">
-          <div className="min-w-0">
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span className="font-mono text-sm font-black text-slate-950">{quote.quoteNo}</span>
-
-              <Badge className={status.tone}>
-                {status.icon}
-                {status.label}
-              </Badge>
-
-              <Badge className={validBadge.className}>
-                <Clock size={12} />
-                {validBadge.text}
-              </Badge>
-
-              {quote.sampleAvailable === "AVAILABLE" && (
-                <Badge className="border-amber-200 bg-amber-50 text-amber-700">
-                  <FlaskConical size={12} />
-                  샘플 가능
-                </Badge>
-              )}
-            </div>
-
-            <h2 className="line-clamp-1 text-base font-black text-slate-950">
-              {quote.productName}
-            </h2>
-
-            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-              <span>{quote.sellerName}</span>
-              <span>{quote.brandName}</span>
-              <span>{quote.categoryName}</span>
-              <span>견적일 {quote.createdAt}</span>
-              <span>유효기간 {quote.validUntil}</span>
-            </div>
+        {actionError && (
+          <div className="mb-4 flex items-center justify-between border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+            <span>{actionError}</span>
+            <button
+              type="button"
+              aria-label="오류 알림 닫기"
+              onClick={() => setActionError("")}
+              className="text-rose-700"
+            >
+              <X size={16} />
+            </button>
           </div>
+        )}
 
-          <div className="flex items-end justify-between gap-4 lg:block lg:text-right">
-            <div>
-              <p className="text-xs font-bold text-slate-500">총 견적 금액</p>
-              <p className="mt-1 whitespace-nowrap text-xl font-black text-primary">
-                {formatPrice(quote.totalAmount)}
-              </p>
-              <p className="mt-1 text-xs font-semibold text-slate-500">
-                최저 단가 {formatPrice(getLowestUnitPrice(quote))}
-              </p>
-            </div>
-            <span className="text-slate-400 lg:hidden">
-              {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </span>
+        {isLoading && (
+          <div className="border border-slate-200 bg-white px-6 py-20 text-center text-sm font-semibold text-slate-500">
+            견적 목록을 불러오는 중입니다.
           </div>
-        </div>
-      </button>
+        )}
 
-<div className="border-t border-primary/15 bg-secondary/80 px-5 py-3">
-       <div className="grid gap-3 text-sm md:grid-cols-4">
-          <MiniInfo label="총 수량" value={`${getTotalQuantity(quote).toLocaleString()}개`} />
-          <MiniInfo label="납기" value={`${quote.leadTimeDays}일`} />
-          <MiniInfo label="배송비" value={formatShippingFee(quote.shippingFee)} />
-          <MiniInfo label="배송사" value={quote.deliveryCompany} />
-        </div>
-      </div>
+        {!isLoading && loadError && (
+          <div className="border border-rose-200 bg-white px-6 py-20 text-center text-sm font-semibold text-rose-600">
+            {loadError}
+          </div>
+        )}
 
-      {expanded && (
-        <div className="border-t border-slate-100 p-5">
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
-            <div className="space-y-5">
-              <section>
-                <SectionLabel icon={<Package size={14} />} title="견적 상품 항목" />
-                <div className="overflow-hidden rounded-lg border border-slate-200">
-                  {quote.items.map((item) => (
-                    <div
-                      key={item.optionSummary}
-                      className="grid gap-2 border-b border-slate-100 bg-white px-4 py-3 text-sm last:border-b-0 md:grid-cols-[minmax(0,1fr)_190px] md:items-center"
-                    >
-                      <div>
-                        <p className="font-bold text-slate-950">{item.optionSummary}</p>
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          {item.quantity.toLocaleString()}개 x {formatPrice(item.unitPrice)}
-                        </p>
+        {!isLoading && !loadError && quoteGroups.length === 0 && (
+          <div className="flex min-h-72 flex-col items-center justify-center border border-slate-200 bg-white px-6 py-12 text-center">
+            <FileText size={38} className="text-slate-300" />
+            <p className="mt-3 text-base font-black text-slate-800">
+              조건에 맞는 견적이 없습니다.
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              검색어 또는 견적 상태를 다시 확인해 주세요.
+            </p>
+          </div>
+        )}
+
+        {!isLoading && !loadError && (
+          <div className="space-y-4">
+            {quoteGroups.map(([sourcingRequestId, groupQuotes]) => {
+              const lowestAmount = Math.min(
+                ...groupQuotes.map((quote) => quote.totalAmount)
+              );
+              const shortestLeadTime = Math.min(
+                ...groupQuotes.map((quote) => quote.leadTimeDays)
+              );
+              const representativeProduct = groupQuotes[0]?.productName ?? "-";
+
+              return (
+                <section
+                  key={sourcingRequestId}
+                  className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
+                >
+                  <header className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-sm font-black text-slate-950">
+                          소싱 요청 #{sourcingRequestId}
+                        </h2>
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
+                          견적 {groupQuotes.length}건
+                        </span>
                       </div>
-                      <p className="whitespace-nowrap text-right font-black text-slate-950">
-                        {formatPrice(item.totalPrice)}
+                      <p className="mt-1 text-sm font-semibold text-slate-600">
+                        {representativeProduct}
                       </p>
                     </div>
-                  ))}
-                </div>
-              </section>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(`/buyer/sourcing-detail/${sourcingRequestId}`)
+                      }
+                      className="text-left text-xs font-bold text-slate-500 transition hover:text-primary sm:text-right"
+                    >
+                      소싱 요청 확인
+                    </button>
+                  </header>
 
-              <section>
-                <SectionLabel icon={<FileText size={14} />} title="견적 상세 정보" />
-                <div className="grid gap-3 md:grid-cols-2">
-                  <InfoBox label="소재" value={quote.material} />
-                  <InfoBox label="카테고리" value={quote.categoryName} />
-                  <InfoBox label="납기" value={`${quote.leadTimeDays}일`} />
-                  <InfoBox label="샘플 제공" value={quote.sampleAvailable === "AVAILABLE" ? "가능" : "불가"} />
-                </div>
-              </section>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[1120px] table-fixed text-left">
+                      <thead className="border-b border-slate-100 text-xs font-bold text-slate-500">
+                        <tr>
+                          <th className="w-[16%] px-5 py-3">견적번호</th>
+                          <th className="w-[16%] px-4 py-3">공급사</th>
+                          <th className="w-[12%] px-4 py-3">상태</th>
+                          <th className="w-[13%] px-4 py-3 text-right">총 견적 금액</th>
+                          <th className="w-[10%] px-4 py-3">납기</th>
+                          <th className="w-[10%] px-4 py-3">샘플</th>
+                          <th className="w-[14%] px-4 py-3">유효기간</th>
+                          <th className="w-[17%] px-5 py-3 text-right">처리</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {groupQuotes.map((quote) => {
+                          const status =
+                            statusConfig[quote.status] ??
+                            statusConfig.SUBMITTED;
+                          const remainingDays =
+                            getRemainingDays(quote.validUntil);
+                          const isLowest = quote.totalAmount === lowestAmount;
+                          const isFastest =
+                            quote.leadTimeDays === shortestLeadTime;
+                          const groupHasApprovedQuote =
+                            groupQuotes.some(
+                              (groupQuote) =>
+                                groupQuote.status === "APPROVED"
+                            );
+                          const canRespond =
+                            quote.status === "SUBMITTED" &&
+                            !groupHasApprovedQuote;
 
-              {quote.sellerMemo && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
-                  {quote.sellerMemo}
-                </div>
-              )}
-            </div>
+                          return (
+                            <tr
+                              key={quote.quoteId}
+                              className="align-middle transition-colors hover:bg-slate-50/70"
+                            >
+                              <td className="px-5 py-4">
+                                <p className="font-mono text-sm font-black text-slate-950">
+                                  {quote.quoteNo}
+                                </p>
+                                <p className="mt-1 text-xs text-slate-400">
+                                  {formatDate(quote.submittedAt)} 제출
+                                </p>
+                              </td>
+                              <td className="px-4 py-4">
+                                <p className="truncate text-sm font-bold text-slate-900">
+                                  {quote.companyName || "공급사"}
+                                </p>
+                                <p className="mt-1 truncate text-xs text-slate-400">
+                                  {quote.sellerName || "-"}
+                                </p>
+                              </td>
+                              <td className="px-4 py-4">
+                                <span
+                                  className={`inline-flex items-center gap-1 border px-2 py-1 text-xs font-bold ${status.className}`}
+                                >
+                                  {status.icon}
+                                  {status.label}
+                                </span>
+                              </td>
+                              <td className="px-4 py-4 text-right">
+                                <p className="text-sm font-black text-slate-950">
+                                  {formatPrice(quote.totalAmount)}
+                                </p>
+                                {isLowest && groupQuotes.length > 1 && (
+                                  <span className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                                    최저 견적
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-4">
+                                <p className="text-sm font-bold text-slate-700">
+                                  {quote.leadTimeDays}일
+                                </p>
+                                {isFastest && groupQuotes.length > 1 && (
+                                  <p className="mt-1 text-[11px] font-bold text-blue-700">
+                                    최단 납기
+                                  </p>
+                                )}
+                              </td>
+                              <td className="px-4 py-4">
+                                <span
+                                  className={`inline-flex items-center gap-1 text-xs font-bold ${
+                                    quote.sampleAvailable
+                                      ? "text-emerald-700"
+                                      : "text-slate-400"
+                                  }`}
+                                >
+                                  {quote.sampleAvailable ? (
+                                    <Check size={14} />
+                                  ) : (
+                                    <X size={14} />
+                                  )}
+                                  {quote.sampleAvailable ? "가능" : "불가"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-4">
+                                <p
+                                  className={`text-sm font-bold ${
+                                    remainingDays < 0
+                                      ? "text-rose-600"
+                                      : remainingDays <= 3
+                                        ? "text-amber-700"
+                                        : "text-slate-700"
+                                  }`}
+                                >
+                                  {formatDate(quote.validUntil)}
+                                </p>
+                                <p className="mt-1 text-xs font-semibold text-slate-400">
+                                  {remainingDays < 0
+                                    ? "기간 만료"
+                                    : remainingDays === 0
+                                      ? "오늘 만료"
+                                      : `D-${remainingDays}`}
+                                </p>
+                              </td>
+                              <td className="px-5 py-4 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  {canRespond && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setPendingAction({
+                                            quote,
+                                            status: "REJECTED",
+                                          })
+                                        }
+                                        className="h-9 border border-slate-200 px-3 text-xs font-bold text-slate-600 transition hover:border-rose-300 hover:text-rose-600"
+                                      >
+                                        거절
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setPendingAction({
+                                            quote,
+                                            status: "APPROVED",
+                                          })
+                                        }
+                                        className="h-9 bg-primary px-3 text-xs font-bold text-white transition hover:bg-primary/90"
+                                      >
+                                        확정
+                                      </button>
+                                    </>
+                                  )}
+                                  <button
+                                    type="button"
+                                    title="견적 상세"
+                                    aria-label={`${quote.quoteNo} 상세 보기`}
+                                    onClick={() =>
+                                      navigate(
+                                        `/buyer/quotes/${quote.quoteId}`
+                                      )
+                                    }
+                                    className="inline-flex h-9 w-9 items-center justify-center border border-slate-200 text-slate-500 transition hover:border-primary hover:text-primary"
+                                  >
+                                    <Eye size={16} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        )}
 
-            <aside className="rounded-xl border border-slate-200 bg-white p-4">
-              <SectionLabel icon={<ReceiptText size={14} />} title="견적 요약" />
-              <div className="space-y-3 text-sm">
-                <SummaryRow label="상품 금액" value={formatPrice(quote.subtotalAmount)} />
-                <SummaryRow label="배송비" value={formatShippingFee(quote.shippingFee)} />
-                <div className="border-t border-slate-100 pt-3">
-                  <SummaryRow label="최종 금액" value={formatPrice(quote.totalAmount)} strong />
-                </div>
-                <SummaryRow label="견적 유효기간" value={validBadge.summaryText} />
-                <SummaryRow label="소싱 요청번호" value={quote.sourcingRequestNo} />
-              </div>
-
-              <div className="mt-5 space-y-2">
-                <Link
-                  to={`/buyer/quotes/${quote.quoteId}`}
-                  className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-white transition hover:bg-primary/90"
-                >
-                  <Eye size={14} />
-                  견적서 상세
-                </Link>
-
-                {quote.status !== "ACCEPTED" && quote.status !== "EXPIRED" && (
-                  <button
-                    type="button"
-                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary/30 bg-white px-4 py-2.5 text-sm font-bold text-primary transition hover:bg-secondary"
-                  >
-                    <CheckCircle size={14} />
-                    이 견적 채택
-                  </button>
+        {pendingAction && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quote-action-title"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4"
+          >
+            <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
+              <div
+                className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                  pendingAction.status === "APPROVED"
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-rose-50 text-rose-600"
+                }`}
+              >
+                {pendingAction.status === "APPROVED" ? (
+                  <CheckCircle2 size={20} />
+                ) : (
+                  <XCircle size={20} />
                 )}
               </div>
-            </aside>
+
+              <h2
+                id="quote-action-title"
+                className="mt-4 text-lg font-black text-slate-950"
+              >
+                {pendingAction.status === "APPROVED"
+                  ? "이 견적을 확정하시겠습니까?"
+                  : "이 견적을 거절하시겠습니까?"}
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                {pendingAction.status === "APPROVED"
+                  ? "확정하면 나머지 견적은 미채택 처리되며, 셀러가 확인 후 계약서를 작성해 전달합니다."
+                  : "거절한 견적은 다시 확정할 수 없습니다."}
+              </p>
+
+              <div className="mt-4 border-y border-slate-100 py-3">
+                <p className="text-sm font-bold text-slate-900">
+                  {pendingAction.quote.productName}
+                </p>
+                <p className="mt-1 font-mono text-xs text-slate-500">
+                  {pendingAction.quote.quoteNo}
+                </p>
+                <p className="mt-2 text-sm font-black text-primary">
+                  {formatPrice(pendingAction.quote.totalAmount)}
+                </p>
+              </div>
+
+              <div className="mt-5 flex gap-2">
+                <button
+                  type="button"
+                  disabled={isUpdating}
+                  onClick={() => setPendingAction(null)}
+                  className="h-10 flex-1 border border-slate-200 text-sm font-bold text-slate-600 disabled:opacity-50"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  disabled={isUpdating}
+                  onClick={handleStatusUpdate}
+                  className={`h-10 flex-1 text-sm font-bold text-white disabled:opacity-50 ${
+                    pendingAction.status === "APPROVED"
+                      ? "bg-primary"
+                      : "bg-rose-600"
+                  }`}
+                >
+                  {isUpdating
+                    ? "처리 중..."
+                    : pendingAction.status === "APPROVED"
+                      ? "견적 확정"
+                      : "견적 거절"}
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
-    </article>
-  );
-}
-
-function Badge({ children, className }: { children: ReactNode; className: string }) {
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold ${className}`}>
-      {children}
-    </span>
-  );
-}
-
-function SectionLabel({ icon, title }: { icon: ReactNode; title: string }) {
-  return (
-    <div className="mb-3 flex items-center gap-2">
-      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-secondary text-primary">
-        {icon}
-      </span>
-      <h3 className="text-sm font-black text-slate-950">{title}</h3>
+        )}
+      </main>
     </div>
   );
 }
-
-function SummaryRow({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <span className="text-slate-500">{label}</span>
-      <span className={`text-right ${strong ? "text-base font-black text-primary" : "font-semibold text-slate-900"}`}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function MiniInfo({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs font-bold text-slate-500">{label}</p>
-      <p className="mt-1 font-black text-slate-900">{value}</p>
-    </div>
-  );
-}
-
-function InfoBox({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-      <p className="text-xs font-bold text-slate-500">{label}</p>
-      <p className="mt-1 text-sm font-black text-slate-950">{value}</p>
-    </div>
-  );
-}
-
-export default BuyerQuoteList;

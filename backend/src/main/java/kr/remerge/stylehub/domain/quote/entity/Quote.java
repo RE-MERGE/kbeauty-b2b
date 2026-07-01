@@ -2,6 +2,7 @@ package kr.remerge.stylehub.domain.quote.entity;
 
 import jakarta.persistence.*;
 import kr.remerge.stylehub.domain.company.entity.Company;
+import kr.remerge.stylehub.domain.quote.constant.QuoteStatusCode;
 import kr.remerge.stylehub.domain.sourcing.entity.SourcingRequest;
 import kr.remerge.stylehub.domain.user.entity.User;
 import lombok.*;
@@ -107,7 +108,7 @@ public class Quote{
 
     @Builder.Default
     @Column(nullable = false, length = 30)
-    private String status = "SUBMITTED";
+    private String status = QuoteStatusCode.SUBMITTED;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -127,12 +128,12 @@ public class Quote{
     public void changeStatus(String status) {
         this.status = status;
         LocalDateTime now = LocalDateTime.now();
+
         switch (status) {
             case "APPROVED" -> this.acceptedAt = now;
             case "NEGOTIATING" -> this.negotiatedAt = now;
             case "EXPIRED" -> this.expiredAt = now;
             default -> {
-                // REJECTED, SAMPLE_REQUESTED는 별도 타임스탬프 없음
             }
         }
     }

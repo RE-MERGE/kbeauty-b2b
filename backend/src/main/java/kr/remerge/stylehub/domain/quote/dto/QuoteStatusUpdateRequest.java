@@ -1,10 +1,10 @@
 package kr.remerge.stylehub.domain.quote.dto;
 
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import jakarta.validation.constraints.NotBlank;
 
-@Getter
-@NoArgsConstructor
-public class QuoteStatusUpdateRequest {
-    private String status; // APPROVED, REJECTED, NEGOTIATING, SAMPLE_REQUESTED
+public record QuoteStatusUpdateRequest(
+
+        @NotBlank(message = "변경할 상태가 필요합니다.")
+        String status // APPROVED, REJECTED, NEGOTIATING, SAMPLE_REQUESTED
+) {
 }

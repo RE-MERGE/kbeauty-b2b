@@ -15,6 +15,7 @@ import {
   Truck,
   X,
 } from "lucide-react";
+import api from "@/api/axios";
 
 const CATEGORIES = ["상의", "하의", "원피스/세트", "아우터", "이너웨어", "액세서리"];
 const SHIPPING_COMPANIES = ["CJ대한통운", "롯데택배", "한진택배", "로젠택배", "자체 배송", "직접 배송"];
@@ -35,6 +36,20 @@ type QuoteInitData = {
   deliveryDate: string | null;
   needSample: "Y" | "N";
   items: QuoteInitItem[];
+};
+
+type SourcingDetailResponse = {
+  sourcing_no: string;
+  product_name: string;
+  brand_name: string | null;
+  main_material: string | null;
+  delivery_date: string | null;
+  need_sample: "Y" | "N";
+  items: {
+    option_summary: string;
+    quantity: number;
+    sample_quantity: number | null;
+  }[];
 };
 
 type QuoteOptionValueRow = {
@@ -67,6 +82,12 @@ type QuoteForm = {
   customValidDays: string;
   sampleAvailable: "AVAILABLE" | "UNAVAILABLE";
   sellerMemo: string;
+};
+
+type QuoteCreateResponse = {
+  quoteId: number;
+  quoteNo: string;
+  status: string;
 };
 
 // ─── 파싱 유틸 ──────────────────────────────────────────────────────────────
@@ -102,7 +123,7 @@ function buildInitialQuoteItems(data: QuoteInitData): QuoteItemRow[] {
 
   return data.items.map((item) => ({
     optionValues: parseOptionSummary(item.optionSummary),
-    quantity: data.needSample === "Y" && item.quantity ? String(item.quantity) : "",
+    quantity: item.quantity ? String(item.quantity) : "",
     unitPrice: "",
   }));
 }
@@ -283,20 +304,43 @@ export function SellerQuoteWrite() {
   useEffect(() => {
     if (!requestId) return;
 
-    setLoading(true);
-    fetch(`/api/sourcing-requests/${requestId}/quote-init`)
-        .then((res) => {
-          if (!res.ok) throw new Error("소싱 요청 조회 실패");
-          return res.json() as Promise<QuoteInitData>;
-        })
-        .then((data) => {
-          setInitData(data);
-          setForm(buildInitialForm(data));
-          setQuoteItems(buildInitialQuoteItems(data));
-          setSampleItems(buildInitialSampleItems(data));
-        })
-        .catch((err) => console.error(err))
-        .finally(() => setLoading(false));
+    const loadQuoteInit = async () => {
+      try {
+        setLoading(true);
+        setSubmitError(null);
+
+        const response =
+            await api.get<SourcingDetailResponse>(
+                `/quotes/init/${requestId}`
+            );
+
+        const quoteInitData: QuoteInitData = {
+          sourcingNo: response.sourcing_no,
+          productName: response.product_name,
+          brandName: response.brand_name,
+          material: response.main_material,
+          deliveryDate: response.delivery_date,
+          needSample: response.need_sample,
+          items: response.items.map((item) => ({
+            optionSummary: item.option_summary,
+            quantity: item.quantity,
+            sampleQuantity: item.sample_quantity,
+          })),
+        };
+
+        setInitData(quoteInitData);
+        setForm(buildInitialForm(quoteInitData));
+        setQuoteItems(buildInitialQuoteItems(quoteInitData));
+        setSampleItems(buildInitialSampleItems(quoteInitData));
+      } catch (error) {
+        console.error("견적 작성 초기 정보 조회 실패", error);
+        setSubmitError("소싱 요청 정보를 불러오지 못했습니다.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadQuoteInit();
   }, [requestId]);
 
   // ── form 업데이트 ────────────────────────────────────────────────────────
@@ -370,10 +414,10 @@ export function SellerQuoteWrite() {
             const quantity = toNumber(item.quantity);
             const unitPrice = toNumber(item.unitPrice);
             return {
-              option_summary: buildOptionSummary(item.optionValues),
+              optionSummary: buildOptionSummary(item.optionValues),
               quantity,
-              unit_price: unitPrice,
-              total_price: quantity * unitPrice,
+              unitPrice,
+              sample: false,
             };
           }),
       [quoteItems]
@@ -385,18 +429,28 @@ export function SellerQuoteWrite() {
             const quantity = toNumber(sample.quantity);
             const unitPrice = toNumber(sample.unitPrice);
             return {
-              sample_name: sample.sampleName.trim(),
+              optionSummary: sample.sampleName.trim(),
               quantity,
-              unit_price: unitPrice,
-              total_price: quantity * unitPrice,
-              memo: sample.memo.trim(),
+              unitPrice,
+              sample: true,
             };
           }),
       [sampleItems]
   );
 
   const totalQuantity = quoteItemSnapshots.reduce((sum, item) => sum + item.quantity, 0);
-  const subtotalAmount = quoteItemSnapshots.reduce((sum, item) => sum + item.total_price, 0);
+  const regularSubtotalAmount = quoteItemSnapshots.reduce(
+      (sum, item) => sum + item.quantity * item.unitPrice,
+      0
+  );
+  const sampleSubtotalAmount =
+      form.sampleAvailable === "AVAILABLE"
+          ? sampleItemSnapshots.reduce(
+              (sum, item) => sum + item.quantity * item.unitPrice,
+              0
+          )
+          : 0;
+  const subtotalAmount = regularSubtotalAmount + sampleSubtotalAmount;
   const shippingFee = toNumber(form.shippingFee);
   const totalAmount = subtotalAmount + shippingFee;
   const validDaysForDisplay =
@@ -413,37 +467,35 @@ export function SellerQuoteWrite() {
     setSubmitting(true);
     setSubmitError(null);
 
+    const items = [
+      ...quoteItemSnapshots,
+      ...(form.sampleAvailable === "AVAILABLE"
+          ? sampleItemSnapshots.filter(
+              (item) => item.optionSummary.length > 0
+          )
+          : []),
+    ];
+
     const payload = {
-      sourcing_id: requestId ? Number(requestId) : undefined,
-      brand_name: form.brandName,
-      product_name: form.productName,
-      category_name: form.categoryName,
+      sourcingRequestId: requestId ? Number(requestId) : undefined,
+      brandName: form.brandName,
+      productName: form.productName,
+      categoryName: form.categoryName,
       material: form.material,
-      lead_time_days: toNumber(form.leadTimeDays),
-      delivery_company: form.deliveryCompany,
-      shipping_fee: shippingFee,
-      valid_until: getValidUntil(form.validDays, form.customValidDays),
-      sample_available: form.sampleAvailable,
-      seller_memo: sellerMemoWithSample,
-      subtotal_amount: subtotalAmount,
-      total_amount: totalAmount,
-      quote_items: quoteItemSnapshots,
-      sample_items: form.sampleAvailable === "AVAILABLE" ? sampleItemSnapshots : [],
+      leadTimeDays: toNumber(form.leadTimeDays),
+      deliveryCompany: form.deliveryCompany,
+      shippingFee,
+      validUntil: getValidUntil(form.validDays, form.customValidDays),
+      sampleAvailable: form.sampleAvailable === "AVAILABLE",
+      sellerMemo: sellerMemoWithSample,
+      items,
     };
 
     try {
-      const res = await fetch("/api/quotes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const quoteData =
+          await api.post<QuoteCreateResponse>("/quotes", payload);
 
-      if (!res.ok) throw new Error("견적서 제출에 실패했습니다.");
-
-      const quoteData = await res.json();
-
-      // QuoteDetail로 이동 - quoteData 전체를 location.state로 전달
-      navigate(`/seller/quotes/${quoteData.quote_id}`, { state: { quote: quoteData } });
+      navigate(`/seller/quotes/${quoteData.quoteId}`);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.");
     } finally {

@@ -1,4 +1,4 @@
-package kr.remerge.stylehub.global.auth.dto.login;
+package kr.remerge.stylehub.global.auth.dto.change;
 
 import jakarta.validation.constraints.NotBlank;
 

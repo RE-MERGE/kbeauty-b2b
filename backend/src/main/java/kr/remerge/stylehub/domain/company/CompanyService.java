@@ -2,10 +2,13 @@ package kr.remerge.stylehub.domain.company;
 
 import kr.remerge.stylehub.domain.company.client.NtsApiClient;
 import kr.remerge.stylehub.domain.company.client.OcrApiClient;
+import kr.remerge.stylehub.domain.company.dto.response.CompanyLookupResponse;
 import kr.remerge.stylehub.domain.company.dto.response.NtsResponse;
 import kr.remerge.stylehub.domain.company.dto.response.OcrParseResponse;
 import kr.remerge.stylehub.domain.company.dto.response.OcrResponse;
+import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.company.repository.CompanyRepository;
+import kr.remerge.stylehub.domain.user.enumtype.BusinessRole;
 import kr.remerge.stylehub.global.exception.BusinessException;
 import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -55,14 +58,14 @@ public class CompanyService {
      * 2. 최종 정보 조회 버튼 클릭 시 국세청 진위확인 및 의류 업종 필터링을 수행
      */
     public boolean verifyAndFilterBusiness(String businessNumber, String companyName, String representativeName, String openDate) {
-        // 2-1. 중복 가입 방지 (DB 확인)
-        if (companyRepository.existsByBusinessNumber(businessNumber)) {
-            throw new BusinessException(ErrorCode.DUPLICATE_BUSINESS_NUMBER);
-        }
-
         // 하이픈 제거 전처리 추가 (국세청 전송용)
         String cleanNum = businessNumber.replace("-", "");
         String cleanDate = openDate.replace("-", "");
+
+        // 2-1. 중복 가입 방지 (DB 확인)
+        if (companyRepository.existsByBusinessNumber(cleanNum)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_BUSINESS_NUMBER);
+        }
 
         // 2-2. 국세청 진위확인 API 호출 (4종 세트 전송)
         NtsResponse ntsResponse = ntsApiClient.validateBusiness(cleanNum, companyName, representativeName, cleanDate);
@@ -92,5 +95,33 @@ public class CompanyService {
         }
 
         return true;
+    }
+
+    /**
+     * 3. 직원 회원가입 전: 사업자번호로 소속 회사 존재 여부 및 가입 자격 검증
+     */
+    public CompanyLookupResponse lookupAndValidateCompany(String businessNumber, String businessRole) {
+        // 하이픈 제거 전처리
+        String cleanNum = businessNumber.replace("-", "");
+
+        // DB에서 회사 조회 (없으면 회사를 찾을 수 없다는 에러 발생)
+        Company company = companyRepository.findByBusinessNumber(cleanNum)
+                .orElseThrow(() -> new BusinessException(ErrorCode.COMPANY_NOT_FOUND));
+
+        BusinessRole roleEnum;
+        try {
+            roleEnum = BusinessRole.valueOf(businessRole.toUpperCase().trim());
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw new BusinessException(ErrorCode.INVALID_JOIN_ROLE); // 잘못된 역할군 예외 처리
+        }
+
+        company.validateEmployeeJoinEligibility(roleEnum);
+
+        // 검증 통과 시 프론트 UI 그리기에 필요한 정보만 리턴
+        return new CompanyLookupResponse(
+                company.getName(),
+                company.getRepresentativeName(),
+                company.getSellerStatus()
+        );
     }
 }

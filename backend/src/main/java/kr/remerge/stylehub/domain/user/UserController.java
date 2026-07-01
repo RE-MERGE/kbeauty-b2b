@@ -2,8 +2,10 @@ package kr.remerge.stylehub.domain.user;
 
 import jakarta.validation.Valid;
 import kr.remerge.stylehub.domain.user.dto.request.*;
+import kr.remerge.stylehub.domain.user.dto.response.ProfileUpdateResponse;
 import kr.remerge.stylehub.domain.user.dto.response.UserResponse;
 import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
+import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
 import kr.remerge.stylehub.global.auth.security.LoginUser;
 import kr.remerge.stylehub.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +29,7 @@ public class UserController {
 
     @PostMapping("/signup/buyer")
     public ResponseEntity<ApiResponse<Void>> signUpBuyer(
-            @Valid @RequestBody BuyerSignUpRequest request) {
+            @Valid @RequestBody BuyerSignUpRequest request ) {
         userService.signUpBuyer(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.successWithMessage("바이어 가입 신청이 완료되었습니다."));
@@ -80,7 +82,9 @@ public class UserController {
     // ───────────────────────────────────────────
     // 내 정보 수정
     // ───────────────────────────────────────────
-
+    /***
+     * 프로필 수정 전 회원정보 비밀번호 검증
+     **/
     @PostMapping("/me/verify-password")
     public ResponseEntity<ApiResponse<Void>> verifyPassword(
             @LoginUser AuthUser userDetails,
@@ -91,15 +95,12 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success());
     }
 
-    // PATCH /api/users/me
-    // JWT 인증 필요
-    @PatchMapping("/me")
-    public ResponseEntity<ApiResponse<UserResponse>> updateMe(
-            @LoginUser AuthUser userDetails,
-            @Valid @RequestBody UpdateUserRequest request) {
-
-        UserResponse response = userService.updateMe(userDetails.userId(), request);
-
+    @PatchMapping("/profile")
+    public ResponseEntity<ApiResponse<ProfileUpdateResponse>> updateProfile(
+            @LoginUser AuthUser user,
+            @Valid @RequestBody ProfileUpdateRequest request
+    ) {
+        ProfileUpdateResponse response = userService.updateProfile(user.userId(), request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

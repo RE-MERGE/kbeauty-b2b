@@ -4,6 +4,7 @@ import {
     BuyerSignUpRequest,
     ChangeEmailOtpRequest,
     ChangePhoneOtpRequest,
+    CompanyLookupResponse,
     EmployeeSignUpRequest,
     FindIdResponse,
     FindIdSendOtpRequest,
@@ -15,7 +16,10 @@ import {
     ResetPasswordRequest,
     ResetPasswordTokenResponse,
     SellerSignUpRequest,
+    SendPhoneOtpPayload,
+    VerifyEmailOtpPayload,
     VerifyEmailOtpRequest,
+    VerifyPhoneOtpPayload,
     VerifyPhoneOtpRequest
 } from "@/api/auth/auth.types";
 
@@ -47,6 +51,63 @@ export const signUpSeller = async (request: SellerSignUpRequest): Promise<void> 
 
 export const signUpEmployee = async (request: EmployeeSignUpRequest): Promise<void> => {
     await api.post<void>("/users/signup/employee", request);
+};
+
+/**
+ * 1. 이메일 중복 확인
+ * @description 409 상태 코드가 반환되면 중복된 이메일로 판단합니다.
+ */
+export const checkEmailDuplicate = async (email: string): Promise<void> => {
+    await api.get(`/auth/email/check?email=${encodeURIComponent(email)}`);
+};
+
+/**
+ * 2. 이메일 인증 코드 발송
+ */
+export const sendEmailOtp = async (email: string): Promise<void> => {
+    await api.post("/auth/email/send", {email});
+};
+
+/**
+ * 3. 이메일 인증 코드 검증
+ */
+export const verifyEmailOtp = async (payload: VerifyEmailOtpPayload): Promise<void> => {
+    await api.post("/auth/email/verify", payload);
+};
+
+/**
+ * 1. 휴대폰 중복 확인
+ * @description 409 상태 코드가 반환되면 중복된 휴대폰으로 판단합니다.
+ */
+export const checkPhoneDuplicate = async (phone: string): Promise<void> => {
+    await api.get(`/auth/phone/check?phone=${encodeURIComponent(phone)}`);
+};
+
+/**
+ * 2. 휴대폰 인증 번호 발송 (SENS SMS)
+ */
+export const sendPhoneOtp = async (payload: SendPhoneOtpPayload): Promise<void> => {
+    await api.post("/auth/phone/send", payload);
+};
+
+/**
+ * 3. 휴대폰 인증 번호 검증
+ */
+export const verifyPhoneOtp = async (payload: VerifyPhoneOtpPayload): Promise<void> => {
+    await api.post("/auth/phone/verify", payload);
+};
+
+/**
+ * 4. 소속 회사 조회 및 가입 가능 여부(승인 상태) 검증
+ * @description 비로그인(회원가입 단계)에서 사업자번호로 등록된 회사를 조회합니다.
+ */
+export const lookupCompany = async (
+    businessNumber: string,
+    businessRole: "SELLER" | "BUYER"
+): Promise<CompanyLookupResponse> => {
+    return await api.get<CompanyLookupResponse>(
+        `/company/lookup?businessNumber=${businessNumber}&businessRole=${businessRole}`
+    );
 };
 
 // ───────────────────────────────────────────
@@ -99,19 +160,19 @@ export const resetPassword = async (request: ResetPasswordRequest): Promise<void
 // 회원 정보 변경 인증 (Profile OTP)
 // ───────────────────────────────────────────
 export const sendEmailChangeOtp = async (request: ChangeEmailOtpRequest): Promise<void> => {
-    await api.post<void>("/auth/change-email/otp", request);
+    await api.post<void>("/auth/change-id/send-otp", request);
 };
 
 export const verifyEmailChangeOtp = async (request: VerifyEmailOtpRequest): Promise<void> => {
-    await api.post<void>("/auth/change-email/otp/verify", request);
+    await api.post<void>("/auth/change-id/verify-otp", request);
 };
 
 export const sendPhoneChangeOtp = async (request: ChangePhoneOtpRequest): Promise<void> => {
-    await api.post<void>("/auth/change-phone/otp", request);
+    await api.post<void>("/auth/change-phone/send-otp", request);
 };
 
 export const verifyPhoneChangeOtp = async (request: VerifyPhoneOtpRequest): Promise<void> => {
-    await api.post<void>("/auth/change-phone/otp/verify", request);
+    await api.post<void>("/auth/change-phone/verify-otp", request);
 };
 
 // ───────────────────────────────────────────

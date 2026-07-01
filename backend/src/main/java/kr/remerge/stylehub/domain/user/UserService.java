@@ -10,6 +10,7 @@ import kr.remerge.stylehub.domain.company.repository.CompanyBankAccountRepositor
 import kr.remerge.stylehub.domain.company.repository.CompanyHandledCategoryRepository;
 import kr.remerge.stylehub.domain.company.repository.CompanyRepository;
 import kr.remerge.stylehub.domain.user.dto.request.*;
+import kr.remerge.stylehub.domain.user.dto.response.ProfileUpdateResponse;
 import kr.remerge.stylehub.domain.user.dto.response.UserResponse;
 import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.entity.UserPreferredCategory;
@@ -18,8 +19,6 @@ import kr.remerge.stylehub.domain.user.enumtype.UserRole;
 import kr.remerge.stylehub.domain.user.repository.UserPreferredCategoryRepository;
 import kr.remerge.stylehub.domain.user.repository.UserRepository;
 import kr.remerge.stylehub.global.auth.AuthService;
-import kr.remerge.stylehub.global.auth.jwt.JwtProvider;
-import kr.remerge.stylehub.global.common.service.EmailService;
 import kr.remerge.stylehub.global.exception.BusinessException;
 import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +27,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
@@ -41,212 +42,249 @@ public class UserService {
     private final CompanyBankAccountRepository companyBankAccountRepository;
     private final BrandRepository brandRepository;
     private final CategoryRepository categoryRepository;
-
     private final AuthService authService;
-    private final EmailService emailService;         // 이메일 발송 서비스
-    private final JwtProvider jwtProvider; // 임시 비밀번호 재설정용 토큰 공급자
+
     // ───────────────────────────────────────────
-    // 회원가입
+    // 회원가입 플로우
     // ───────────────────────────────────────────
-    // ───────────────────────────────────────────
-    // 바이어 대표자 가입
-    // ───────────────────────────────────────────
+
+    /**
+     * 바이어 대표자 가입
+     */
     @Transactional
     public void signUpBuyer(BuyerSignUpRequest request) {
-        validateEmail(request.email());
+        // 1. 공통 가입 인증 검증 (이메일, 휴대폰)
+        validateSignUpAuth(request.email(), request.phone());
 
-        // 사업자 번호 중복 검사
+        // 2. 인증 티켓 소모
+        invalidateAuthTickets(request.email(), request.phone());
+
+        // 3. 사업자 번호 중복 검사
         if (companyRepository.existsByBusinessNumber(request.businessNumber())) {
             throw new BusinessException(ErrorCode.DUPLICATE_BUSINESS_NUMBER);
         }
 
-        // 1. 회사 생성 및 저장
+        // 4. 회사 및 유저 정보 저장
         Company company = companyRepository.save(request.toCompanyEntity());
-
-        // 2. 유저 생성 및 저장
         String encodedPassword = passwordEncoder.encode(request.password());
         User user = request.toUserEntity(company, encodedPassword, UserRole.PRESIDENT, BusinessRole.BUYER);
         userRepository.save(user);
 
-        // 3. 선호 카테고리 저장
-        saveUserPreferredCategories(user, request.preferredCategoryIds());
+        // 5. 선호 카테고리 저장 (바이어 대표는 0개 허용이므로 필수 여부 false)
+        saveCategories(request.preferredCategoryIds(), false,
+                category -> UserPreferredCategory.builder().user(user).category(category).build(),
+                preferredCategoryRepository::saveAll);
     }
 
-    // ───────────────────────────────────────────
-    // 셀러 대표자 가입
-    // ───────────────────────────────────────────
+    /**
+     * 셀러 대표자 가입
+     */
     @Transactional
     public void signUpSeller(SellerSignUpRequest request) {
-        validateEmail(request.email());
+        // 1. 공통 가입 인증 검증
+        validateSignUpAuth(request.email(), request.phone());
 
-        // 사업자 번호 중복 검사
+        // 2. 인증 티켓 소모
+        invalidateAuthTickets(request.email(), request.phone());
+
+        // 3. 사업자 번호 중복 검사
         if (companyRepository.existsByBusinessNumber(request.businessNumber())) {
             throw new BusinessException(ErrorCode.DUPLICATE_BUSINESS_NUMBER);
         }
 
-        // 1. 회사 생성 및 저장
+        // 4. 회사 및 브랜드 정보 저장
         Company company = companyRepository.save(request.toCompanyEntity());
-
-        // 2. 브랜드 정보가 있다면 저장
         if (request.brandName() != null && !request.brandName().isBlank()) {
             brandRepository.save(request.toBrandEntity(company));
         }
 
-        // 3. 유저 생성 및 저장
+        // 5. 유저 및 정산 계좌 저장
         String encodedPassword = passwordEncoder.encode(request.password());
         User user = request.toUserEntity(company, encodedPassword, UserRole.PRESIDENT, BusinessRole.BOTH);
         userRepository.save(user);
-
-        // 4. 회사 정산 계좌 저장
         companyBankAccountRepository.save(request.toBankAccountEntity(company));
 
-        // 5. 카테고리 맵핑 데이터들 저장
-        saveUserPreferredCategories(user, request.preferredCategoryIds());
-        saveCompanyHandledCategories(company, request.handledCategoryIds());
+        // 6. 카테고리 매핑 데이터 저장
+        // - 개인 선호 카테고리: 선택 사항 (false)
+        // - 회사 취급 카테고리: 최소 1개 필수 사항 (true)
+        saveCategories(request.preferredCategoryIds(), false,
+                category -> UserPreferredCategory.builder().user(user).category(category).build(),
+                preferredCategoryRepository::saveAll);
+
+        saveCategories(request.handledCategoryIds(), true,
+                category -> CompanyHandledCategory.builder().companyId(company.getCompanyId()).categoryId(category.getCategoryId()).build(),
+                companyHandledCategoryRepository::saveAll);
     }
 
-    // ───────────────────────────────────────────
-    // 직원 가입
-    // ───────────────────────────────────────────
+    /**
+     * 직원 가입
+     */
     @Transactional
     public void signUpEmployee(EmployeeSignUpRequest request) {
-        validateEmail(request.email());
+        // 1. 공통 가입 인증 검증 및 티켓 소모
+        validateSignUpAuth(request.email(), request.phone());
+        invalidateAuthTickets(request.email(), request.phone());
 
-        // 1. 기존에 등록된 회사 찾기 (없으면 예외)
+        // 2. 소속 회사 조회
         Company company = companyRepository.findByBusinessNumber(request.businessNumber())
                 .orElseThrow(() -> new BusinessException(ErrorCode.COMPANY_NOT_FOUND));
 
-        if (company.getSellerStatus() != SellerStatus.APPROVED) {
-            throw new BusinessException(ErrorCode.COMPANY_NOT_APPROVED); // 💡 승인되지 않은 회사 예외
-        }
+        // 3. 직원 역할군 및 회사 상태 정밀 검증
+        validateEmployeeRole(request.businessRole(), company);
 
-        BusinessRole requestedRole = request.businessRole();
-        if (requestedRole != BusinessRole.SELLER && requestedRole != BusinessRole.BUYER) {
-            throw new BusinessException(ErrorCode.INVALID_BUSINESS_ROLE);
-        }
-
-        // 2. 직원 유저 생성 및 저장
+        // 4. 직원 유저 생성 및 저장
         String encodedPassword = passwordEncoder.encode(request.password());
         User user = request.toUserEntity(company, encodedPassword, UserRole.EMPLOYEE, request.businessRole());
         userRepository.save(user);
 
-        // 3. 직원 개인 선호 카테고리 저장 (선택 사항)
-        if (request.preferredCategoryIds() != null && !request.preferredCategoryIds().isEmpty()) {
-            saveUserPreferredCategories(user, request.preferredCategoryIds());
-        }
+        // 5. 직원 개인 선호 카테고리 저장 (선택 사항이므로 false)
+        saveCategories(request.preferredCategoryIds(), false,
+                category -> UserPreferredCategory.builder().user(user).category(category).build(),
+                preferredCategoryRepository::saveAll);
     }
 
     // ───────────────────────────────────────────
-    // 공통 내부 메서드
+    // 공통 내부 리팩토링 메서드 (중복 제거용)
     // ───────────────────────────────────────────
-    private void validateEmail(String email) {
+
+    /**
+     * 카테고리 검증, 매핑, 저장을 일괄 처리하는 공통 제네릭 메서드 (핵심 리팩토링)
+     */
+    private <T> void saveCategories(List<Integer> categoryIds, boolean isRequired, Function<Category, T> mapper, Consumer<List<T>> saveAction) {
+        int count = (categoryIds == null) ? 0 : categoryIds.size();
+
+        // [조건 1] 필수 사항인데 하나도 선택 안 한 경우 에러 (셀러 대표 취급 카테고리 방어)
+        if (isRequired && count == 0) {
+            throw new BusinessException(ErrorCode.INVALID_CATEGORY_COUNT);
+        }
+        // [조건 2] 5개를 초과하여 선택한 경우 무조건 에러
+        if (count > 5) {
+            throw new BusinessException(ErrorCode.INVALID_CATEGORY_COUNT);
+        }
+        // 데이터가 없는 선택 사항 케이스라면 저장 생략하고 리턴
+        if (categoryIds == null || categoryIds.isEmpty()) {
+            return;
+        }
+
+        // DB에서 카테고리 데이터 유효성 일괄 검증
+        List<Category> categories = categoryRepository.findAllById(categoryIds);
+        if (categories.size() != categoryIds.size()) {
+            throw new BusinessException(ErrorCode.CATEGORY_NOT_FOUND);
+        }
+
+        // 제네릭 스트림 매핑 처리 후 람다 액션 실행
+        List<T> entities = categories.stream().map(mapper).toList();
+        saveAction.accept(entities);
+    }
+
+    /**
+     * 회원가입 후 사용된 이메일 및 휴대폰 인증 티켓 무효화
+     */
+    private void invalidateAuthTickets(String email, String phone) {
+        authService.invalidateVerification(email);
+        authService.invalidateVerification(phone.replaceAll("[^0-9]", ""));
+    }
+
+    /**
+     * 직원 가입 요청 시 역할군 및 회사의 상태(SellerStatus) 정밀 검증
+     */
+    private void validateEmployeeRole(BusinessRole requestedRole, Company company) {
+        if (requestedRole != BusinessRole.SELLER && requestedRole != BusinessRole.BUYER) {
+            throw new BusinessException(ErrorCode.INVALID_JOIN_ROLE);
+        }
+
+        if (requestedRole == BusinessRole.SELLER) {
+            if (company.getSellerStatus() != SellerStatus.APPROVED && company.getSellerStatus() != SellerStatus.PENDING) {
+                throw new BusinessException(ErrorCode.COMPANY_NOT_APPROVED);
+            }
+        } else if (requestedRole == BusinessRole.BUYER) {
+            if (company.getSellerStatus() != SellerStatus.NONE &&
+                    company.getSellerStatus() != SellerStatus.APPROVED &&
+                    company.getSellerStatus() != SellerStatus.PENDING) {
+                throw new BusinessException(ErrorCode.INVALID_COMPANY_STATUS);
+            }
+        }
+    }
+
+    /**
+     * 회원가입 전 공통 보안 검증 (이메일 중복, 이메일 인증 여부, 휴대폰 인증 여부)
+     */
+    private void validateSignUpAuth(String email, String phone) {
         if (userRepository.existsByEmail(email)) {
             throw new BusinessException(ErrorCode.DUPLICATE_EMAIL);
         }
-    }
-
-    // 유저 개인 선호 카테고리 저장 (바이어/셀러/직원 공통)
-    // user_preferred_categories 테이블
-    private void saveUserPreferredCategories(User user, List<Integer> categoryIds) {
-        validateCategoryCount(categoryIds);
-
-        List<Category> categories = categoryRepository.findAllById(categoryIds);
-        if (categories.size() != categoryIds.size()) {
-            throw new BusinessException(ErrorCode.CATEGORY_NOT_FOUND);
+        if (!authService.isVerified(email)) {
+            throw new BusinessException(ErrorCode.UNVERIFIED_EMAIL);
         }
-
-        List<UserPreferredCategory> preferredCategories = categories.stream()
-                .map(category -> UserPreferredCategory.builder()
-                        .user(user)       // 객체 연관 관계 매핑
-                        .category(category) // 객체 연관 관계 매핑
-                        .build())
-                .toList();
-
-        preferredCategoryRepository.saveAll(preferredCategories);
-    }
-
-    // 회사 취급 카테고리 저장 (셀러만)
-    // company_handled_categories 테이블
-    private void saveCompanyHandledCategories(Company company, List<Integer> categoryIds) {
-        validateCategoryCount(categoryIds);
-
-        List<Category> categories = categoryRepository.findAllById(categoryIds);
-        if (categories.size() != categoryIds.size()) {
-            throw new BusinessException(ErrorCode.CATEGORY_NOT_FOUND);
-        }
-
-        List<CompanyHandledCategory> handledCategories = categories.stream()
-                .map(category -> CompanyHandledCategory.builder()
-                        .companyId(company.getCompanyId())
-                        .categoryId(category.getCategoryId())
-                        .build())
-                .toList();
-
-        companyHandledCategoryRepository.saveAll(handledCategories);
-    }
-
-    private void validateCategoryCount(List<Integer> categoryIds) {
-        if (categoryIds.size() < 3 || categoryIds.size() > 5) {
-            throw new BusinessException(ErrorCode.INVALID_CATEGORY_COUNT);
+        String cleanPhone = phone.replaceAll("[^0-9]", "");
+        if (!authService.isVerified(cleanPhone)) {
+            throw new BusinessException(ErrorCode.UNVERIFIED_PHONE);
         }
     }
 
     // ───────────────────────────────────────────
-    // 내 정보 조회
+    // 회원 조회 / 수정 / 탈퇴 로직 (원본 유지)
     // ───────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public UserResponse getMe(Integer userId) {
         User user = userRepository.findByIdWithCompany(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-
         return UserResponse.from(user);
     }
 
-    // ───────────────────────────────────────────
-    // 내 정보 수정
-    // ───────────────────────────────────────────
     @Transactional(readOnly = true)
     public void verifyPassword(Integer userId, VerifyPasswordRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-
-        // 입력받은 비밀번호와 DB의 해시화된 비밀번호 비교
         if (!passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
             throw new BusinessException(ErrorCode.INVALID_PASSWORD);
         }
     }
 
     @Transactional
-    public UserResponse updateMe(Integer userId, UpdateUserRequest request) {
+    public ProfileUpdateResponse updateProfile(Integer userId, ProfileUpdateRequest request) {
+        // 1. 현재 로그인한 유저 정보 조회
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        // 이메일을 변경하는 경우 중복 체크
-        if (!user.getEmail().equals(request.email()) && userRepository.existsByEmail(request.email())) {
-            throw new BusinessException(ErrorCode.DUPLICATE_EMAIL);
-        }
-        if (!request.email().equals(user.getEmail())) {
-            if (!authService.isVerified(request.email())) {
-                throw new BusinessException(ErrorCode.UNVERIFIED_EMAIL);
+        // 2. 이메일이 변경되었는지 확인 → 변경되었다면 Redis 인증 여부 검증
+        if (request.email() != null && !request.email().equals(user.getEmail())) {
+            if (userRepository.existsByEmail(request.email())) {
+                throw new BusinessException(ErrorCode.DUPLICATE_EMAIL);
             }
+            // AuthService에 만들어 둔 검증 정책 메서드 활용
+            authService.validateVerification(request.email());
             authService.invalidateVerification(request.email());
+
+            user.updateEmail(request.email());
         }
 
-        user.update(request.email(), request.phone(), request.profileImageUrl());
+        // 3. 휴대폰 번호가 변경되었는지 확인 → 변경되었다면 Redis 인증 여부 검증
+        if (request.phone() != null && !request.phone().equals(user.getPhone())) {
+            String cleanPhone = request.phone().replaceAll("[^0-9]", "");
+            if (userRepository.existsByPhone(cleanPhone)) { // 해당 메서드가 레포지토리에 있다고 가정
+                throw new BusinessException(ErrorCode.DUPLICATE_PHONE_NUMBER);
+            }
 
-        return UserResponse.from(user);
+            authService.validateVerification(cleanPhone);
+            authService.invalidateVerification(cleanPhone);
+
+            user.updatePhone(cleanPhone);
+        }
+
+        // 4. 프로필 이미지 등 기타 정보 업데이트
+        if (request.profileImageUrl() != null) {
+            user.updateProfileImageUrl(request.profileImageUrl());
+        }
+
+        return ProfileUpdateResponse.from(user);
     }
-
-    // ───────────────────────────────────────────
-    // 회원 탈퇴
-    // ───────────────────────────────────────────
 
     @Transactional
     public void deleteMe(Integer userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-
         user.delete();
     }
 }

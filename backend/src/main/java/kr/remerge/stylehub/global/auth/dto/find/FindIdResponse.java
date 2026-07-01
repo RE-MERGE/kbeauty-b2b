@@ -1,4 +1,4 @@
-package kr.remerge.stylehub.domain.user.dto.response;
+package kr.remerge.stylehub.global.auth.dto.find;
 
 public record FindIdResponse(
     String maskedEmail,

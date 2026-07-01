@@ -39,6 +39,7 @@ public enum ErrorCode {
     USER_DELETED(HttpStatus.FORBIDDEN, "USER_007", "탈퇴한 계정입니다."),
     INVALID_BUSINESS_ROLE(HttpStatus.BAD_REQUEST, "USER_008", "유효하지 않은 비즈니스 역할입니다."),
     INVALID_LOGIN_CREDENTIALS(HttpStatus.BAD_REQUEST, "USER_009", "이메일 또는 비밀번호가 올바르지 않습니다."),
+    DUPLICATE_PHONE_NUMBER(HttpStatus.CONFLICT, "USER_010", "이미 사용 중인 핸드폰 번호입니다."),
 
     // ───────────────────────────────────────────
     // 회사 (COMPANY)
@@ -49,6 +50,8 @@ public enum ErrorCode {
     INVALID_BUSINESS_INFORMATION(HttpStatus.BAD_REQUEST, "COMPANY_004", "국세청 등록 정보와 일치하지 않는 사업자 정보입니다."),
     NOT_CLOTHING_BUSINESS(HttpStatus.BAD_REQUEST, "COMPANY_005", "의류 및 패션 관련 업종의 셀러만 가입이 가능합니다."),
     OCR_PARSING_FAILED(HttpStatus.BAD_REQUEST, "COMPANY_006", "사업자등록증 이미지 글자 인식에 실패했습니다."),
+    INVALID_COMPANY_STATUS(HttpStatus.BAD_REQUEST, "COMPANY_007", "가입할 수 없는 상태의 회사입니다."),
+    INVALID_JOIN_ROLE(HttpStatus.BAD_REQUEST, "COMPANY_008", "올바르지 않은 가입 입니다."),
 
     // ───────────────────────────────────────────
     // 상품 (PRODUCT)

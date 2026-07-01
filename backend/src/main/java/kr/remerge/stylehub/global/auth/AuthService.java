@@ -1,11 +1,10 @@
 package kr.remerge.stylehub.global.auth;
 
-import kr.remerge.stylehub.domain.user.dto.response.FindIdResponse;
 import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.repository.UserRepository;
-import kr.remerge.stylehub.global.auth.dto.change.LoginRequest;
-import kr.remerge.stylehub.global.auth.dto.change.TokenResponse;
 import kr.remerge.stylehub.global.auth.dto.find.*;
+import kr.remerge.stylehub.global.auth.dto.login.LoginRequest;
+import kr.remerge.stylehub.global.auth.dto.token.TokenResponse;
 import kr.remerge.stylehub.global.auth.jwt.JwtProperties;
 import kr.remerge.stylehub.global.auth.jwt.JwtProvider;
 import kr.remerge.stylehub.global.common.RedisRepository;
@@ -107,6 +106,87 @@ public class AuthService {
     }
 
     // ───────────────────────────────────────────
+    // 회원가입 (SignUp) 비즈니스 로직 추가
+    // ───────────────────────────────────────────
+
+    /**
+     * 회원가입용 이메일 중복체크
+     * 이미 가입된 유저가 존재하면 DUPLICATE_EMAIL(409) 에러 발생
+     */
+    public void checkEmailDuplicateForSignUp(String email) {
+        if (userRepository.existsByEmail(email)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_EMAIL);
+        }
+    }
+
+    /**
+     * 회원가입용 휴대폰 번호 중복체크
+     * 이미 가입된 휴대폰 번호가 존재하면 DUPLICATE_PHONE_NUMBER(409) 에러 발생
+     */
+    public void checkPhoneDuplicateForSignUp(String phone) {
+        String cleanPhone = phone.replaceAll("[^0-9]", "");
+        if (userRepository.existsByPhone(cleanPhone)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_PHONE_NUMBER);
+        }
+    }
+
+    /**
+     * 회원가입용 이메일 OTP 발송
+     */
+    public void sendSignUpEmailOtp(String email) {
+        // 1. 중복 체크
+        checkEmailDuplicateForSignUp(email);
+
+        // 2. 인증코드 생성 및 Redis 저장
+        String otpCode = String.format("%06d", SECURE_RANDOM.nextInt(1000000));
+        String targetKey = "SIGNUP:EMAIL:" + email;
+        redisRepository.save(targetKey, otpCode, Duration.ofMinutes(3));
+
+        // 3. EmailService에 정의한 순서(email, otpCode)대로 전달
+        emailService.sendSignUpVerificationEmail(email, otpCode);
+    }
+
+    /**
+     * 회원가입용 이메일 OTP 검증 및 점유 성공 플래그 저장
+     */
+    public void verifySignUpEmailOtp(String email, String code) {
+        String targetKey = "SIGNUP:EMAIL:" + email;
+        validateOtpCode(targetKey, code); // 만료 및 불일치 자동 체크 예외처리됨
+
+        // 검증 성공 시 가입 완료용 인증 완료 플래그 활성화 (10분 간 유효)
+        redisRepository.save(verificationKey(email), "true", Duration.ofMinutes(10));
+        redisRepository.delete(targetKey); // 사용된 OTP 폐기
+    }
+
+    /**
+     * 회원가입용 휴대폰 OTP 발송
+     */
+    public void sendSignUpPhoneOtp(String phone) {
+
+        checkPhoneDuplicateForSignUp(phone);
+
+        String cleanPhone = phone.replaceAll("[^0-9]", "");
+        String otpCode = "01000000000".equals(cleanPhone) ? "123456" : String.format("%06d", SECURE_RANDOM.nextInt(1000000));
+        String targetKey = "SIGNUP:PHONE:" + cleanPhone;
+
+        redisRepository.save(targetKey, otpCode, Duration.ofMinutes(3));
+        smsService.sendSignUpOtpSms(phone, otpCode);
+    }
+
+    /**
+     * 회원가입용 휴대폰 OTP 검증 및 점유 성공 플래그 저장
+     */
+    public void verifySignUpPhoneOtp(String phone, String code) {
+        String cleanPhone = phone.replaceAll("[^0-9]", "");
+        String targetKey = "SIGNUP:PHONE:" + cleanPhone;
+        validateOtpCode(targetKey, code);
+
+        // 검증 성공 시 가입 완료용 인증 완료 플래그 활성화 (10분 간 유효)
+        redisRepository.save(verificationKey(phone), "true", Duration.ofMinutes(10));
+        redisRepository.delete(targetKey); // 사용된 OTP 폐기
+    }
+
+    // ───────────────────────────────────────────
     // 로그아웃 (Logout)
     // ───────────────────────────────────────────
     public void logout(Integer userId) {
@@ -118,7 +198,8 @@ public class AuthService {
             case PENDING -> throw new BusinessException(ErrorCode.USER_PENDING);
             case SUSPENDED -> throw new BusinessException(ErrorCode.USER_SUSPENDED);
             case DELETED -> throw new BusinessException(ErrorCode.USER_DELETED);
-            default -> {}
+            default -> {
+            }
         }
     }
 
@@ -131,13 +212,13 @@ public class AuthService {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
 
+        String cleanPhone = request.phone().replaceAll("[^0-9]", "");
         // 2. 난수 생성 및 Redis 저장
-        String otpCode = String.format("%06d", SECURE_RANDOM.nextInt(1000000));
+        String otpCode = "01000000000".equals(cleanPhone) ? "123456" : String.format("%06d", SECURE_RANDOM.nextInt(1000000));
         redisRepository.save("SMS_AUTH:" + request.phone(), otpCode, Duration.ofMinutes(3));
 
         // 3. 문자 발송
-        String messageContent = "[StyleHub] 인증번호 [" + otpCode + "]를 입력해주세요.";
-        boolean isSent = smsService.sendSms(request.phone(), messageContent);
+        boolean isSent = smsService.sendFindIdOtpSms(request.phone(), otpCode);
 
         if (!isSent) {
             throw new BusinessException(ErrorCode.SMS_SEND_FAILED);
@@ -177,25 +258,12 @@ public class AuthService {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
 
-        // 2. 인증코드 생성 및 Redis 저장
+        // 2. 인증코드 생성 및 Redis 저장 (비밀번호 찾기는 정책상 5분)
         String otpCode = String.format("%06d", SECURE_RANDOM.nextInt(1000000));
         redisRepository.save("EMAIL_AUTH:" + request.email(), otpCode, Duration.ofMinutes(5));
 
-        // 3. HTML 템플릿 빌드 (여기서는 내용만 채웁니다)
-        String subject = "[StyleHub] 비밀번호 찾기 인증번호 안내";
-        String htmlContent = """
-                <div style='margin:20px; padding:20px; border:1px solid #e2e8f0; border-radius:12px; max-width: 500px;'>
-                    <h2 style='color: #0F172A; font-size: 20px; margin-bottom: 8px;'>안녕하세요, StyleHub입니다.</h2>
-                    <p style='color: #475569; font-size: 14px;'>본인 확인을 위한 비밀번호 찾기 인증번호입니다.<br/>아래의 인증번호를 제한 시간 내에 입력해 주세요.</p>
-                    <div style='font-size:32px; font-weight:bold; color:#2563EB; letter-spacing:4px; margin:24px 0; text-align:center; background-color:#F8FAFC; padding:12px; border-radius:8px;'>
-                        %s
-                    </div>
-                    <p style='color: #94A3B8; font-size: 12px; margin-top: 16px;'>※ 인증번호 유효 시간은 <b>5분</b>입니다.</p>
-                </div>
-                """.formatted(otpCode);
-
-        // 4. 분리한 이메일 공통 서비스 호출!
-        emailService.sendHtmlEmail(request.email(), subject, htmlContent);
+        // 3. 전용 서비스 메서드를 호출하여 코드만 전달! (내부에서 문구 조립 및 발송 일괄 처리)
+        emailService.sendFindPasswordEmail(request.email(), otpCode);
     }
 
     // ───────────────────────────────────────────
@@ -219,7 +287,7 @@ public class AuthService {
         redisRepository.delete("EMAIL_AUTH:" + request.email());
 
         // 5. 1회성 비밀번호 재설정 토큰(JWT) 발행
-        // 💡 JwtProvider에 가볍게 이메일을 담아 5~10분짜리 짧은 토큰을 만드는 메서드를 활용합니다.
+        // JwtProvider에 가볍게 이메일을 담아 5~10분짜리 짧은 토큰을 만드는 메서드를 활용합니다.
         String resetToken = jwtProvider.createPasswordResetToken(request.email());
 
         return new ResetPasswordTokenResponse(resetToken);
@@ -252,34 +320,83 @@ public class AuthService {
     // ───────────────────────────────────────────
     // 정보 변경을 위한 인증 코드 발송 및 검증 (마이페이지용)
     // ───────────────────────────────────────────
-    public void sendChangeAuthCode(String target) {
+    public void sendChangeIdOtp(String newEmail) {
+        // 1. 중복 체크: 바꾸려는 이메일이 이미 시스템에 가입된 이메일인지 검증
+        if (userRepository.existsByEmail(newEmail)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_EMAIL);
+        }
+        // 2. 6자리 인증 코드 생성
         String otpCode = String.format("%06d", SECURE_RANDOM.nextInt(1000000));
-        saveOtp("CHANGE_AUTH:" + target, otpCode);
+
+        // 3. Redis 저장 (기존에 정의된 CHANGE_AUTH 키 접두사 및 saveOtp 헬퍼 활용)
+        String targetKey = "CHANGE_AUTH:EMAIL:" + newEmail;
+        saveOtp(targetKey, otpCode, Duration.ofMinutes(5));
+
+        // 4. 이메일 발송 서비스 호출 (문구는 마이페이지 이메일 변경용 전용 메서드가 있다면 그것으로 교체 가능)
+        emailService.sendSignUpVerificationEmail(newEmail, otpCode);// 내부적으로 Duration.ofMinutes(3) 적용됨
     }
 
-    public void verifyChangeAuthCode(String target, String code) {
-        validateOtpCode("CHANGE_AUTH:" + target, code);
-        redisRepository.save(verificationKey(target), "true", Duration.ofMinutes(10));
-        redisRepository.delete("CHANGE_AUTH:" + target);
+    public void verifyChangeIdOtp(String newEmail, String otpCode) {
+        String targetKey = "CHANGE_AUTH:EMAIL:" + newEmail;
+
+        // 1. 공통 헬퍼 메서드로 만료 및 일치 여부 검증 (틀리면 예외 발생)
+        validateOtpCode(targetKey, otpCode);
+
+        // 2. 검증 성공 시, 최종 프로필 업데이트(수정) 단계에서 확인할 '인증 완료 플래그' 저장 (10분 유효)
+        redisRepository.save(verificationKey(newEmail), "true", Duration.ofMinutes(10));
+
+        // 3. 사용 완료된 OTP 소멸
+        redisRepository.delete(targetKey);
+    }
+
+    public void sendChangePhoneOtp(String newPhone) {
+        // 1. 하이픈 등 특수문자 제거 전처리
+        String cleanPhone = newPhone.replaceAll("[^0-9]", "");
+
+        // 2. 중복 체크: 바꾸려는 번호가 이미 다른 유저가 사용 중인 번호인지 검증
+        if (userRepository.existsByPhone(cleanPhone)) {
+            throw new BusinessException(ErrorCode.DUPLICATE_PHONE_NUMBER);
+        }
+
+        // 3. 테스트용 계정 예외 처리 및 6자리 인증 코드 생성
+        String otpCode = "01000000000".equals(cleanPhone) ? "123456" : String.format("%06d", SECURE_RANDOM.nextInt(1000000));
+
+        // 4. Redis 저장 (휴대폰 전용 접두사 'CHANGE_AUTH:PHONE:' 사용, 5분 유효)
+        String targetKey = "CHANGE_AUTH:PHONE:" + cleanPhone;
+        saveOtp(targetKey, otpCode, Duration.ofMinutes(5));
+
+        // 5. 알림톡/SMS 발송 서비스 호출 (가입 시 쓰던 템플릿 혹은 전용 마이페이지 템플릿 사용)
+        smsService.sendSignUpOtpSms(newPhone, otpCode);
+    }
+
+    public void verifyChangePhoneOtp(String newPhone, String otpCode) {
+        // 1. 하이픈 제거 전처리
+        String cleanPhone = newPhone.replaceAll("[^0-9]", "");
+        String targetKey = "CHANGE_AUTH:PHONE:" + cleanPhone;
+
+        // 2. 공통 헬퍼 메서드로 만료 및 일치 여부 검증 (틀리면 예외 발생)
+        validateOtpCode(targetKey, otpCode);
+
+        // 3. 검증 성공 시, 최종 프로필 업데이트 단계에서 대조할 '인증 완료 플래그' 저장 (10분 유효)
+        redisRepository.save(verificationKey(cleanPhone), "true", Duration.ofMinutes(10));
+
+        // 4. 사용 완료된 OTP 소멸
+        redisRepository.delete(targetKey);
     }
 
     // ───────────────────────────────────────────
     // 회원정보 수정 시 '이메일 인증 여부' 검증 정책
     // ───────────────────────────────────────────
-    public void validateVerification(String target) {
-        if (isNotVerified(target)) {
-            throw new BusinessException(ErrorCode.UNVERIFIED_EMAIL);
-        }
-        invalidateVerification(target);
-    }
-
-    public boolean isNotVerified(String target) {
-        return !isVerified(target);
-    }
-
     public boolean isVerified(String target) {
         String authStatus = redisRepository.get(verificationKey(target));
         return "true".equals(authStatus);
+    }
+
+    public void validateVerification(String target) {
+        if (!isVerified(target)) {
+            throw new BusinessException(ErrorCode.UNVERIFIED_EMAIL);
+        }
+        invalidateVerification(target);
     }
 
     public void invalidateVerification(String target) {
@@ -308,8 +425,8 @@ public class AuthService {
         return id.substring(0, 2) + "***" + id.substring(id.length() - 2) + "@" + domain;
     }
 
-    private void saveOtp(String target, String code) {
-        redisRepository.save(target, code, Duration.ofMinutes(3));
+    private void saveOtp(String target, String code, Duration duration) {
+        redisRepository.save(target, code, duration);
     }
 
     private String verificationKey(String target) {

@@ -19,6 +19,8 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
 
     List<OrderItem> findByOrder_OrderIdAndAssignedUser_UserId(Integer orderId, Integer userId);
 
+    boolean existsByOrder_OrderIdAndAssignedUser_UserId(Integer orderId, Integer userId);
+
     Optional<OrderItem> findByOrderItemIdAndAssignedUser_UserId(Integer orderItemId, Integer userId);
 
     long countByOrder_OrderId(Integer orderId);

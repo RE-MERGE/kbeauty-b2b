@@ -1,5 +1,6 @@
 package kr.remerge.stylehub.domain.order.service;
 
+import jakarta.validation.Valid;
 import kr.remerge.stylehub.domain.order.dto.seller.*;
 import kr.remerge.stylehub.domain.order.entity.Order;
 import kr.remerge.stylehub.domain.order.entity.OrderItem;
@@ -134,28 +135,23 @@ public class SellerOrderService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
-        List<OrderItem> visibleItems;
+        if (user.getRole() == UserRole.EMPLOYEE) {
+            boolean participates = orderItemRepository
+                    .existsByOrder_OrderIdAndAssignedUser_UserId(orderId, userId);
 
-        if (user.getRole() == UserRole.PRESIDENT) {
-            visibleItems = orderItemRepository.findByOrder_OrderId(orderId);
-        } else if (user.getRole() == UserRole.EMPLOYEE) {
-
-            visibleItems = orderItemRepository
-                    .findByOrder_OrderIdAndAssignedUser_UserId(
-                            orderId,
-                            userId
-                    );
-
-            if (visibleItems.isEmpty()) {
+            if (!participates) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
-        } else {
+        } else if (user.getRole() != UserRole.PRESIDENT) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
+        List<OrderItem> visibleItems =
+                orderItemRepository.findByOrder_OrderId(orderId);
+
         List<SellerOrderItemResponse> orderItemList = visibleItems
                 .stream()
-                .map(SellerOrderItemResponse::from)
+                .map(item -> SellerOrderItemResponse.from(item, user))
                 .toList();
 
         SellerOrderAmountResponse amountResponse = SellerOrderAmountResponse.from(order);
@@ -271,5 +267,55 @@ public class SellerOrderService {
                     OrderStatus.PREPARING
             );
         }
+    }
+
+    @Transactional
+    public void registerShipment(Integer userId, Integer orderId, OrderShipmentRequest request) {
+
+        User user = userRepository.findByIdWithCompany(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+
+        boolean sameCompany =
+                user.getCompany() != null
+                        && Objects.equals(
+                        user.getCompany().getCompanyId(),
+                        order.getSellerCompany().getCompanyId()
+                );
+
+        if (!sameCompany) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        if (order.getStatus() != OrderStatus.PREPARING) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        long totalItemCount =
+                orderItemRepository.countByOrder_OrderId(orderId);
+
+        long readyItemCount =
+                orderItemRepository.countByOrder_OrderIdAndItemStatus(
+                        orderId,
+                        OrderItemStatus.READY
+                );
+
+        if (totalItemCount == 0 || totalItemCount != readyItemCount) {
+            throw new BusinessException(ErrorCode.ORDER_ITEMS_NOT_READY);
+        }
+
+        order.registerShipment(
+                request.carrier().trim(),
+                request.trackingNumber().trim()
+        );
+
+        orderStatusService.changeStatus(
+                orderId,
+                user,
+                OrderStatus.SHIPPED
+        );
+
     }
 }

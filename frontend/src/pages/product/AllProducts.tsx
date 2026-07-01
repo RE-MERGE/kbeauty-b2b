@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router";
 import api from "../../api/axios";
-import { Search, Heart, ShoppingCart, Grid3x3, List, ChevronDown, X, FolderOpen, Check } from "lucide-react";
+import { Search, Heart, ShoppingCart, Grid3x3, List, ChevronDown, X, FolderOpen, Check, Plus } from "lucide-react";
 
 interface ProductSummary {
   productId: number;
@@ -122,6 +122,9 @@ export function AllProducts() {
   const [folderModalProductId, setFolderModalProductId] = useState<number | null>(null);
   const [apiProducts, setApiProducts] = useState<ProductSummary[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const newFolderInputRef = useRef<HTMLInputElement>(null);
 
   const favorites = [...new Set(folders.flatMap(f => f.productIds))];
 
@@ -151,6 +154,12 @@ export function AllProducts() {
       document.removeEventListener("click", clickHandler);
     };
   }, []);
+
+  useEffect(() => {
+    if (creatingFolder) {
+      newFolderInputRef.current?.focus();
+    }
+  }, [creatingFolder]);
 
   const handleCategoryChange = (catId: string) => {
     if (catId === "all") {
@@ -193,6 +202,24 @@ export function AllProducts() {
     setFolders(next);
     saveFolderData(next);
     setFolderModalProductId(null);
+  };
+
+  const addFolder = () => {
+    const trimmed = newFolderName.trim();
+    if (!trimmed) {
+      setCreatingFolder(false);
+      return;
+    }
+    const newFolder: Folder = {
+      id: `folder_${Date.now()}`,
+      name: trimmed,
+      productIds: [],
+    };
+    const next = [...folders, newFolder];
+    setFolders(next);
+    saveFolderData(next);
+    setNewFolderName("");
+    setCreatingFolder(false);
   };
 
   const filteredProducts = apiProducts
@@ -290,7 +317,7 @@ export function AllProducts() {
 
         {/* 폴더 선택 모달 */}
         {folderModalProductId !== null && (
-            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setFolderModalProductId(null)}>
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => { setFolderModalProductId(null); setCreatingFolder(false); setNewFolderName(""); }}>
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center gap-3 mb-5">
                   <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
@@ -351,8 +378,50 @@ export function AllProducts() {
                         </button>
                     );
                   })}
+
+                  {/* 새 폴더 만들기 타일 */}
+                  {creatingFolder ? (
+                      <div className="flex flex-col rounded-xl border-2 border-primary overflow-hidden">
+                        <div className="w-full aspect-square bg-primary/5 flex items-center justify-center">
+                          <FolderOpen size={24} className="text-primary opacity-50" />
+                        </div>
+                        <div className="px-2 py-1.5 flex items-center gap-1">
+                          <input
+                              ref={newFolderInputRef}
+                              type="text"
+                              value={newFolderName}
+                              onChange={(e) => setNewFolderName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") { e.preventDefault(); addFolder(); }
+                                if (e.key === "Escape") { setCreatingFolder(false); setNewFolderName(""); }
+                              }}
+                              placeholder="폴더명"
+                              maxLength={20}
+                              className="w-full min-w-0 text-xs outline-none border-b border-primary/40 focus:border-primary bg-transparent"
+                          />
+                          <button onClick={addFolder} className="text-primary flex-shrink-0" title="추가">
+                            <Check size={14} />
+                          </button>
+                          <button onClick={() => { setCreatingFolder(false); setNewFolderName(""); }} className="text-muted-foreground flex-shrink-0" title="취소">
+                            <X size={14} />
+                          </button>
+                        </div>
+                      </div>
+                  ) : (
+                      <button
+                          onClick={() => setCreatingFolder(true)}
+                          className="flex flex-col rounded-xl border-2 border-dashed border-border hover:border-primary transition-all text-left"
+                      >
+                        <div className="w-full aspect-square bg-muted/30 flex items-center justify-center">
+                          <Plus size={24} className="text-muted-foreground" />
+                        </div>
+                        <div className="px-2 py-1.5">
+                          <p className="text-xs font-medium text-muted-foreground">새 폴더</p>
+                        </div>
+                      </button>
+                  )}
                 </div>
-                <button onClick={() => setFolderModalProductId(null)} className="w-full py-2.5 rounded-lg border border-border text-sm font-semibold text-foreground hover:bg-muted transition-colors">닫기</button>
+                <button onClick={() => { setFolderModalProductId(null); setCreatingFolder(false); setNewFolderName(""); }} className="w-full py-2.5 rounded-lg border border-border text-sm font-semibold text-foreground hover:bg-muted transition-colors">닫기</button>
               </div>
             </div>
         )}

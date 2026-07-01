@@ -71,19 +71,12 @@ const certGroups = [
   { label: "소재 / 환경 인증", items: ["OEKO-TEX Standard 100", "GOTS (유기농 섬유)", "Recycled Content (GRS)", "비건 인증", "Fair Trade"] },
 ];
 
-interface OptionValue {
-  optionName: string;
-  optionValue: string;
-  sortOrder: number;
-}
-
 interface ProductOption {
   optionLabel: string;
   sku: string;
   stockQuantity: string;
   additionalPrice: string;
   restockAlertQuantity: string;
-  optionValues: OptionValue[];
 }
 
 interface ProductImage {
@@ -245,10 +238,6 @@ const initialForm = {
 
 const newOption = (): ProductOption => ({
   optionLabel: "", sku: "", stockQuantity: "", additionalPrice: "0", restockAlertQuantity: "",
-  optionValues: [
-    { optionName: "색상", optionValue: "", sortOrder: 1 },
-    { optionName: "패턴", optionValue: "", sortOrder: 2 },
-  ],
 });
 
 export function SellerProductRegister() {
@@ -260,6 +249,9 @@ export function SellerProductRegister() {
   const [selectedSubTypes, setSelectedSubTypes] = useState<string[]>([]);
   const [selectedSizeSystem, setSelectedSizeSystem] = useState<string>("");
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [customSizeInput, setCustomSizeInput] = useState("");
+  const [leadTimeOption, setLeadTimeOption] = useState<"range1" | "range2" | "custom" | "">("");
+  const [leadTimeCustomInput, setLeadTimeCustomInput] = useState("");
   const [selectedCerts, setSelectedCerts] = useState<string[]>([]);
   const [certFiles, setCertFiles] = useState<Record<string, CertFile>>({});
   const [certModalTarget, setCertModalTarget] = useState<string | null>(null);
@@ -302,6 +294,23 @@ export function SellerProductRegister() {
 
   const currentSubList = form.mainCategory ? (subCategoryMap[form.mainCategory] ?? []) : [];
   const currentSubTypes = form.subCategory ? (subTypes[form.subCategory] ?? []) : [];
+
+  const addCustomSize = () => {
+    const trimmed = customSizeInput.trim();
+    if (!trimmed) return;
+    if (!selectedSizes.includes(trimmed)) {
+      setSelectedSizes((prev) => [...prev, trimmed]);
+    }
+    setCustomSizeInput("");
+  };
+
+  const addCustomLeadTime = () => {
+    const trimmed = leadTimeCustomInput.trim();
+    if (!trimmed) return;
+    setLeadTimeOption("custom");
+    update("leadTime", trimmed);
+    setLeadTimeCustomInput("");
+  };
 
   const updateOption = (idx: number, field: keyof ProductOption, value: string) =>
       setOptions(prev => prev.map((o, i) => i === idx ? { ...o, [field]: value } : o));
@@ -430,6 +439,9 @@ export function SellerProductRegister() {
     setSelectedSubTypes([]);
     setSelectedSizeSystem("");
     setSelectedSizes([]);
+    setCustomSizeInput("");
+    setLeadTimeOption("");
+    setLeadTimeCustomInput("");
     setSelectedCerts([]);
     setCertFiles({});
     setOptions([newOption()]);
@@ -455,6 +467,7 @@ export function SellerProductRegister() {
       season: form.season,
       moq: form.moq ? parseInt(form.moq) : null,
       unitPrice: form.unitPrice ? parseInt(form.unitPrice) : null,
+      leadTimeDays: form.leadTime ? parseInt(form.leadTime) : null,
       mainMaterial: form.mainMaterial,
       description: form.description,
       careInstruction: form.careInstruction,
@@ -469,7 +482,6 @@ export function SellerProductRegister() {
         stockQuantity: o.stockQuantity ? parseInt(o.stockQuantity) : 0,
         additionalPrice: o.additionalPrice ? parseInt(o.additionalPrice) : 0,
         restockAlertQuantity: o.restockAlertQuantity ? parseInt(o.restockAlertQuantity) : null,
-        optionValues: o.optionValues.filter(v => v.optionValue),
       })),
       certifications: Object.values(certFiles).map((c) => ({
         certName: c.certName,
@@ -691,18 +703,47 @@ export function SellerProductRegister() {
               <div className="flex flex-wrap gap-2">
                 {sizeSystems.map((item) => (
                     <ToggleChip key={item} label={item} selected={selectedSizeSystem === item}
-                                onToggle={() => { setSelectedSizeSystem(prev => prev === item ? "" : item); setSelectedSizes([]); }} />
+                                onToggle={() => { setSelectedSizeSystem(prev => prev === item ? "" : item); setSelectedSizes([]); setCustomSizeInput(""); }} />
                 ))}
               </div>
             </div>
             {selectedSizeSystem && (
                 <div className="mb-4">
                   <p className="text-xs font-medium text-muted-foreground mb-2">제공 사이즈</p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 items-center">
                     {(sizeOptionsBySystem[selectedSizeSystem] ?? []).map((item) => (
                         <ToggleChip key={item} label={item} selected={selectedSizes.includes(item)}
                                     onToggle={() => toggleItem(selectedSizes, setSelectedSizes, item)} />
                     ))}
+                    {selectedSizes
+                        .filter((s) => !(sizeOptionsBySystem[selectedSizeSystem] ?? []).includes(s))
+                        .map((custom) => (
+                            <span key={custom} className="flex items-center gap-1 py-1.5 px-3 text-xs rounded border border-primary bg-primary text-white">
+                              {custom}
+                              <button type="button" onClick={() => toggleItem(selectedSizes, setSelectedSizes, custom)} className="hover:opacity-70">
+                                <X size={11} />
+                              </button>
+                            </span>
+                        ))}
+                    <div className="flex items-center gap-1.5 ml-1">
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">기타</span>
+                      <input
+                          type="text"
+                          value={customSizeInput}
+                          onChange={(e) => setCustomSizeInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addCustomSize();
+                            }
+                          }}
+                          placeholder="직접작성"
+                          className="border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary transition-colors w-24"
+                      />
+                      <button type="button" onClick={addCustomSize} className="text-xs text-primary border border-primary rounded px-2 py-1.5 hover:bg-primary hover:text-white transition-colors">
+                        추가
+                      </button>
+                    </div>
                   </div>
                 </div>
             )}
@@ -776,7 +817,7 @@ export function SellerProductRegister() {
                 <Plus size={13} /> 옵션 추가
               </button>
             </div>
-            <p className="text-xs text-muted-foreground mb-4">옵션 라벨은 조합명(예: 블랙/M), 색상과 패턴은 각각 입력하세요.</p>
+            <p className="text-xs text-muted-foreground mb-4">옵션 라벨은 조합명(예: 블랙/M)으로 입력하세요.</p>
             <div className="space-y-4">
               {options.map((opt, optIdx) => (
                   <div key={optIdx} className="border border-border rounded-lg p-4">
@@ -788,7 +829,7 @@ export function SellerProductRegister() {
                           </button>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div className="grid grid-cols-2 gap-3">
                       <div className="col-span-2">
                         <label className="block text-xs font-medium text-foreground mb-1">옵션 라벨 <span className="text-red-500">*</span></label>
                         <input type="text" value={opt.optionLabel} onChange={(e) => updateOption(optIdx, "optionLabel", e.target.value)} placeholder="예: 블랙/M" className="w-full border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary transition-colors" />
@@ -808,83 +849,6 @@ export function SellerProductRegister() {
                       <div>
                         <label className="block text-xs font-medium text-foreground mb-1">재고 알림 수량</label>
                         <input type="number" value={opt.restockAlertQuantity} onChange={(e) => updateOption(optIdx, "restockAlertQuantity", e.target.value)} placeholder="예: 10" className="w-full border border-border rounded px-3 py-2 text-sm outline-none focus:border-primary transition-colors" />
-                      </div>
-                    </div>
-                    <div className="border-t border-border pt-3">
-                      <p className="text-xs font-medium text-muted-foreground mb-2">옵션 속성값</p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs text-muted-foreground">색상</label>
-                            <button type="button" onClick={() => setOptions(prev => prev.map((o, i) => i === optIdx
-                                ? { ...o, optionValues: [...o.optionValues, { optionName: "색상", optionValue: "", sortOrder: o.optionValues.length + 1 }] }
-                                : o
-                            ))} className="text-xs text-primary flex items-center gap-0.5 hover:underline">
-                              <Plus size={10} /> 추가
-                            </button>
-                          </div>
-                          <div className="space-y-1">
-                            {opt.optionValues.filter(v => v.optionName === "색상").map((v, vi) => {
-                              const realIdx = opt.optionValues.indexOf(v);
-                              return (
-                                  <div key={vi} className="flex gap-1 items-center">
-                                    <input type="text" value={v.optionValue}
-                                           onChange={(e) => setOptions(prev => prev.map((o, i) => i === optIdx
-                                               ? { ...o, optionValues: o.optionValues.map((ov, j) => j === realIdx ? { ...ov, optionValue: e.target.value } : ov) }
-                                               : o
-                                           ))}
-                                           placeholder="예: 블랙"
-                                           className="flex-1 border border-border rounded px-2 py-1 text-xs outline-none focus:border-primary transition-colors"
-                                    />
-                                    {opt.optionValues.filter(v => v.optionName === "색상").length > 1 && (
-                                        <button type="button" onClick={() => setOptions(prev => prev.map((o, i) => i === optIdx
-                                            ? { ...o, optionValues: o.optionValues.filter((_, j) => j !== realIdx) }
-                                            : o
-                                        ))} className="text-muted-foreground hover:text-red-500 transition-colors">
-                                          <X size={11} />
-                                        </button>
-                                    )}
-                                  </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs text-muted-foreground">패턴</label>
-                            <button type="button" onClick={() => setOptions(prev => prev.map((o, i) => i === optIdx
-                                ? { ...o, optionValues: [...o.optionValues, { optionName: "패턴", optionValue: "", sortOrder: o.optionValues.length + 1 }] }
-                                : o
-                            ))} className="text-xs text-primary flex items-center gap-0.5 hover:underline">
-                              <Plus size={10} /> 추가
-                            </button>
-                          </div>
-                          <div className="space-y-1">
-                            {opt.optionValues.filter(v => v.optionName === "패턴").map((v, vi) => {
-                              const realIdx = opt.optionValues.indexOf(v);
-                              return (
-                                  <div key={vi} className="flex gap-1 items-center">
-                                    <input type="text" value={v.optionValue}
-                                           onChange={(e) => setOptions(prev => prev.map((o, i) => i === optIdx
-                                               ? { ...o, optionValues: o.optionValues.map((ov, j) => j === realIdx ? { ...ov, optionValue: e.target.value } : ov) }
-                                               : o
-                                           ))}
-                                           placeholder="예: 솔리드"
-                                           className="flex-1 border border-border rounded px-2 py-1 text-xs outline-none focus:border-primary transition-colors"
-                                    />
-                                    {opt.optionValues.filter(v => v.optionName === "패턴").length > 1 && (
-                                        <button type="button" onClick={() => setOptions(prev => prev.map((o, i) => i === optIdx
-                                            ? { ...o, optionValues: o.optionValues.filter((_, j) => j !== realIdx) }
-                                            : o
-                                        ))} className="text-muted-foreground hover:text-red-500 transition-colors">
-                                          <X size={11} />
-                                        </button>
-                                    )}
-                                  </div>
-                              );
-                            })}
-                          </div>
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -943,11 +907,60 @@ export function SellerProductRegister() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">단가 <span className="text-red-500">*</span></label>
-                <input type="text" value={form.unitPrice} onChange={(e) => update("unitPrice", e.target.value)} placeholder="예: 10000" className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors" />
+                <input
+                    type="text"
+                    inputMode="numeric"
+                    value={form.unitPrice ? `${Number(form.unitPrice).toLocaleString()} ₩` : ""}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, "");
+                      update("unitPrice", raw);
+                    }}
+                    placeholder="예: 10,000"
+                    className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors"
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">리드타임 (일)</label>
-                <input type="text" value={form.leadTime} onChange={(e) => update("leadTime", e.target.value)} placeholder="예: 7" className="w-full border border-border rounded px-3 py-2.5 text-sm outline-none focus:border-primary transition-colors" />
+                <label className="block text-sm font-medium text-foreground mb-1.5">리드타임</label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <ToggleChip
+                      label="3~5일 이내"
+                      selected={leadTimeOption === "range1"}
+                      onToggle={() => { setLeadTimeOption("range1"); update("leadTime", "5"); }}
+                  />
+                  <ToggleChip
+                      label="15일 이내"
+                      selected={leadTimeOption === "range2"}
+                      onToggle={() => { setLeadTimeOption("range2"); update("leadTime", "15"); }}
+                  />
+                  {leadTimeOption === "custom" && form.leadTime && (
+                      <span className="flex items-center gap-1 py-1.5 px-3 text-xs rounded border border-primary bg-primary text-white">
+                        {form.leadTime}일 이내
+                        <button type="button" onClick={() => { setLeadTimeOption(""); update("leadTime", ""); }} className="hover:opacity-70">
+                          <X size={11} />
+                        </button>
+                      </span>
+                  )}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">기타</span>
+                    <input
+                        type="text"
+                        inputMode="numeric"
+                        value={leadTimeCustomInput}
+                        onChange={(e) => setLeadTimeCustomInput(e.target.value.replace(/[^0-9]/g, ""))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addCustomLeadTime();
+                          }
+                        }}
+                        placeholder="직접작성"
+                        className="border border-border rounded px-2 py-1.5 text-xs outline-none focus:border-primary transition-colors w-24"
+                    />
+                    <button type="button" onClick={addCustomLeadTime} className="text-xs text-primary border border-primary rounded px-2 py-1.5 hover:bg-primary hover:text-white transition-colors">
+                      추가
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

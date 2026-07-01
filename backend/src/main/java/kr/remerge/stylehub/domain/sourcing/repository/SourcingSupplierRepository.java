@@ -1,12 +1,16 @@
 package kr.remerge.stylehub.domain.sourcing.repository;
 
+import io.lettuce.core.ScanIterator;
 import io.lettuce.core.dynamic.annotation.Param;
+import jakarta.validation.constraints.NotNull;
 import kr.remerge.stylehub.domain.sourcing.entity.SourcingSupplier;
+import kr.remerge.stylehub.domain.sourcing.enumtype.SourcingStatus;
 import kr.remerge.stylehub.domain.sourcing.enumtype.SourcingSupplierStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface SourcingSupplierRepository extends JpaRepository<SourcingSupplier, Integer> {
 
@@ -63,4 +67,6 @@ public interface SourcingSupplierRepository extends JpaRepository<SourcingSuppli
     // 특정 소싱 요청의 전체 supplier 조회 (CANCELLED 체크용)
     List<SourcingSupplier> findAllBySourcingRequest_SourcingRequestId(Integer sourcingRequestId);
     List<SourcingSupplier> findBySourcingRequest_SourcingRequestId(Integer sourcingRequestId);
+
+    Optional<SourcingSupplier> findBySourcingRequest_SourcingRequestIdAndSellerCompanyIdAndStatusIn(Integer sourcingRequestId, Integer companyId, List<SourcingSupplierStatus> suggested);
 }

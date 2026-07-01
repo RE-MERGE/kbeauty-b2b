@@ -1,45 +1,46 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useParams } from "react-router";
+import { Link, useParams } from "react-router";
+import api from "@/api/axios";
 import {
   ChevronLeft, FileText, CheckCircle, Package,
   AlertCircle, Clock, FlaskConical, Building2,
   Download, MessageCircle, XCircle,
-  PenLine, RotateCcw, Loader2,
+  PenLine, RotateCcw, Loader2, FileSignature,
 } from "lucide-react";
 
-type QuoteStatus = "SUBMITTED" | "REVIEWING" | "APPROVED" | "REJECTED" | "NEGOTIATING" | "SAMPLE_REQUESTED" | "EXPIRED";
+type QuoteStatus = "SUBMITTED" | "REVIEWING" | "APPROVED" | "REJECTED" | "NOT_SELECTED" | "NEGOTIATING" | "SAMPLE_REQUESTED" | "EXPIRED";
 
 type QuoteItemData = {
-  quote_item_id: number;
-  option_summary: string;
+  quoteItemId: number;
+  optionSummary: string;
   quantity: number;
-  unit_price: number;
-  total_price: number;
-  is_sample: boolean;
+  unitPrice: number;
+  totalPrice: number;
+  isSample: boolean;
 };
 
 type QuoteData = {
-  quote_id: number;
-  quote_no: string;
-  sourcing_id: number;
-  need_sample: "Y" | "N";
-  brand_name: string;
-  product_name: string;
-  category_name: string;
+  quoteId: number;
+  quoteNo: string;
+  sourcingRequestId: number;
+  brandName: string;
+  productName: string;
+  categoryName: string;
   material: string;
-  lead_time_days: number;
-  delivery_company: string;
-  shipping_fee: number;
-  valid_until: string;
-  sample_available: string;
-  seller_memo: string;
-  subtotal_amount: number;
-  total_amount: number;
+  leadTimeDays: number;
+  deliveryCompany: string;
+  shippingFee: number;
+  validUntil: string;
+  sampleAvailable: boolean;
+  sellerMemo: string;
+  subtotalAmount: number;
+  totalAmount: number;
   status: QuoteStatus;
-  submitted_at: string;
-  seller_name: string;
-  company_name: string;
-  quote_items: QuoteItemData[];
+  buyerName: string;
+  sellerName: string;
+  companyName: string;
+  submittedAt: string;
+  items: QuoteItemData[];
 };
 
 const statusConfig: Record<QuoteStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
@@ -47,6 +48,7 @@ const statusConfig: Record<QuoteStatus, { label: string; color: string; bg: stri
   REVIEWING:         { label: "검토 중",       color: "text-blue-700",   bg: "bg-blue-50 border-blue-200",     icon: <Clock size={13} />       },
   APPROVED:          { label: "채택 완료",     color: "text-green-700",  bg: "bg-green-50 border-green-200",   icon: <CheckCircle size={13} /> },
   REJECTED:          { label: "거절됨",        color: "text-red-700",    bg: "bg-red-50 border-red-200",       icon: <XCircle size={13} />     },
+  NOT_SELECTED:      { label: "미채택",        color: "text-slate-600",  bg: "bg-slate-100 border-slate-200",  icon: <XCircle size={13} />     },
   NEGOTIATING:       { label: "협의 중",       color: "text-purple-700", bg: "bg-purple-50 border-purple-200", icon: <MessageCircle size={13}/> },
   SAMPLE_REQUESTED:  { label: "샘플 결제 진행", color: "text-amber-700",  bg: "bg-amber-50 border-amber-200",   icon: <FlaskConical size={13} /> },
   EXPIRED:           { label: "기간 만료",     color: "text-slate-500",  bg: "bg-slate-100 border-slate-200",  icon: <RotateCcw size={13} />   },
@@ -67,27 +69,17 @@ function formatPrice(value: number) {
 }
 
 async function updateQuoteStatus(quoteId: number, status: string): Promise<void> {
-  const res = await fetch(`/api/quotes/${quoteId}/status`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status }),
-  });
-  if (!res.ok) throw new Error("상태 변경에 실패했습니다.");
+  await api.patch(`/quotes/${quoteId}/status`, { status });
 }
 
 async function fetchQuote(quoteId: string): Promise<QuoteData> {
-  const res = await fetch(`/api/quotes/${quoteId}`);
-  if (!res.ok) throw new Error("견적 조회에 실패했습니다.");
-  return res.json();
+  return api.get<QuoteData>(`/quotes/${quoteId}`);
 }
 
 export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
   const { quoteId } = useParams<{ quoteId: string }>();
-  const location = useLocation();
-
-  const initialQuote: QuoteData | undefined = (location.state as { quote?: QuoteData })?.quote;
-  const [quote, setQuote] = useState<QuoteData | undefined>(initialQuote);
-  const [pageLoading, setPageLoading] = useState(!initialQuote);
+  const [quote, setQuote] = useState<QuoteData>();
+  const [pageLoading, setPageLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -95,12 +87,9 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
     fetchQuote(quoteId)
         .then(setQuote)
         .catch((e) => {
-          if (!initialQuote) {
-            setLoadError(e instanceof Error ? e.message : "견적 조회에 실패했습니다.");
-          }
+          setLoadError(e instanceof Error ? e.message : "견적 조회에 실패했습니다.");
         })
         .finally(() => setPageLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quoteId]);
 
   const [action, setAction] = useState<"approve" | "reject" | "negotiate" | null>(null);
@@ -109,7 +98,9 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const backPath = role === "buyer" ? `/buyer/sourcing-detail/${quote?.sourcing_id}` : "/seller/sourcing-requests";
+  const backPath = role === "buyer"
+      ? `/buyer/sourcing-detail/${quote?.sourcingRequestId}`
+      : "/seller/sourcing-requests";
 
   if (pageLoading) {
     return (
@@ -136,17 +127,17 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
     );
   }
 
-  const regularItems = quote.quote_items.filter((item) => !item.is_sample);
-  const sampleItems  = quote.quote_items.filter((item) => item.is_sample);
+  const regularItems = quote.items.filter((item) => !item.isSample);
+  const sampleItems  = quote.items.filter((item) => item.isSample);
   const totalQty     = regularItems.reduce((sum, item) => sum + item.quantity, 0);
   const status       = statusConfig[quote.status] ?? statusConfig["SUBMITTED"];
-  const needsSample  = quote.need_sample === "Y";
+  const needsSample  = sampleItems.length > 0;
 
   const handleStatusChange = async (newStatus: string, doneState: typeof done) => {
     setSubmitting(true);
     setError(null);
     try {
-      await updateQuoteStatus(quote.quote_id, newStatus);
+      await updateQuoteStatus(quote.quoteId, newStatus);
       setQuote({ ...quote, status: newStatus as QuoteStatus });
       setDone(doneState);
     } catch (e) {
@@ -158,7 +149,7 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
 
   if (done) {
     const doneConfig = {
-      approved:         { icon: <CheckCircle size={36} className="text-green-500" />,    bg: "bg-green-50",   title: "견적을 채택했습니다",       sub: "공급사에게 알림이 전송되었습니다. 주문이 확정되면 발주 내역에서 확인하세요.",            cta: "/orders",   ctaLabel: "발주 내역 확인" },
+      approved:         { icon: <CheckCircle size={36} className="text-green-500" />,    bg: "bg-green-50",   title: "견적을 확정했습니다",       sub: "셀러가 확인 후 계약서를 작성해 전달할 예정입니다.",                                      cta: "/buyer/quotes", ctaLabel: "견적 목록 확인" },
       rejected:         { icon: <XCircle size={36} className="text-red-500" />,          bg: "bg-red-50",     title: "견적을 거절했습니다",       sub: "공급사에게 거절 알림이 전송되었습니다. 다른 견적을 계속 검토하세요.",                   cta: backPath,    ctaLabel: "소싱 목록으로" },
       negotiated:       { icon: <MessageCircle size={36} className="text-purple-500" />, bg: "bg-purple-50",  title: "협의 요청을 보냈습니다",    sub: "공급사가 검토 후 답변드립니다. 협의 내역은 소싱 요청 상세에서 확인할 수 있습니다.", cta: backPath,    ctaLabel: "소싱 목록으로" },
       sample_requested: { icon: <FlaskConical size={36} className="text-amber-500" />,   bg: "bg-amber-50",   title: "샘플 결제를 진행해 주세요", sub: "샘플 결제 완료 후 진행 상황은 주문 내역에서 확인할 수 있습니다.",                  cta: "/checkout", ctaLabel: "샘플 결제하러 가기" },
@@ -204,16 +195,16 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
                 </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400">
-                  <span className="font-mono">{quote.quote_no}</span>
-                  <span>소싱 요청 <span className="text-white font-medium">#{quote.sourcing_id}</span></span>
-                  <span>제출일 {formatDate(quote.submitted_at)}</span>
+                  <span className="font-mono">{quote.quoteNo}</span>
+                  <span>소싱 요청 <span className="text-white font-medium">#{quote.sourcingRequestId}</span></span>
+                  <span>제출일 {formatDate(quote.submittedAt)}</span>
                 </div>
               </div>
               <div className="text-right shrink-0">
                 <div className="text-xs text-gray-400 mb-0.5">견적 유효기간</div>
                 <div className="flex items-center gap-1.5 text-sm font-semibold">
                   <Clock size={14} className="text-primary" />
-                  <span className="text-white">{formatDate(quote.valid_until)}까지</span>
+                  <span className="text-white">{formatDate(quote.validUntil)}까지</span>
                 </div>
               </div>
             </div>
@@ -233,8 +224,8 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
                 <Building2 size={22} className="text-primary" />
               </div>
               <div>
-                <p className="font-semibold text-slate-900">{quote.company_name || "-"}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{quote.seller_name || "-"}</p>
+                <p className="font-semibold text-slate-900">{quote.companyName || "-"}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{quote.sellerName || "-"}</p>
               </div>
             </div>
           </section>
@@ -248,11 +239,11 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
             <div className="p-5">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                 {[
-                  { label: "브랜드명",    value: quote.brand_name },
-                  { label: "상품명",      value: quote.product_name },
-                  { label: "카테고리",    value: quote.category_name },
+                  { label: "브랜드명",    value: quote.brandName },
+                  { label: "상품명",      value: quote.productName },
+                  { label: "카테고리",    value: quote.categoryName },
                   { label: "소재",        value: quote.material },
-                  { label: "출고 소요일", value: quote.lead_time_days ? `${quote.lead_time_days}일` : "-", highlight: true },
+                  { label: "출고 소요일", value: quote.leadTimeDays ? `${quote.leadTimeDays}일` : "-", highlight: true },
                 ].map((row) => (
                     <div key={row.label}>
                       <div className="text-xs text-slate-500 mb-0.5">{row.label}</div>
@@ -279,14 +270,14 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
                   <p className="px-5 py-4 text-sm text-slate-400">등록된 품목이 없습니다.</p>
               ) : (
                   regularItems.map((item) => (
-                      <div key={item.quote_item_id} className="px-5 py-4 flex items-center justify-between gap-4 text-sm">
+                      <div key={item.quoteItemId} className="px-5 py-4 flex items-center justify-between gap-4 text-sm">
                         <div className="flex-1">
-                          <p className="font-medium text-slate-900">{item.option_summary || "-"}</p>
+                          <p className="font-medium text-slate-900">{item.optionSummary || "-"}</p>
                           <p className="text-xs text-slate-500 mt-0.5">
-                            수량 {item.quantity.toLocaleString()}장 · 단가 {formatPrice(item.unit_price)}
+                            수량 {item.quantity.toLocaleString()}장 · 단가 {formatPrice(item.unitPrice)}
                           </p>
                         </div>
-                        <p className="font-bold text-slate-900 font-mono">{formatPrice(item.total_price)}</p>
+                        <p className="font-bold text-slate-900 font-mono">{formatPrice(item.totalPrice)}</p>
                       </div>
                   ))
               )}
@@ -302,14 +293,14 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
                 </div>
                 <div className="divide-y divide-slate-100">
                   {sampleItems.map((item) => (
-                      <div key={item.quote_item_id} className="px-5 py-4 flex items-center justify-between gap-4 text-sm">
+                      <div key={item.quoteItemId} className="px-5 py-4 flex items-center justify-between gap-4 text-sm">
                         <div className="flex-1">
-                          <p className="font-medium text-slate-900">{item.option_summary || "-"}</p>
+                          <p className="font-medium text-slate-900">{item.optionSummary || "-"}</p>
                           <p className="text-xs text-slate-500 mt-0.5">
-                            수량 {item.quantity.toLocaleString()}장 · 단가 {formatPrice(item.unit_price)}
+                            수량 {item.quantity.toLocaleString()}장 · 단가 {formatPrice(item.unitPrice)}
                           </p>
                         </div>
-                        <p className="font-bold text-slate-900 font-mono">{formatPrice(item.total_price)}</p>
+                        <p className="font-bold text-slate-900 font-mono">{formatPrice(item.totalPrice)}</p>
                       </div>
                   ))}
                 </div>
@@ -325,11 +316,11 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
             <div className="p-5 grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
               <div>
                 <div className="text-xs text-slate-500 mb-0.5">택배사</div>
-                <div className="font-medium text-slate-900">{quote.delivery_company || "—"}</div>
+                <div className="font-medium text-slate-900">{quote.deliveryCompany || "—"}</div>
               </div>
               <div>
                 <div className="text-xs text-slate-500 mb-0.5">배송비</div>
-                <div className="font-medium text-slate-900">{formatPrice(quote.shipping_fee)}</div>
+                <div className="font-medium text-slate-900">{formatPrice(quote.shippingFee)}</div>
               </div>
             </div>
           </section>
@@ -342,18 +333,18 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
             </div>
             <div className="p-5 space-y-4">
               <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium ${
-                  quote.sample_available === "AVAILABLE"
+                  quote.sampleAvailable
                       ? "bg-amber-50 border-amber-200 text-amber-700"
                       : "bg-slate-100 border-slate-200 text-slate-500"
               }`}>
                 <FlaskConical size={14} />
-                {quote.sample_available === "AVAILABLE" ? "샘플 제공 가능" : "샘플 제공 불가"}
+                {quote.sampleAvailable ? "샘플 제공 가능" : "샘플 제공 불가"}
               </div>
-              {quote.seller_memo && (
+              {quote.sellerMemo && (
                   <div>
                     <div className="text-xs font-medium text-slate-500 mb-1.5">공급사 메모</div>
                     <div className="text-sm text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 leading-relaxed whitespace-pre-line">
-                      {quote.seller_memo}
+                      {quote.sellerMemo}
                     </div>
                   </div>
               )}
@@ -369,23 +360,23 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
             <div className="p-5 space-y-3 text-sm">
               <div className="flex justify-between text-slate-500">
                 <span>상품 금액 ({totalQty.toLocaleString()}장)</span>
-                <span className="font-mono">{formatPrice(quote.subtotal_amount)}</span>
+                <span className="font-mono">{formatPrice(quote.subtotalAmount)}</span>
               </div>
               <div className="flex justify-between text-slate-500">
                 <span>배송비</span>
-                <span className="font-mono">{formatPrice(quote.shipping_fee)}</span>
+                <span className="font-mono">{formatPrice(quote.shippingFee)}</span>
               </div>
               <div className="border-t border-slate-200 pt-3 flex justify-between font-bold text-slate-900">
                 <span>견적 총액</span>
-                <span className="font-mono text-xl text-primary">{formatPrice(quote.total_amount)}</span>
+                <span className="font-mono text-xl text-primary">{formatPrice(quote.totalAmount)}</span>
               </div>
               <div className="flex justify-between text-xs text-slate-500">
                 <span>출고 소요일</span>
-                <span>{quote.lead_time_days}일</span>
+                <span>{quote.leadTimeDays}일</span>
               </div>
               <div className="flex justify-between text-xs text-slate-500">
                 <span>견적 유효기간</span>
-                <span>{formatDate(quote.valid_until)}까지</span>
+                <span>{formatDate(quote.validUntil)}까지</span>
               </div>
             </div>
           </section>
@@ -435,6 +426,18 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
               </div>
           )}
 
+          {role === "seller" && quote.status === "APPROVED" && (
+              <div className="flex justify-end pb-4">
+                <Link
+                    to={`/seller/contracts/new/${quote.quoteId}`}
+                    className="inline-flex items-center gap-2 bg-primary px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary/90"
+                >
+                  <FileSignature size={15} />
+                  계약서 작성
+                </Link>
+              </div>
+          )}
+
           {/* SAMPLE_REQUESTED 상태 안내 */}
           {quote.status === "SAMPLE_REQUESTED" && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
@@ -458,10 +461,10 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
                   채택 확정 시 공급사에게 알림이 전송되고 주문이 생성됩니다.
                 </p>
                 <div className="bg-white border border-green-200 rounded-lg px-4 py-3 text-sm mb-4">
-                  <div className="font-semibold text-slate-900 mb-1">{quote.brand_name} · {quote.product_name}</div>
+                  <div className="font-semibold text-slate-900 mb-1">{quote.brandName} · {quote.productName}</div>
                   <div className="text-slate-500">
                     총 {totalQty.toLocaleString()}장 · 견적 총액{" "}
-                    <span className="text-primary font-bold">{formatPrice(quote.total_amount)}</span>
+                    <span className="text-primary font-bold">{formatPrice(quote.totalAmount)}</span>
                   </div>
                 </div>
                 <div className="flex gap-2">

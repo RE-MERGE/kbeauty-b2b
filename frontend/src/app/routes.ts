@@ -26,6 +26,7 @@ import {BuyerShippingQuotes} from "@/pages/buyer/BuyerShippingQuotes";
 import {CompanySettings} from "@/pages/company/CompanySettings";
 
 import {SellerContractSign} from "@/pages/contract/SellerContractSign";
+import {SellerContractCreate} from "@/pages/contract/SellerContractCreate";
 import {BuyerContractSign} from "@/pages/contract/BuyerContractSign";
 
 import {Inquiry} from "@/pages/inquiry/Inquiry";
@@ -43,6 +44,7 @@ import {SellerProductRegister} from "@/pages/product/SellerProductRegister";
 
 import {QuoteDetailBuyer, QuoteDetailSeller} from "@/pages/quote/QuoteDetailWrappers";
 import {SellerQuoteWrite} from "@/pages/quote/SellerQuoteWrite";
+import {SellerQuoteList} from "@/pages/quote/SellerQuoteList";
 import BuyerQuoteList from "@/pages/quote/BuyerQuoteList";
 
 import {SellerDashboard} from "@/pages/seller/SellerDashboard";
@@ -138,6 +140,7 @@ export const router = createBrowserRouter([
                     {path: "orders", Component: Orders},
                     {path: "orders/:id", Component: OrderDetail},
                     {path: "quotes", Component: BuyerQuoteList},
+                    {path: "quotes/:quoteId", Component: QuoteDetailBuyer},
                     {path: "sourcing-request", Component: SourcingRequest},
                     {path: "orders/:orderId/contract-sign", Component: BuyerContractSign},
                     {path: "shipping-quotes", Component: BuyerShippingQuotes},
@@ -157,7 +160,9 @@ export const router = createBrowserRouter([
                     {path: "orders", Component: SellerOrders},
                     {path: "orders/:id", Component: SellerOrderDetail},
                     {path: "sourcing/:requestId/quote", Component: SellerQuoteWrite},
-                    {path: "orders/:orderId/contract-sign", Component: SellerContractSign},
+                    {path: "contracts/new/:quoteId", Component: SellerContractCreate},
+                    {path: "contracts/quotes/:quoteId", Component: SellerContractSign},
+                    {path: "quotes", Component: SellerQuoteList},
                     {path: "quotes/:quoteId", Component: QuoteDetailSeller},
                 ],
             },

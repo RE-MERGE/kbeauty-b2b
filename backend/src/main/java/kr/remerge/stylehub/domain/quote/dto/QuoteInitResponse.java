@@ -15,6 +15,7 @@ public class QuoteInitResponse {
     private String productName;
     private String brandName;
     private String material;
+    private String deliveryDate;
     private String needSample;   // "Y" / "N"
 
     private List<QuoteInitItemResponse> items;
@@ -33,6 +34,7 @@ public class QuoteInitResponse {
                 .productName(request.getProductName())
                 .brandName(request.getBrandName())
                 .material(request.getMainMaterial())
+                .deliveryDate(request.getDeliveryDate() != null ? request.getDeliveryDate().toString() : null)
                 .needSample(request.getNeedSample())
                 .items(items.stream()
                         .map(item -> QuoteInitItemResponse.builder()

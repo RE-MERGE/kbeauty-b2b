@@ -7,15 +7,14 @@ import kr.remerge.stylehub.domain.cart.repository.CartRepository;
 import kr.remerge.stylehub.domain.company.entity.Address;
 import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.company.repository.AddressRepository;
-import kr.remerge.stylehub.domain.order.checkout.dto.AddressCreateRequest;
-import kr.remerge.stylehub.domain.order.checkout.dto.AddressResponse;
-import kr.remerge.stylehub.domain.order.checkout.dto.CartCheckoutRequest;
-import kr.remerge.stylehub.domain.order.checkout.dto.CartCheckoutResponse;
-import kr.remerge.stylehub.domain.order.checkout.dto.OrderCheckoutItemResponse;
-import kr.remerge.stylehub.domain.order.checkout.dto.OrderCheckoutResponse;
+import kr.remerge.stylehub.domain.order.checkout.dto.*;
+import kr.remerge.stylehub.domain.order.checkout.exception.CheckoutValidationException;
 import kr.remerge.stylehub.domain.order.entity.Order;
+import kr.remerge.stylehub.domain.order.entity.OrderItem;
+import kr.remerge.stylehub.domain.order.enumtype.OrderStatus;
 import kr.remerge.stylehub.domain.order.repository.OrderItemRepository;
 import kr.remerge.stylehub.domain.order.repository.OrderRepository;
+import kr.remerge.stylehub.domain.order.service.OrderStatusService;
 import kr.remerge.stylehub.domain.product.entity.Product;
 import kr.remerge.stylehub.domain.product.entity.ProductOption;
 import kr.remerge.stylehub.domain.user.entity.User;
@@ -26,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -35,6 +35,8 @@ import static java.util.stream.Collectors.groupingBy;
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
 public class CheckoutService {
+
+    private final OrderStatusService orderStatusService;
 
     private final CartRepository cartRepository;
     private final UserRepository userRepository;
@@ -59,8 +61,16 @@ public class CheckoutService {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
 
+        List<CheckoutInvalidItemResponse> invalidItems = new ArrayList<>();
+
         for (CartItem cartItem : cartItems) {
-            validateCartItem(cartItem);
+            invalidItems.addAll(validateCartItem(cartItem));
+        }
+
+        if (!invalidItems.isEmpty()) {
+            throw new CheckoutValidationException(
+                    new CheckoutValidationErrorResponse(invalidItems)
+            );
         }
 
         List<CartResponse> items = cartItems.stream()
@@ -84,40 +94,95 @@ public class CheckoutService {
 
     }
 
-    private void validateCartItem(CartItem cartItem) {
+    private List<CheckoutInvalidItemResponse> validateCartItem(CartItem cartItem) {
+
+        List<CheckoutInvalidItemResponse> invalidItems = new ArrayList<>();
 
         ProductOption option = cartItem.getProductOption();
         Product product = option.getProduct();
 
         int quantity = cartItem.getQuantity();
 
-        if (!option.getIsActive()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        if (Boolean.FALSE.equals(option.getIsActive())) {
+            invalidItems.add(toInvalidItem(
+                    cartItem,
+                    ErrorCode.OPTION_INACTIVE,
+                    quantity,
+                    0
+            ));
         }
 
         if (quantity > option.getStockQuantity()) {
-            throw new BusinessException(ErrorCode.OUT_OF_STOCK);
+            invalidItems.add(toInvalidItem(
+                    cartItem,
+                    ErrorCode.OUT_OF_STOCK,
+                    quantity,
+                    option.getStockQuantity()
+            ));
         }
 
         if (cartItem.getCartType() == CartType.NORMAL
                 && quantity < product.getMoq()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
+            invalidItems.add(toInvalidItem(
+                    cartItem,
+                    ErrorCode.MOQ_NOT_MET,
+                    quantity,
+                    product.getMoq()
+            ));
         }
 
         if (cartItem.getCartType() == CartType.SAMPLE) {
             if (!product.getSampleAvailable()) {
-                throw new BusinessException(ErrorCode.SAMPLE_OPTION_NOT_CONFIGURED);
+                invalidItems.add(toInvalidItem(
+                        cartItem,
+                        ErrorCode.SAMPLE_NOT_AVAILABLE,
+                        quantity,
+                        0
+                ));
             }
 
             if (option.getSamplePrice() == null
                     || option.getSampleMaxQuantity() == null) {
-                throw new BusinessException(ErrorCode.SAMPLE_OPTION_NOT_CONFIGURED);
+                invalidItems.add(toInvalidItem(
+                        cartItem,
+                        ErrorCode.SAMPLE_OPTION_NOT_CONFIGURED,
+                        quantity,
+                        0
+                ));
             }
 
-            if (quantity > option.getSampleMaxQuantity()) {
-                throw new BusinessException(ErrorCode.SAMPLE_OPTION_NOT_CONFIGURED);
+            if (option.getSampleMaxQuantity() != null
+                    && quantity > option.getSampleMaxQuantity()) {
+                invalidItems.add(toInvalidItem(
+                        cartItem,
+                        ErrorCode.SAMPLE_LIMIT_EXCEEDED,
+                        quantity,
+                        option.getSampleMaxQuantity()
+                ));
             }
         }
+
+        return invalidItems;
+    }
+
+    private CheckoutInvalidItemResponse toInvalidItem(
+            CartItem cartItem,
+            ErrorCode errorCode,
+            Integer requestedQuantity,
+            Integer availableQuantity
+    ) {
+        ProductOption option = cartItem.getProductOption();
+        Product product = option.getProduct();
+
+        return new CheckoutInvalidItemResponse(
+                cartItem.getCartItemId(),
+                product.getProductName(),
+                option.getOptionLabel(),
+                errorCode.name(),
+                errorCode.getMessage(),
+                requestedQuantity,
+                availableQuantity
+        );
     }
 
     private long calculateShippingFee(List<CartResponse> items) {
@@ -221,5 +286,119 @@ public class CheckoutService {
                 order.getShippingFee(),
                 order.getTotalAmount()
         );
+
+    }
+
+    public MultiOrderCheckoutResponse getMultiOrderCheckout(Integer userId, List<Integer> orderIds) {
+
+        findUser(userId);
+        List<Order> orders = findOwnedPendingOrders(userId, orderIds);
+        List<Integer> distinctOrderIds = orders.stream()
+                .map(Order::getOrderId)
+                .toList();
+
+        Map<Integer, List<OrderItem>> itemsByOrderId =
+                orderItemRepository.
+                        findByOrder_OrderIdInOrderByOrderItemIdAsc(distinctOrderIds)
+                        .stream()
+                        .collect(groupingBy(
+                                orderItem -> orderItem.getOrder().getOrderId()
+                        ));
+
+        List<OrderCheckoutResponse> orderResponses = orders.stream()
+                .map(order -> {
+                    List<OrderCheckoutItemResponse> items =
+                            itemsByOrderId.
+                                    getOrDefault(order.getOrderId(), List.of())
+                                    .stream()
+                                    .map(OrderCheckoutItemResponse::from)
+                                    .toList();
+
+                    return new OrderCheckoutResponse(
+                            order.getOrderId(),
+                            order.getOrderNo(),
+                            items,
+                            order.getSubtotalAmount(),
+                            order.getShippingFee(),
+                            order.getTotalAmount()
+                    );
+                })
+                .toList();
+
+        long productAmount = orders.stream()
+                .mapToLong(Order::getSubtotalAmount)
+                .sum();
+
+        long shippingFee = orders.stream()
+                .mapToLong(Order::getShippingFee)
+                .sum();
+
+        long totalAmount = orders.stream()
+                .mapToLong(Order::getTotalAmount)
+                .sum();
+
+        return new MultiOrderCheckoutResponse(
+                orderResponses,
+                productAmount,
+                shippingFee,
+                totalAmount
+        );
+
+    }
+
+    @Transactional
+    public DevOrderPaymentResponse completeDevOrderPayment(
+            Integer userId,
+            List<Integer> orderIds
+    ) {
+
+        User user = findUser(userId);
+
+        List<Order> orders = findOwnedPendingOrders(userId, orderIds);
+
+        orderStatusService.confirmPayments(orders, user);
+
+        List<String> orderNos = orders.stream()
+                .map(Order::getOrderNo)
+                .toList();
+
+        long totalAmount = orders.stream()
+                .mapToLong(Order::getTotalAmount)
+                .sum();
+
+        return new DevOrderPaymentResponse(orderNos, totalAmount);
+    }
+
+    private List<Order> findOwnedPendingOrders(
+            Integer userId,
+            List<Integer> orderIds
+    ) {
+
+        List<Integer> distinctOrderIds = orderIds.stream()
+                .distinct()
+                .toList();
+
+        List<Order> orders =
+                orderRepository.findByOrderIdInAndBuyer_UserId(distinctOrderIds, userId);
+
+        if (orders.size() != distinctOrderIds.size()) {
+            throw new BusinessException(ErrorCode.ORDER_NOT_FOUND);
+        }
+
+        boolean hasInvalidStatus = orders.stream()
+                .anyMatch(order -> order.getStatus() != OrderStatus.PENDING);
+
+        if (hasInvalidStatus) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        return orders;
+    }
+
+    private User findUser(Integer userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.USER_NOT_FOUND)
+                );
     }
 }

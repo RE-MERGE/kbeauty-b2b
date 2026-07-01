@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import { loadTossPayments } from "@tosspayments/tosspayments-sdk";
 import api from "@/api/axios";
@@ -64,6 +64,39 @@ type OrderCheckoutResponse = {
   productAmount: number;
   shippingFee: number;
   totalAmount: number;
+};
+
+type MultiOrderCheckoutResponse = {
+  orders: OrderCheckoutResponse[];
+  productAmount: number;
+  shippingFee: number;
+  totalAmount: number;
+};
+
+type DevOrderPaymentResponse = {
+  orderNos: string[];
+  totalAmount: number;
+};
+
+type CheckoutInvalidItem = {
+  cartItemId: number;
+  productName: string;
+  optionLabel: string;
+  reasonCode: string;
+  message: string;
+  requestedQuantity: number;
+  availableQuantity: number;
+};
+
+type CheckoutValidationErrorData = {
+  invalidItems: CheckoutInvalidItem[];
+};
+
+type ApiErrorResponse<T = unknown> = {
+  success: boolean;
+  data?: T;
+  message?: string;
+  code?: string;
 };
 
 type OrderCreateResponse = {
@@ -133,7 +166,6 @@ const isSignedMap: Record<string, boolean> = {
   "ORD-2024-0901": false,
 };
 
-const TOSS_CLIENT_KEY = "test_ck_GePWvyJnrKme6gpAnkz63gLzN97E";
 
 function formatPrice(value: number) {
   return `${value.toLocaleString()}원`;
@@ -149,16 +181,26 @@ export function Checkout() {
   const orderType = checkoutState?.cartType === "SAMPLE"
     ? "sample"
     : searchParams.get("type") ?? "ready";
-  const orderId = searchParams.get("orderId") ?? "";
+  const customOrderId = searchParams.get("orderId") ?? "";
+  const orderIdsParam = searchParams.get("orderIds") ?? "";
+  const orderIds = useMemo(
+    () => orderIdsParam
+      .split(",")
+      .map(Number)
+      .filter((orderId) => Number.isInteger(orderId) && orderId > 0),
+    [orderIdsParam]
+  );
+  const orderId = customOrderId || String(orderIds[0] ?? "");
 
   const isCustom = orderType === "custom";
-  const isOrderCheckout = !isCustom && orderId.length > 0;
+  const isOrderCheckout = !isCustom && orderIds.length > 0;
   const isSample = orderType === "sample";
   const isSigned = isCustom ? (isSignedMap[orderId] ?? false) : true;
 
   const [checkoutPreview, setCheckoutPreview] = useState<CheckoutPreviewResponse | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(!isCustom);
   const [previewError, setPreviewError] = useState("");
+  const [checkoutInvalidItems, setCheckoutInvalidItems] = useState<CheckoutInvalidItem[]>([]);
   const [addresses, setAddresses] = useState<DeliveryAddress[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<DeliveryAddress | null>(null);
   const [isAddressLoading, setIsAddressLoading] = useState(true);
@@ -167,6 +209,7 @@ export function Checkout() {
   const [isAddressSaving, setIsAddressSaving] = useState(false);
   const [addressSaveError, setAddressSaveError] = useState("");
   const [showAddressForm, setShowAddressForm] = useState(false);
+
 
   useEffect(() => {
     if (isCustom) {
@@ -182,47 +225,78 @@ export function Checkout() {
 
     const loadCheckoutPreview = async () => {
       try {
+        setCheckoutInvalidItems([]);
         if (isOrderCheckout) {
-          const response = await api.get<OrderCheckoutResponse>(`/checkout/preview/${orderId}`);
+          const response = await api.post<MultiOrderCheckoutResponse>(
+            "/checkout/orders/preview",
+            { orderIds }
+          );
 
           setCheckoutPreview({
             cartType: "NORMAL",
-            items: response.items.map((item) => ({
-              cartItemId: item.orderItemId,
-              productName: item.productName,
-              optionLabel: item.optionSummary ?? "옵션 정보 없음",
-              unitPrice: item.unitPrice + item.additionalPrice,
-              quantity: item.quantity,
-              totalPrice: item.totalPrice,
-            })),
+            items: response.orders.flatMap((order) =>
+              order.items.map((item) => ({
+                cartItemId: item.orderItemId,
+                productName: item.productName,
+                optionLabel: item.optionSummary ?? "옵션 정보 없음",
+                unitPrice: item.unitPrice + item.additionalPrice,
+                quantity: item.quantity,
+                totalPrice: item.totalPrice,
+              }))
+            ),
             productAmount: response.productAmount,
             shippingFee: response.shippingFee,
             totalAmount: response.totalAmount,
           });
-          setCheckoutOrderNo(response.orderNo);
+          return;
+        }
+
+        const currentCheckoutState = checkoutState;
+
+        if (!currentCheckoutState?.cartItemIds.length) {
+          setPreviewError("선택한 장바구니 상품이 없습니다.");
           return;
         }
 
         const response = await api.post<CheckoutPreviewResponse>("/checkout/preview", {
-          cartItemIds: checkoutState.cartItemIds,
-          cartType: checkoutState.cartType,
+          cartItemIds: currentCheckoutState.cartItemIds,
+          cartType: currentCheckoutState.cartType,
         });
         setCheckoutPreview(response);
       } catch (error) {
-        const apiError = error as { response?: { status?: number; data?: unknown } };
+        const apiError = error as {
+          response?: {
+            status?: number;
+            data?: ApiErrorResponse<CheckoutValidationErrorData>;
+          };
+        };
+        const errorResponse = apiError.response?.data;
+        const invalidItems = errorResponse?.data?.invalidItems ?? [];
+
         console.error(
           "Checkout 조회 실패",
           apiError.response?.status,
-          JSON.stringify(apiError.response?.data),
+          JSON.stringify(errorResponse),
         );
-        setPreviewError("주문 정보를 불러오지 못했습니다. 장바구니에서 다시 시도해주세요.");
+
+        if (errorResponse?.code === "CHECKOUT_001" && invalidItems.length > 0) {
+          setCheckoutInvalidItems(invalidItems);
+          setPreviewError(errorResponse.message ?? "주문할 수 없는 장바구니 상품이 있습니다.");
+          return;
+        }
+
+        setPreviewError(
+          isOrderCheckout
+            ? "선택한 주문 정보를 불러오지 못했습니다. 주문 목록에서 다시 시도해주세요."
+            : "주문 정보를 불러오지 못했습니다. 장바구니에서 다시 시도해주세요."
+        );
       } finally {
         setIsPreviewLoading(false);
       }
     };
 
     void loadCheckoutPreview();
-  }, [checkoutState, isCustom, isOrderCheckout, orderId]);
+  }, [checkoutState, isCustom, isOrderCheckout, orderIds]);
 
   useEffect(() => {
     const loadAddresses = async () => {
@@ -262,7 +336,6 @@ export function Checkout() {
   const [createdOrderTotal, setCreatedOrderTotal] = useState(0);
   const [isTestOrderLoading, setIsTestOrderLoading] = useState(false);
   const [testOrderError, setTestOrderError] = useState("");
-  const [checkoutOrderNo, setCheckoutOrderNo] = useState("");
 
   const subtotal = checkoutPreview?.productAmount
     ?? orderItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -283,16 +356,53 @@ export function Checkout() {
   }
 
   if (previewError) {
+    const hasInvalidItems = checkoutInvalidItems.length > 0;
+
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-        <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+        <div className="w-full max-w-xl rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
           <AlertCircle size={36} className="mx-auto mb-4 text-rose-500" />
-          <p className="mb-5 text-sm font-semibold text-slate-700">{previewError}</p>
+          <p className="text-center text-base font-black text-slate-950">
+            {hasInvalidItems ? "주문할 수 없는 상품이 있습니다." : previewError}
+          </p>
+          {hasInvalidItems ? (
+            <>
+              <p className="mt-2 text-center text-sm text-slate-500">
+                아래 상품의 수량이나 옵션 상태를 확인한 뒤 다시 결제를 진행해주세요.
+              </p>
+              <div className="my-5 space-y-3">
+                {checkoutInvalidItems.map((item) => (
+                  <div
+                    key={`${item.cartItemId}-${item.reasonCode}`}
+                    className="rounded-lg border border-rose-100 bg-rose-50/60 p-4 text-left"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-slate-950">{item.productName}</p>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">{item.optionLabel}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-bold text-rose-600">
+                        {item.reasonCode}
+                      </span>
+                    </div>
+                    <p className="mt-3 text-sm font-semibold text-rose-700">{item.message}</p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                      <span>요청 수량 {item.requestedQuantity.toLocaleString()}개</span>
+                      <span>·</span>
+                      <span>가능 수량 {item.availableQuantity.toLocaleString()}개</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="mb-5 mt-2 text-center text-sm font-semibold text-slate-700">{previewError}</p>
+          )}
           <Link
             to="/cart"
-            className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-bold text-white"
+            className="mx-auto inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-bold text-white"
           >
-            장바구니로 돌아가기
+            장바구니로 돌아가 수정하기
           </Link>
         </div>
       </div>
@@ -329,54 +439,48 @@ export function Checkout() {
       setIsAddressSaving(false);
     }
   };
-
+  const TOSS_CLIENT_KEY = "test_ck_GePWvyJnrKme6gpAnkz63gLzN97E";
   const handlePayment = async () => {
     if (!agreeTerms || !isSigned || !selectedAddress || isPaymentLoading) return;
     if (!checkoutState?.cartItemIds.length) return;
 
     try {
-        setIsPaymentLoading(true);
+      setIsPaymentLoading(true);
 
-        const orderResponse = await api.post<OrderCreateResponse>("/orders", {
+        const orderResponse = await api.post<OrderCreateResponse>("/buyer/orders", {
             cartItemIds: checkoutState.cartItemIds,
             addressId: selectedAddress.addressId,
             cartType: checkoutState.cartType,
         });
 
-        const realOrderNumber = orderResponse.orderNos[0];
+      if (orderResponse.orderNos && orderResponse.orderNos.length > 0) {
+        sessionStorage.setItem("pending_order_ids", JSON.stringify(orderResponse.orderNos));
+      }
 
-        if (!realOrderNumber) {
-            alert("주문 번호를 발급받지 못했습니다.");
-            return;
-        }
+      // 토스 결제창에는 대표로 첫 번째 주문 번호를 던져줍니다. (realOrderNumber)
+      const realOrderNumber = orderResponse.orderNos[0];
 
-        const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY);
-        const payment = tossPayments.payment({ customerKey: "ANONYMOUS" });
+      if (!realOrderNumber) {
+        alert("주문 번호를 발급받지 못했습니다.");
+        return;
+      }
 
-        const orderName = orderItems.length > 1
-            ? `${orderItems[0].name} 외 ${orderItems.length - 1}건`
-            : orderItems[0].name;
+      const tossPayments = await loadTossPayments(TOSS_CLIENT_KEY);
+      const payment = tossPayments.payment({ customerKey: "ANONYMOUS" });
 
-        const commonRequest = {
-            amount: { currency: "KRW" as const, value: total },
-            orderId: realOrderNumber,
-            orderName,
-            successUrl: `${window.location.origin}/payment/success`,
-            failUrl: `${window.location.origin}/payment/fail`,
-            customerName: "구매 담당자",
-        };
+      const orderName = orderItems.length > 1
+          ? `${orderItems[0].name} 외 ${orderItems.length - 1}건`
+          : orderItems[0].name;
 
-        if (paymentMethod === "card") {
-            await payment.requestPayment({
-                method: "CARD",
-                ...commonRequest,
-            });
-        } else {
-            await payment.requestPayment({
-                method: "VIRTUAL_ACCOUNT",
-                ...commonRequest,
-            });
-        }
+      const commonRequest = {
+        amount: { currency: "KRW" as const, value: total },
+        orderId: realOrderNumber, // 대표 주문번호
+        orderName,
+        successUrl: `${window.location.origin}/payment/success`,
+        failUrl: `${window.location.origin}/payment/fail`,
+        customerName: "구매 담당자",
+      };
+
       if (paymentMethod === "card") {
         await payment.requestPayment({
           method: "CARD",
@@ -390,12 +494,12 @@ export function Checkout() {
       }
 
     } catch (error) {
-        console.error("주문 생성 또는 결제 요청 실패:", error);
-        alert("결제 처리 중 오류가 발생했습니다.");
+      console.error("주문 생성 또는 결제 요청 실패:", error);
+      alert("결제 처리 중 오류가 발생했습니다.");
     } finally {
-        setIsPaymentLoading(false);
+      setIsPaymentLoading(false);
     }
-};
+  };
 
   const handleTestOrder = async () => {
     if (isOrderCheckout || !checkoutState?.cartItemIds.length || !selectedAddress || isTestOrderLoading) return;
@@ -404,7 +508,7 @@ export function Checkout() {
       setIsTestOrderLoading(true);
       setTestOrderError("");
 
-      const response = await api.post<OrderCreateResponse>("/orders", {
+      const response = await api.post<OrderCreateResponse>("/buyer/orders", {
         cartItemIds: checkoutState.cartItemIds,
         addressId: selectedAddress.addressId,
         cartType: checkoutState.cartType,
@@ -421,15 +525,27 @@ export function Checkout() {
     }
   };
 
-  const handleTestOrderPayment = () => {
+  const handleTestOrderPayment = async () => {
     if (!isOrderCheckout || !selectedAddress || isTestOrderLoading) return;
 
-    setIsTestOrderLoading(true);
-    setTestOrderError("");
-    setCreatedOrderNumbers([checkoutOrderNo || `ORDER-${orderId}`]);
-    setCreatedOrderTotal(total);
-    setShowSuccessModal(true);
-    setIsTestOrderLoading(false);
+    try {
+      setIsTestOrderLoading(true);
+      setTestOrderError("");
+
+      const response = await api.post<DevOrderPaymentResponse>(
+        "/checkout/orders/dev-payment",
+        { orderIds }
+      );
+
+      setCreatedOrderNumbers(response.orderNos);
+      setCreatedOrderTotal(response.totalAmount);
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error("개발용 임시 결제 처리 실패", error);
+      setTestOrderError("임시 결제 처리에 실패했습니다. 주문 상태를 확인해 주세요.");
+    } finally {
+      setIsTestOrderLoading(false);
+    }
   };
 
   return (
@@ -473,7 +589,7 @@ export function Checkout() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => navigate(`/orders/custom/${orderId}/sign`)}
+                  onClick={() => navigate(`/buyer/orders/custom/${orderId}/sign`)}
                   className="mt-3 inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-amber-700"
                 >
                   <PenLine size={14} />
@@ -781,7 +897,7 @@ export function Checkout() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => navigate("/orders")}
+                  onClick={() => navigate("/buyer/orders")}
                   className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-3 text-sm font-bold text-white transition hover:bg-primary/90"
                 >
                   <ShoppingBag size={18} />

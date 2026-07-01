@@ -174,7 +174,7 @@ export function BuyerOrderDetail() {
       {/* 상단 네비 */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2 text-sm">
-          <Link to="/orders" className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+          <Link to="/buyer/orders" className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
             <ChevronLeft size={16} /> 주문 목록
           </Link>
           <span className="text-muted-foreground">/</span>

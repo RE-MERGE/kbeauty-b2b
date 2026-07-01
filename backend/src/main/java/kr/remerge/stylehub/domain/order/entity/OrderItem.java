@@ -1,6 +1,7 @@
 package kr.remerge.stylehub.domain.order.entity;
 
 import jakarta.persistence.*;
+import kr.remerge.stylehub.domain.order.enumtype.OrderItemStatus;
 import kr.remerge.stylehub.domain.product.entity.Product;
 import kr.remerge.stylehub.domain.product.entity.ProductOption;
 import kr.remerge.stylehub.domain.user.entity.User;
@@ -64,11 +65,34 @@ public class OrderItem {
     @Column(name = "total_price", nullable = false)
     private Long totalPrice;
 
+    @Column(name = "product_image_url")
+    private String productImageUrl;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "item_status", nullable = false)
+    @Builder.Default
+    private OrderItemStatus itemStatus = OrderItemStatus.WAITING;
+
+    @Column(name = "prepared_at")
+    private LocalDateTime preparedAt;
+
+    public void markReady() {
+
+        if (this.itemStatus == OrderItemStatus.READY) {
+            return;
+        }
+
+        this.itemStatus = OrderItemStatus.READY;
+        this.preparedAt = LocalDateTime.now();
+    }
 
     @PrePersist
     void setCreatedAt() {
         this.createdAt = LocalDateTime.now();
     }
+
+
 }

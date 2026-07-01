@@ -155,4 +155,11 @@ public class Order extends BaseEntity {
     @Column(name = "agreed_at")
     private LocalDateTime agreedAt;
 
+    public void confirmPayment() {
+        this.status = OrderStatus.CONFIRMED;
+    }
+
+    public void changeStatus(OrderStatus newStatus) {
+        this.status = newStatus;
+    }
 }

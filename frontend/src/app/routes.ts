@@ -12,17 +12,13 @@ import {AdminAnalytics} from "@/pages/admin/AdminAnalytics";
 import {AdminUsers} from "@/pages/admin/AdminUsers";
 import {SearchPage} from "@/pages/admin/SearchPage";
 
-import {RegisterBuyer} from "@/pages/auth/BuyerRegister";
-import {RegisterSeller} from "@/pages/auth/SellerRegister";
 import {AuthLayout} from "@/pages/auth/layout";
 import {Login} from "@/pages/auth/Login";
-import {Register} from "@/pages/auth/Register";
-import {RegisterEmployee} from "@/pages/auth/EmployeeRegister";
+import {RegisterTypeSelect} from "@/pages/auth/RegisterTypeSelect";
 import {RegisterSuccess} from "@/pages/auth/Success";
 import {FindId} from "@/pages/auth/FindId";
 import {FindPw} from "@/pages/auth/FindPw";
 
-import {BuyerOrderDetail} from "@/pages/buyer/BuyerOrderDetail";
 import {BuyerSourcingList} from "@/pages/sourcing/BuyerSourcingList";
 import {BuyerDashboard} from "@/pages/buyer/BuyerDashboard";
 import {BuyerShippingQuotes} from "@/pages/buyer/BuyerShippingQuotes";
@@ -45,12 +41,13 @@ import {AllProducts} from "@/pages/product/AllProducts";
 import {Wishlist} from "@/pages/product/Wishlist";
 import {SellerProductRegister} from "@/pages/product/SellerProductRegister";
 
-import {QuoteDetail} from "@/pages/quote/QuoteDetail";
+import {QuoteDetailBuyer, QuoteDetailSeller} from "@/pages/quote/QuoteDetailWrappers";
 import {SellerQuoteWrite} from "@/pages/quote/SellerQuoteWrite";
 import BuyerQuoteList from "@/pages/quote/BuyerQuoteList";
 
 import {SellerDashboard} from "@/pages/seller/SellerDashboard";
 import {SellerProductManage} from "@/pages/seller/SellerProductManage";
+import {SellerOrders} from "@/pages/seller/SellerOrders";
 import {SellerOrderDetail} from "@/pages/seller/SellerOrderDetail";
 
 import {Negotiations} from "@/pages/trade/Negotiations";
@@ -70,32 +67,23 @@ import AdminSupport from "@/pages/admin/AdminSupport";
 
 import {SupplierRegister} from "@/pages/company/SupplierRegister";
 
-//토스페이먼츠
 import PaymentSuccessPage from "@/pages/tosspayment/PaymentSuccessPage";
 import OrderCompletePage from "@/pages/tosspayment/OrderCompletePage";
+import {Register} from "@/pages/auth/Register";
 
 export const router = createBrowserRouter([
-    // ─────────────────────────────────────────
-    // auth 그룹 - 인증 불필요
-    // ─────────────────────────────────────────
     {
         path: "auth",
         Component: AuthLayout,
         children: [
             {index: true, Component: Login},
-            {path: "register", Component: Register},
-            {path: "register/buyer", Component: RegisterBuyer},
-            {path: "register/seller", Component: RegisterSeller},
-            {path: "register/employee", Component: RegisterEmployee},
+            {path: "register", Component: RegisterTypeSelect},
+            {path: "register/:role/:memberType", Component: Register},
             {path: "register/success", Component: RegisterSuccess},
             {path: "find-id", Component: FindId},
             {path: "find-pw", Component: FindPw},
         ],
     },
-    // ─────────────────────────────────────────
-    // auth를 제외한 모든 페이지 - ProtectedLayout으로 한 번에 감쌈
-    // 로그인 안 했으면 자동으로 /auth/login으로 리다이렉트
-    // ─────────────────────────────────────────
     {
         Component: ProtectedLayout,
         children: [
@@ -111,17 +99,14 @@ export const router = createBrowserRouter([
                     {path: "mypage", Component: MyPage},
                     {path: "settings", Component: CompanySettings},
                     {path: "partner", Component: PartnerPlan},
-                    {path: "quotes/:quoteId", Component: QuoteDetail},
+                    {path: "quotes/:quoteId", Component: QuoteDetailBuyer},
 
                     // Order Flow
                     {path: "cart", Component: Cart},
-                    {path: "orders", Component: Orders},
-                    {path: "orders/:id", Component: OrderDetail},
                     {path: "checkout", Component: Checkout},
 
-
                     // Trade Flow
-                    {path: "orders/:orderId/negotiations", Component: Negotiations},
+                    {path: "negotiations", Component: Negotiations},
                     {path: "orders/:orderId/disputes", Component: Disputes},
 
                     // Toss Payments
@@ -150,13 +135,14 @@ export const router = createBrowserRouter([
                 handle: {role: ["BUYER", "BOTH"]},
                 children: [
                     {index: true, Component: BuyerDashboard},
+                    {path: "orders", Component: Orders},
+                    {path: "orders/:id", Component: OrderDetail},
                     {path: "quotes", Component: BuyerQuoteList},
                     {path: "sourcing-request", Component: SourcingRequest},
                     {path: "orders/:orderId/contract-sign", Component: BuyerContractSign},
                     {path: "shipping-quotes", Component: BuyerShippingQuotes},
                     {path: "my-sourcing", Component: BuyerSourcingList},
-                    {path: "sourcing-detail", Component: BuyerSourcingDetail},
-                    {path: "orders/:id", Component: BuyerOrderDetail},
+                    {path: "sourcing-detail/:requestId", Component: BuyerSourcingDetail},
                 ],
             },
             {
@@ -168,9 +154,11 @@ export const router = createBrowserRouter([
                     {path: "products/new", Component: SellerProductRegister},
                     {path: "products", Component: SellerProductManage},
                     {path: "sourcing-requests", Component: SellerRequestList},
+                    {path: "orders", Component: SellerOrders},
                     {path: "orders/:id", Component: SellerOrderDetail},
                     {path: "sourcing/:requestId/quote", Component: SellerQuoteWrite},
                     {path: "orders/:orderId/contract-sign", Component: SellerContractSign},
+                    {path: "quotes/:quoteId", Component: QuoteDetailSeller},
                 ],
             },
             {

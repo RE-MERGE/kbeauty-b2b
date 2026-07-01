@@ -20,10 +20,12 @@ public enum ErrorCode {
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_003", "유효하지 않은 토큰입니다."),
     EXPIRED_ACCESS_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH_004", "액세스 토큰이 만료되었습니다."),
     REFRESH_TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "AUTH_005", "리프레시 토큰이 만료되었습니다."),
-    OTP_EXPIRED(HttpStatus.BAD_REQUEST, "AUTH_006", "인증 시간이 만료되었습니다. 다시 시도해 주세요."),
+    OTP_EXPIRED(HttpStatus.UNAUTHORIZED, "AUTH_006", "인증 시간이 만료되었습니다. 다시 요청해 주세요."),
     INVALID_OTP_CODE(HttpStatus.BAD_REQUEST, "AUTH_007", "인증번호가 일치하지 않습니다."),
-    UNVERIFIED_EMAIL(HttpStatus.BAD_REQUEST, "AUTH_008", "인증되지 않은 이메일입니다."),
-    UNVERIFIED_PHONE(HttpStatus.BAD_REQUEST, "AUTH_009", "인증되지 않은 휴대폰 번호입니다."),
+    UNVERIFIED_EMAIL(HttpStatus.FORBIDDEN, "AUTH_008", "인증되지 않은 이메일입니다."),
+    UNVERIFIED_PHONE(HttpStatus.FORBIDDEN, "AUTH_009", "인증되지 않은 휴대폰 번호입니다."),
+    SMS_SEND_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "AUTH_010", "문자 발송 중에 오류가 발생하였습니다."),
+    EMAIL_SEND_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "AUTH_011", "이메일 발송에 실패했습니다. 잠시 후 다시 시도해 주세요."),
 
     // ───────────────────────────────────────────
     // 유저 (USER)
@@ -36,6 +38,7 @@ public enum ErrorCode {
     USER_SUSPENDED(HttpStatus.FORBIDDEN, "USER_006", "정지된 계정입니다."),
     USER_DELETED(HttpStatus.FORBIDDEN, "USER_007", "탈퇴한 계정입니다."),
     INVALID_BUSINESS_ROLE(HttpStatus.BAD_REQUEST, "USER_008", "유효하지 않은 비즈니스 역할입니다."),
+    INVALID_LOGIN_CREDENTIALS(HttpStatus.BAD_REQUEST, "USER_009", "이메일 또는 비밀번호가 올바르지 않습니다."),
 
     // ───────────────────────────────────────────
     // 회사 (COMPANY)
@@ -43,6 +46,9 @@ public enum ErrorCode {
     COMPANY_NOT_FOUND(HttpStatus.NOT_FOUND, "COMPANY_001", "회사를 찾을 수 없습니다."),
     DUPLICATE_BUSINESS_NUMBER(HttpStatus.CONFLICT, "COMPANY_002", "이미 등록된 사업자등록번호입니다."),
     COMPANY_NOT_APPROVED(HttpStatus.FORBIDDEN, "COMPANY_003", "승인되지 않은 공급업체입니다."),
+    INVALID_BUSINESS_INFORMATION(HttpStatus.BAD_REQUEST, "COMPANY_004", "국세청 등록 정보와 일치하지 않는 사업자 정보입니다."),
+    NOT_CLOTHING_BUSINESS(HttpStatus.BAD_REQUEST, "COMPANY_005", "의류 및 패션 관련 업종의 셀러만 가입이 가능합니다."),
+    OCR_PARSING_FAILED(HttpStatus.BAD_REQUEST, "COMPANY_006", "사업자등록증 이미지 글자 인식에 실패했습니다."),
 
     // ───────────────────────────────────────────
     // 상품 (PRODUCT)
@@ -50,6 +56,10 @@ public enum ErrorCode {
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "PRODUCT_001", "상품을 찾을 수 없습니다."),
     PRODUCT_OPTION_NOT_FOUND(HttpStatus.NOT_FOUND, "PRODUCT_002", "상품 옵션을 찾을 수 없습니다."),
     OUT_OF_STOCK(HttpStatus.BAD_REQUEST, "PRODUCT_003", "재고가 부족합니다."),
+    OPTION_INACTIVE(HttpStatus.BAD_REQUEST, "PRODUCT_004", "현재 판매 중인 옵션이 아닙니다."),
+    MOQ_NOT_MET(HttpStatus.BAD_REQUEST, "PRODUCT_005", "최소 주문 수량을 충족하지 못했습니다."),
+    SAMPLE_NOT_AVAILABLE(HttpStatus.BAD_REQUEST, "PRODUCT_006", "샘플 주문이 불가능한 상품입니다."),
+    SAMPLE_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "PRODUCT_007", "샘플 최대 주문 수량을 초과했습니다."),
 
     // ───────────────────────────────────────────
     // 장바구니 (CART)
@@ -57,6 +67,7 @@ public enum ErrorCode {
     CART_ITEM_EMPTY(HttpStatus.BAD_REQUEST, "CART_001", "선택된 장바구니 상품이 없습니다."),
     INVALID_CART_TYPE(HttpStatus.BAD_REQUEST, "CART_002", "장바구니 타입이 올바르지 않습니다."),
     CART_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "CART_003", "주문할 수 없는 장바구니 상품이 포함되어 있습니다."),
+    CHECKOUT_VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "CART_004", "주문할 수 없는 장바구니 상품이 있습니다."),
 
     // ───────────────────────────────────────────
     // 주문 (ORDER)
@@ -101,7 +112,7 @@ public enum ErrorCode {
     EMPTY_FILE(HttpStatus.BAD_REQUEST, "COMMON_002", "업로드한 파일이 비어있습니다."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON_003", "서버 오류가 발생했습니다."),
     FILE_UPLOAD_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "COMMON_004", "파일 업로드 중 오류가 발생했습니다.");
-    private final HttpStatus httpStatus; // 💡 400, 500 대신 HttpStatus 객체로 명확히 관리
-    private final String code;           // 💡 프론트엔드가 식별할 비즈니스 커스텀 에러 코드 (ex: COMPANY_002)
+    private final HttpStatus httpStatus; // 400, 500 대신 HttpStatus 객체로 명확히 관리
+    private final String code;           // 프론트엔드가 식별할 비즈니스 커스텀 에러 코드 (ex: COMPANY_002)
     private final String message;        // 에러 메시지
 }

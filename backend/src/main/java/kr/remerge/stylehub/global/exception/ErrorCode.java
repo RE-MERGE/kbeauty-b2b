@@ -39,6 +39,7 @@ public enum ErrorCode {
     USER_DELETED(HttpStatus.FORBIDDEN, "USER_007", "탈퇴한 계정입니다."),
     INVALID_BUSINESS_ROLE(HttpStatus.BAD_REQUEST, "USER_008", "유효하지 않은 비즈니스 역할입니다."),
     INVALID_LOGIN_CREDENTIALS(HttpStatus.BAD_REQUEST, "USER_009", "이메일 또는 비밀번호가 올바르지 않습니다."),
+    DUPLICATE_PHONE_NUMBER(HttpStatus.CONFLICT, "USER_010", "이미 사용 중인 핸드폰 번호입니다."),
 
     // ───────────────────────────────────────────
     // 회사 (COMPANY)

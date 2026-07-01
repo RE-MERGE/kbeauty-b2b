@@ -7,5 +7,5 @@ public record VerifyChangeAuthRequest(
     String target,
     
     @NotBlank(message = "인증번호는 필수입니다.")
-    String code
+    String otpCode
 ) {}

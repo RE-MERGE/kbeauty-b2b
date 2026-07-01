@@ -27,7 +27,6 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
-    private final UserService userService;
     private final JwtProperties jwtProperties;
 
     // ───────────────────────────────────────────
@@ -89,7 +88,7 @@ public class AuthController {
      * GET /api/auth/email/check?email=...
      */
     @GetMapping("/email/check")
-    public ResponseEntity<ApiResponse<Void>> checkEmailDuplicate(@Valid @RequestParam SignUpAuth.EmailCheckRequest request) {
+    public ResponseEntity<ApiResponse<Void>> checkEmailDuplicate(@Valid @ModelAttribute SignUpAuth.EmailCheckRequest request) {
         authService.checkEmailDuplicateForSignUp(request.email());
         return ResponseEntity.ok(ApiResponse.success(null));
     }
@@ -114,6 +113,12 @@ public class AuthController {
             @Valid @RequestBody SignUpAuth.EmailVerifyRequest request) {
         authService.verifySignUpEmailOtp(request.email(), request.code());
         return ResponseEntity.ok(ApiResponse.successWithMessage("이메일 인증이 완료되었습니다."));
+    }
+
+    @GetMapping("/phone/check")
+    public ResponseEntity<ApiResponse<Void>> checkPhoneDuplicate(@Valid @ModelAttribute SignUpAuth.PhoneCheckRequest request) {
+        authService.checkPhoneDuplicateForSignUp(request.phone());
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     /**
@@ -253,15 +258,27 @@ public class AuthController {
     // 회원정보 변경 시 이메일/휴대폰 본인 점유인증 (마이페이지 연동용)
     // ───────────────────────────────────────────
 
-    @PostMapping("/request-change-auth")
-    public ResponseEntity<ApiResponse<Void>> requestChangeAuth(@Valid @RequestBody ChangeAuthRequest request) {
-        authService.sendChangeAuthCode(request.target());
+    @PostMapping("/change-id/send-otp")
+    public ResponseEntity<ApiResponse<Void>> sendChangeIdOtp(@Valid @RequestBody ChangeAuthRequest request) {
+        authService.sendChangeIdOtp(request.target());
         return ResponseEntity.ok(ApiResponse.successWithMessage("인증 코드가 발송되었습니다."));
     }
 
-    @PostMapping("/verify-change-auth")
-    public ResponseEntity<ApiResponse<Void>> verifyChangeAuth(@Valid @RequestBody VerifyChangeAuthRequest request) {
-        authService.verifyChangeAuthCode(request.target(), request.code());
+    @PostMapping("/change-id/verify-otp")
+    public ResponseEntity<ApiResponse<Void>> verifyChangeIdOtp(@Valid @RequestBody VerifyChangeAuthRequest request) {
+        authService.verifyChangeIdOtp(request.target(), request.otpCode());
+        return ResponseEntity.ok(ApiResponse.successWithMessage("인증이 완료되었습니다."));
+    }
+
+    @PostMapping("/change-phone/send-otp")
+    public ResponseEntity<ApiResponse<Void>> sendChangePhoneOtp(@Valid @RequestBody ChangeAuthRequest request) {
+        authService.sendChangePhoneOtp(request.target());
+        return ResponseEntity.ok(ApiResponse.successWithMessage("인증 코드가 발송되었습니다."));
+    }
+
+    @PostMapping("/change-phone/verify-otp")
+    public ResponseEntity<ApiResponse<Void>> verifyChangePhoneOtp(@Valid @RequestBody VerifyChangeAuthRequest request) {
+        authService.verifyChangePhoneOtp(request.target(), request.otpCode());
         return ResponseEntity.ok(ApiResponse.successWithMessage("인증이 완료되었습니다."));
     }
 }

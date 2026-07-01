@@ -1,12 +1,16 @@
 package kr.remerge.stylehub.domain.user.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Pattern;
 import kr.remerge.stylehub.domain.company.entity.Address;
 import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.user.enumtype.BusinessRole;
 import kr.remerge.stylehub.domain.user.enumtype.UserRole;
 import kr.remerge.stylehub.domain.user.enumtype.UserStatus;
 import kr.remerge.stylehub.global.entity.BaseEntity;
+import kr.remerge.stylehub.global.exception.BusinessException;
+import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -124,5 +128,26 @@ public class User extends BaseEntity {
 
     public void updateDefaultReceivingAddress(Address address) {
         this.defaultReceivingAddress = address;
+    }
+
+    public void updateEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new BusinessException(ErrorCode.UNVERIFIED_EMAIL);
+        }
+        this.email = email;
+    }
+
+    public void updatePhone(String phone) {
+        if (phone == null || phone.isBlank()) {
+            throw new BusinessException(ErrorCode.UNVERIFIED_PHONE);
+        }
+        this.phone = phone.replaceAll("[^0-9]", "");
+    }
+
+    public void updateProfileImageUrl(String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) {
+            throw new BusinessException(ErrorCode.EMPTY_FILE);
+        }
+        this.profileImageUrl = imageUrl;
     }
 }

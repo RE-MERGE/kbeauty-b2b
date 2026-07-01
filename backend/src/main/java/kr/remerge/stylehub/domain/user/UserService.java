@@ -10,6 +10,7 @@ import kr.remerge.stylehub.domain.company.repository.CompanyBankAccountRepositor
 import kr.remerge.stylehub.domain.company.repository.CompanyHandledCategoryRepository;
 import kr.remerge.stylehub.domain.company.repository.CompanyRepository;
 import kr.remerge.stylehub.domain.user.dto.request.*;
+import kr.remerge.stylehub.domain.user.dto.response.ProfileUpdateResponse;
 import kr.remerge.stylehub.domain.user.dto.response.UserResponse;
 import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.entity.UserPreferredCategory;
@@ -242,22 +243,42 @@ public class UserService {
     }
 
     @Transactional
-    public UserResponse updateMe(Integer userId, UpdateUserRequest request) {
+    public ProfileUpdateResponse updateProfile(Integer userId, ProfileUpdateRequest request) {
+        // 1. 현재 로그인한 유저 정보 조회
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        if (!user.getEmail().equals(request.email()) && userRepository.existsByEmail(request.email())) {
-            throw new BusinessException(ErrorCode.DUPLICATE_EMAIL);
-        }
-        if (!request.email().equals(user.getEmail())) {
-            if (!authService.isVerified(request.email())) {
-                throw new BusinessException(ErrorCode.UNVERIFIED_EMAIL);
+        // 2. 이메일이 변경되었는지 확인 → 변경되었다면 Redis 인증 여부 검증
+        if (request.email() != null && !request.email().equals(user.getEmail())) {
+            if (userRepository.existsByEmail(request.email())) {
+                throw new BusinessException(ErrorCode.DUPLICATE_EMAIL);
             }
+            // AuthService에 만들어 둔 검증 정책 메서드 활용
+            authService.validateVerification(request.email());
             authService.invalidateVerification(request.email());
+
+            user.updateEmail(request.email());
         }
 
-        user.update(request.email(), request.phone(), request.profileImageUrl());
-        return UserResponse.from(user);
+        // 3. 휴대폰 번호가 변경되었는지 확인 → 변경되었다면 Redis 인증 여부 검증
+        if (request.phone() != null && !request.phone().equals(user.getPhone())) {
+            String cleanPhone = request.phone().replaceAll("[^0-9]", "");
+            if (userRepository.existsByPhone(cleanPhone)) { // 해당 메서드가 레포지토리에 있다고 가정
+                throw new BusinessException(ErrorCode.DUPLICATE_PHONE_NUMBER);
+            }
+
+            authService.validateVerification(cleanPhone);
+            authService.invalidateVerification(cleanPhone);
+
+            user.updatePhone(cleanPhone);
+        }
+
+        // 4. 프로필 이미지 등 기타 정보 업데이트
+        if (request.profileImageUrl() != null) {
+            user.updateProfileImageUrl(request.profileImageUrl());
+        }
+
+        return ProfileUpdateResponse.from(user);
     }
 
     @Transactional

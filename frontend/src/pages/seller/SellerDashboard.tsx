@@ -817,6 +817,13 @@ export function SellerDashboard() {
                     <ClipboardList size={15} />
                     주문 관리
                 </Link>
+                <Link
+                    to="/seller/quotes"
+                    className="inline-flex h-11 items-center gap-2 border-b-2 border-transparent px-4 text-sm font-bold text-slate-500 transition hover:border-slate-300 hover:text-slate-900"
+                >
+                    <FileText size={15} />
+                    견적 관리
+                </Link>
             </nav>
 
             {/* ── 긴급 알림 배너 ── */}

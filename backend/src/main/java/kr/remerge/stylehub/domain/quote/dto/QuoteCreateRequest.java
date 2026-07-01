@@ -1,81 +1,72 @@
 package kr.remerge.stylehub.domain.quote.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
-@Getter
-@NoArgsConstructor
-public class QuoteCreateRequest {
+public record QuoteCreateRequest(
 
-    @JsonProperty("sourcing_id")
-    private Integer sourcingId;
+        @NotNull(message = "소싱 요청 ID가 필요합니다.")
+        Integer sourcingRequestId,
 
-    @JsonProperty("brand_name")
-    private String brandName;
+        @Size(max = 100)
+        String brandName,
 
-    @JsonProperty("product_name")
-    private String productName;
+        @NotBlank(message = "상품명을 입력해주세요.")
+        @Size(max = 150)
+        String productName,
 
-    @JsonProperty("category_name")
-    private String categoryName;
+        @Size(max = 100)
+        String categoryName,
 
-    private String material;
+        @Size(max = 255)
+        String material,
 
-    @JsonProperty("lead_time_days")
-    private Integer leadTimeDays;
+        @NotNull(message = "납기일을 입력해주세요.")
+        @Positive(message = "납기일은 1일 이상이어야 합니다.")
+        Integer leadTimeDays,
 
-    @JsonProperty("delivery_company")
-    private String deliveryCompany;
+        @Size(max = 50)
+        String deliveryCompany,
 
-    @JsonProperty("shipping_fee")
-    private Long shippingFee;
+        @NotNull
+        @PositiveOrZero(message = "배송비는 0원 이상이어야 합니다.")
+        Long shippingFee,
 
-    @JsonProperty("valid_until")
-    private String validUntil;           // ISO 8601 string (프론트에서 getValidUntil() 결과)
+        @NotNull(message = "견적 유효기간을 입력해주세요.")
+        @Future(message = "견적 유효기간은 현재보다 이후여야 합니다.")
+        LocalDateTime validUntil,
 
-    @JsonProperty("sample_available")
-    private String sampleAvailable;
+        @NotNull
+        Boolean sampleAvailable,
 
-    @JsonProperty("seller_memo")
-    private String sellerMemo;
+        @Size(max = 2000)
+        String sellerMemo,
 
-    @JsonProperty("subtotal_amount")
-    private Long subtotalAmount;
+        @NotEmpty(message = "견적 상품을 한 개 이상 입력해주세요.")
+        @Valid
+        List<Item> items
 
-    @JsonProperty("total_amount")
-    private Long totalAmount;
+) {
 
-    @JsonProperty("quote_items")
-    private List<QuoteItemDto> quoteItems;
+    public record Item(
 
-    @JsonProperty("sample_items")
-    private List<SampleItemDto> sampleItems;
+            @NotBlank(message = "옵션 정보를 입력해주세요.")
+            @Size(max = 255)
+            String optionSummary,
 
-    @Getter
-    @NoArgsConstructor
-    public static class QuoteItemDto {
-        @JsonProperty("option_summary")
-        private String optionSummary;
-        private Integer quantity;
-        @JsonProperty("unit_price")
-        private Long unitPrice;
-        @JsonProperty("total_price")
-        private Long totalPrice;
-    }
+            @NotNull
+            @Positive(message = "수량은 1개 이상이어야 합니다.")
+            Integer quantity,
 
-    @Getter
-    @NoArgsConstructor
-    public static class SampleItemDto {
-        @JsonProperty("sample_name")
-        private String sampleName;
-        private Integer quantity;
-        @JsonProperty("unit_price")
-        private Long unitPrice;
-        @JsonProperty("total_price")
-        private Long totalPrice;
-        private String memo;
+            @NotNull
+            @PositiveOrZero(message = "단가는 0원 이상이어야 합니다.")
+            Long unitPrice,
+
+            @NotNull
+            Boolean sample
+    ) {
     }
 }

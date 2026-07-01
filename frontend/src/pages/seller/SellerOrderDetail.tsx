@@ -36,6 +36,8 @@ type SellerOrderItemResponse = {
   productImageUrl: string | null;
   itemStatus: "WAITING" | "READY";
   preparedAt: string | null;
+  assignedToMe: boolean;
+  canPrepare: boolean;
 };
 
 type PaymentMethod = "TRANSFER" | "CORP_CARD";
@@ -180,6 +182,9 @@ export function SellerOrderDetail() {
   const [loadError, setLoadError] = useState("");
   const [updatingItemId, setUpdatingItemId] = useState<number | null>(null);
   const [isUpdatingAll, setIsUpdatingAll] = useState(false);
+  const [carrier, setCarrier] = useState("");
+  const [trackingNumber, setTrackingNumber] = useState("");
+  const [isRegisteringShipment, setIsRegisteringShipment] = useState(false);
   const [actionNotice, setActionNotice] = useState<{
     type: "success" | "error";
     message: string;
@@ -270,6 +275,36 @@ export function SellerOrderDetail() {
     }
   };
 
+  const handleRegisterShipment = async () => {
+    if (!id || !carrier || !trackingNumber.trim()) return;
+
+    try {
+      setIsRegisteringShipment(true);
+      setActionNotice(null);
+
+      await api.patch(`/seller/orders/${id}/shipment`, {
+        carrier,
+        trackingNumber: trackingNumber.trim(),
+      });
+
+      await loadOrderDetail(false);
+      setActionNotice({
+        type: "success",
+        message: "출고 정보가 등록되어 배송이 시작되었습니다.",
+      });
+    } catch (error) {
+      setActionNotice({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "출고 정보를 등록하지 못했습니다.",
+      });
+    } finally {
+      setIsRegisteringShipment(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="mx-auto max-w-[1180px] px-4 py-16 text-center text-sm text-muted-foreground">
@@ -308,9 +343,12 @@ export function SellerOrderDetail() {
     order.orderStatus
   );
   const isPresident = user?.role === "PRESIDENT";
-  const isEmployee = user?.role === "EMPLOYEE";
   const canPrepareItems =
     order.orderStatus === "CONFIRMED" || order.orderStatus === "PREPARING";
+  const canRegisterShipment =
+    order.orderStatus === "PREPARING" &&
+    order.preparation.allItemsReady &&
+    !order.delivery.trackingNumber;
   const exceptionLogs = order.statusLogs.filter(
     (log) => log.newStatus && exceptionStatuses.includes(log.newStatus)
   );
@@ -439,6 +477,15 @@ export function SellerOrderDetail() {
                       <p className="mt-1 text-sm text-muted-foreground">
                         {item.optionSummary || "기본 옵션"}
                       </p>
+                      <span
+                        className={`mt-2 inline-flex border px-2 py-1 text-xs font-semibold ${
+                          item.assignedToMe
+                            ? "border-primary/30 bg-secondary text-primary"
+                            : "border-border bg-muted/40 text-muted-foreground"
+                        }`}
+                      >
+                        {item.assignedToMe ? "내 담당 상품" : "다른 담당자 상품"}
+                      </span>
                       <p className="mt-3 text-xs text-muted-foreground">
                         {item.quantity.toLocaleString()}개 x{" "}
                         {item.unitPrice.toLocaleString()}원
@@ -464,7 +511,7 @@ export function SellerOrderDetail() {
                           {formatDate(item.preparedAt)}
                         </p>
                       )}
-                      {isEmployee &&
+                      {item.canPrepare &&
                         canPrepareItems &&
                         item.itemStatus !== "READY" && (
                           <button
@@ -624,6 +671,74 @@ export function SellerOrderDetail() {
               </div>
             </dl>
           </section>
+
+          {canRegisterShipment && (
+            <section className="rounded-lg border border-primary/25 bg-white p-5">
+              <div className="mb-4 flex items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center bg-secondary text-primary">
+                  <Truck size={17} />
+                </div>
+                <div>
+                  <h2 className="font-bold text-foreground">출고 정보 등록</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    모든 상품의 준비가 완료되었습니다.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold text-foreground">
+                    택배사
+                  </span>
+                  <select
+                    value={carrier}
+                    onChange={(event) => setCarrier(event.target.value)}
+                    className="h-10 w-full border border-border bg-white px-3 text-sm outline-none transition focus:border-primary"
+                  >
+                    <option value="">택배사 선택</option>
+                    <option value="CJ대한통운">CJ대한통운</option>
+                    <option value="한진택배">한진택배</option>
+                    <option value="롯데택배">롯데택배</option>
+                    <option value="로젠택배">로젠택배</option>
+                    <option value="우체국택배">우체국택배</option>
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold text-foreground">
+                    운송장 번호
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={trackingNumber}
+                    onChange={(event) =>
+                      setTrackingNumber(
+                        event.target.value.replace(/[^0-9-]/g, "")
+                      )
+                    }
+                    placeholder="운송장 번호 입력"
+                    className="h-10 w-full border border-border px-3 text-sm outline-none transition placeholder:text-muted-foreground/70 focus:border-primary"
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  disabled={
+                    !carrier ||
+                    !trackingNumber.trim() ||
+                    isRegisteringShipment
+                  }
+                  onClick={() => void handleRegisterShipment()}
+                  className="flex h-10 w-full items-center justify-center gap-2 bg-primary text-sm font-bold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+                >
+                  <Truck size={16} />
+                  {isRegisteringShipment ? "처리 중" : "배송 시작"}
+                </button>
+              </div>
+            </section>
+          )}
 
           <section className="rounded-lg border border-border bg-white p-5">
             <h2 className="mb-4 flex items-center gap-2 font-bold text-foreground">

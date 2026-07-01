@@ -3,11 +3,11 @@ package kr.remerge.stylehub.domain.order.entity;
 import jakarta.persistence.*;
 import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.contract.entity.Contract;
-import kr.remerge.stylehub.domain.quote.entity.Quote;
-import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.order.enumtype.OrderStatus;
 import kr.remerge.stylehub.domain.order.enumtype.OrderType;
 import kr.remerge.stylehub.domain.order.enumtype.PaymentMethod;
+import kr.remerge.stylehub.domain.quote.entity.Quote;
+import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.global.entity.BaseEntity;
 import lombok.*;
 
@@ -161,5 +161,11 @@ public class Order extends BaseEntity {
 
     public void changeStatus(OrderStatus newStatus) {
         this.status = newStatus;
+    }
+
+    public void registerShipment(String carrier, String trackingNumber) {
+        this.carrier = carrier;
+        this.trackingNumber = trackingNumber;
+        this.shippedAt = LocalDateTime.now();
     }
 }

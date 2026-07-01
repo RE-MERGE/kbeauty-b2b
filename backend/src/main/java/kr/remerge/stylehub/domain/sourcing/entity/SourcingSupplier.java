@@ -79,8 +79,7 @@ public class SourcingSupplier extends BaseEntity {
         this.respondedAt = LocalDateTime.now();
     }
 
-    public void quote(String feedback, Quote quote) {
-        this.sellerFeedback = feedback;
+    public void quote( Quote quote) {
         this.quote = quote;
         this.status = SourcingSupplierStatus.QUOTED;
         this.respondedAt = LocalDateTime.now();

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface SourcingSupplierRepository extends JpaRepository<SourcingSupplier, Integer> {
 
@@ -76,4 +77,6 @@ public interface SourcingSupplierRepository extends JpaRepository<SourcingSuppli
             @Param("requestIds") List<Integer> requestIds,
             @Param("status") SourcingSupplierStatus status
     );
+
+    Optional<SourcingSupplier> findBySourcingRequest_SourcingRequestIdAndSellerCompanyIdAndStatusIn(Integer sourcingRequestId, Integer companyId, List<SourcingSupplierStatus> suggested);
 }

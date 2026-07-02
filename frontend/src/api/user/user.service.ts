@@ -2,7 +2,8 @@ import api from "@/api/axios";
 import {UserResponse} from "../auth/auth.types";
 import {
     ChangeEmailOtpRequest, ChangePhoneOtpRequest, VerifyEmailOtpRequest,
-    VerifyPhoneOtpRequest, UpdateProfilePayload
+    VerifyPhoneOtpRequest, UpdateProfilePayload, AddressResponse, AddressPayload, CompanyDefaultsResponse,
+    UserDefaultsResponse, UpdateDefaultAddressRequest
 } from "./user.types";
 // ───────────────────────────────────────────
 // 내 정보 조회
@@ -45,4 +46,38 @@ export const verifyPhoneChangeOtp = async (request: VerifyPhoneOtpRequest): Prom
  */
 export const updateProfileInfo = async (payload: UpdateProfilePayload) => {
     return await api.patch<UserResponse>("/users/profile", payload);
+};
+
+// ───────────────────────────────────────────
+// 기본 배송, 발송, 반품 주소지 관리
+// ───────────────────────────────────────────
+
+// 1. 전체 주소록 목록 조회
+export const getCompanyAddresses = async (): Promise<AddressResponse[]> => {
+    return await api.get<AddressResponse[]>("/addresses");
+};
+
+// 2. 회사/유저 기본 설정 조회
+export const getAddressDefaults = async (): Promise<{ company: CompanyDefaultsResponse; user: UserDefaultsResponse }> => {
+    return await api.get<{ company: CompanyDefaultsResponse; user: UserDefaultsResponse }>("/addresses/defaults");
+};
+
+// 3. 새 주소 등록
+export const createAddress = async (payload: AddressPayload): Promise<AddressResponse> => {
+    return await api.post<AddressResponse>("/addresses", payload);
+};
+
+// 4. 주소 수정
+export const updateAddress = async (addressId: number, payload: AddressPayload): Promise<AddressResponse> => {
+    return await api.put<AddressResponse>(`/addresses/${addressId}`, payload);
+};
+
+// 5. 주소 삭제
+export const deleteAddress = async (addressId: number): Promise<void> => {
+    await api.delete<void>(`/addresses/${addressId}`);
+};
+
+// 6. 기본 주소지 변경 (출고지/배송지/수령지 세팅)
+export const updateDefaultAddress = async (payload: UpdateDefaultAddressRequest): Promise<void> => {
+    await api.patch<void>("/addresses/defaults", payload);
 };

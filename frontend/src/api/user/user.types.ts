@@ -1,14 +1,3 @@
-// auth.types.ts에 있는 검증된 유저 타입을 그대로 가져와 연결합니다.
-
-/**
- * 프로필 및 회원 정보 수정 요청 (PATCH /users/me)에 사용되는 객체입니다.
- */
-export interface UpdateProfileRequest {
-    email: string;
-    phone: string | null; // auth.types.ts의 스펙(string | null)과 싱크를 맞춤
-    profileImageUrl: string | null;
-}
-
 /**
  * 1. 정보 수정 전 비밀번호 검증 요청 객체
  */
@@ -29,4 +18,35 @@ export interface SendChangeOtpRequest {
 export interface VerifyChangeOtpRequest {
     targetValue: string; // 새 이메일 주소 또는 새 핸드폰 번호
     otpCode: string;     // 유저가 입력한 인증번호 6자리
+}
+
+// ───────────────────────────────────────────
+// 회원 정보 변경 인증 (Profile OTP)
+// ───────────────────────────────────────────
+
+export interface ChangeEmailOtpRequest {
+    target: string; // 변경할 이메일 주소
+}
+
+export interface VerifyEmailOtpRequest {
+    target: string;
+    otpCode: string; // 6자리 인증번호
+}
+
+export interface ChangePhoneOtpRequest {
+    target: string; // 변경할 연락처
+}
+
+export interface VerifyPhoneOtpRequest {
+    target: string;
+    otpCode: string; // 6자리 인증번호
+}
+
+/**
+ * 최종 프로필 및 회원 정보 수정 요청
+ */
+export interface UpdateProfilePayload {
+    email: string;
+    phone: string;
+    profileImageUrl: string | null;
 }

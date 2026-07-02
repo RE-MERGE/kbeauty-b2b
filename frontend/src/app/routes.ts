@@ -142,7 +142,7 @@ export const router = createBrowserRouter([
                     {path: "quotes", Component: BuyerQuoteList},
                     {path: "quotes/:quoteId", Component: QuoteDetailBuyer},
                     {path: "sourcing-request", Component: SourcingRequest},
-                    {path: "orders/:orderId/contract-sign", Component: BuyerContractSign},
+                    {path: "contracts/:contractId/sign", Component: BuyerContractSign},
                     {path: "shipping-quotes", Component: BuyerShippingQuotes},
                     {path: "my-sourcing", Component: BuyerSourcingList},
                     {path: "sourcing-detail/:requestId", Component: BuyerSourcingDetail},

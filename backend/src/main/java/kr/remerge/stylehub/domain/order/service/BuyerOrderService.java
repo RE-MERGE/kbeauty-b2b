@@ -22,7 +22,7 @@ import kr.remerge.stylehub.domain.order.repository.OrderRepository;
 import kr.remerge.stylehub.domain.product.entity.Product;
 import kr.remerge.stylehub.domain.product.entity.ProductOption;
 import kr.remerge.stylehub.domain.user.entity.User;
-import kr.remerge.stylehub.domain.user.repository.UserRepository;
+import kr.remerge.stylehub.domain.user.support.UserReader;
 import kr.remerge.stylehub.global.exception.BusinessException;
 import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +43,7 @@ import static java.util.stream.Collectors.groupingBy;
 @RequiredArgsConstructor
 public class BuyerOrderService {
 
-    private final UserRepository userRepository;
+    private final UserReader userReader;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final CartRepository cartRepository;
@@ -53,8 +53,7 @@ public class BuyerOrderService {
     @Transactional
     public OrderCreateResponse createOrder(Integer userId, OrderCreateRequest request) {
 
-        User buyer = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        User buyer = userReader.getCompanyUser(userId);
 
         List<CartItem> cartItems = getCartItems(userId, request);
 
@@ -117,7 +116,7 @@ public class BuyerOrderService {
                                 .unitPrice(unitPrice)
                                 .additionalPrice(additionalPrice)
                                 .totalPrice(totalPrice)
-                                .productImageUrl(product.getProductUrl())
+                                .productImageUrl(getImageUrl(option))
                                 .build();
                     })
                     .toList();
@@ -159,6 +158,14 @@ public class BuyerOrderService {
                 : product.getUnitPrice();
     }
 
+    private static String getImageUrl(ProductOption productOption) {
+        if (productOption.getImages().isEmpty()) {
+            return null;
+        }
+
+        return productOption.getImages().get(0).getImageUrl();
+    }
+
     private Order getOrder(OrderCreateRequest request, User buyer, Company sellerCompany, Address address, Long subtotalAmount) {
 
         Long freeShippingThreshold =
@@ -183,7 +190,7 @@ public class BuyerOrderService {
                 .subtotalAmount(subtotalAmount)
                 .shippingFee(shippingFee)
                 .totalAmount(subtotalAmount + shippingFee)
-                .paymentMethod(PaymentMethod.CORP_CARD) //TODO 요청값대체
+                .paymentMethod(PaymentMethod.CORP_CARD)
                 .receiverName(buyer.getName())
                 .receiverPhone(buyer.getPhone())
                 .receiverZipcode(address.getZipcode())
@@ -242,11 +249,6 @@ public class BuyerOrderService {
     }
 
     public List<BuyerOrderListResponse> geyBuyerOrderList(Integer userId) {
-
-        if (userId == null) {
-            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
-        }
-
         List<Order> orders = orderRepository.findByBuyer_UserIdOrderByCreatedAtDesc(userId);
         if (orders.isEmpty()) {
             return List.of();
@@ -271,11 +273,6 @@ public class BuyerOrderService {
     }
 
     public BuyerOrderOverviewResponse getOrderOverview(Integer userId, Integer orderId) {
-
-        if (userId == null) {
-            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
-        }
-
         Order order = orderRepository.findByOrderIdAndBuyer_UserId(orderId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
 
@@ -297,10 +294,6 @@ public class BuyerOrderService {
     }
 
     public BuyerOrderDetailResponse getOrderDetail(Integer userId, Integer orderId) {
-
-        userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-
         Order order = orderRepository.findByOrderIdAndBuyer_UserId(orderId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
 

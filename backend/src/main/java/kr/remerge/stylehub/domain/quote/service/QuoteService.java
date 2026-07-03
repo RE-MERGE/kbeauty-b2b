@@ -17,7 +17,7 @@ import kr.remerge.stylehub.domain.sourcing.repository.SourcingRequestRepository;
 import kr.remerge.stylehub.domain.sourcing.repository.SourcingSupplierRepository;
 import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.enumtype.UserRole;
-import kr.remerge.stylehub.domain.user.repository.UserRepository;
+import kr.remerge.stylehub.domain.user.support.UserReader;
 import kr.remerge.stylehub.global.exception.BusinessException;
 import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +37,7 @@ public class QuoteService {
 
     private final QuoteRepository quoteRepository;
     private final QuoteItemRepository quoteItemRepository;
-    private final UserRepository userRepository;
+    private final UserReader userReader;
     private final SourcingRequestRepository sourcingRequestRepository;
     private final SourcingSupplierRepository sourcingSupplierRepository;
 
@@ -47,7 +47,7 @@ public class QuoteService {
             QuoteCreateRequest request
     ) {
 
-        User seller = findSeller(userId);
+        User seller = userReader.getCompanyUser(userId);
         Company company = seller.getCompany();
 
         SourcingRequest sourcingRequest =
@@ -97,8 +97,7 @@ public class QuoteService {
             Integer userId,
             Integer quoteId
     ) {
-        User user = userRepository.findByIdWithCompany(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        User user = userReader.getUserWithCompany(userId);
 
         Quote quote = quoteRepository.findById(quoteId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.QUOTE_NOT_FOUND));
@@ -277,19 +276,6 @@ public class QuoteService {
                 .orElseThrow(() ->
                         new BusinessException(ErrorCode.SOURCING_NOT_FOUND)
                 );
-    }
-
-    private User findSeller(Integer userId) {
-        User seller = userRepository.findByIdWithCompany(userId)
-                .orElseThrow(() ->
-                        new BusinessException(ErrorCode.USER_NOT_FOUND)
-                );
-
-        if (seller.getCompany() == null) {
-            throw new BusinessException(ErrorCode.COMPANY_NOT_FOUND);
-        }
-
-        return seller;
     }
 
     private record QuoteAmounts(

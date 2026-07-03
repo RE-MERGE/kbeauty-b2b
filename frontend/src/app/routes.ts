@@ -118,6 +118,7 @@ export const router = createBrowserRouter([
             {
                 path: "admin",
                 Component: AdminLayout,
+                handle: {role: "ADMIN"},
                 children: [
                     {index: true, Component: Admin},
                     {path: "dashboard", Component: AdminDashboard},
@@ -133,7 +134,7 @@ export const router = createBrowserRouter([
             {
                 path: "buyer",
                 Component: Root,
-                handle: {role: ["BUYER", "BOTH"]},
+                handle: {roles: ["BUYER", "BOTH"]},
                 children: [
                     {index: true, Component: BuyerDashboard},
                     {path: "orders", Component: Orders},

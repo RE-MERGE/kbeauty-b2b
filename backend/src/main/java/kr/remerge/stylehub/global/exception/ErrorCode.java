@@ -52,6 +52,9 @@ public enum ErrorCode {
     OCR_PARSING_FAILED(HttpStatus.BAD_REQUEST, "COMPANY_006", "사업자등록증 이미지 글자 인식에 실패했습니다."),
     INVALID_COMPANY_STATUS(HttpStatus.BAD_REQUEST, "COMPANY_007", "가입할 수 없는 상태의 회사입니다."),
     INVALID_JOIN_ROLE(HttpStatus.BAD_REQUEST, "COMPANY_008", "올바르지 않은 가입 입니다."),
+    COMPANY_PENDING(HttpStatus.CONFLICT, "COMPANY_009", "승인 대기 중인 회사입니다."),
+    COMPANY_SUSPENDED(HttpStatus.CONFLICT, "COMPANY_010", "이용 정지된 회사입니다."),
+    COMPANY_DELETED(HttpStatus.CONFLICT, "COMPANY_011", "삭제된 회사 정보입니다."),
 
     // ───────────────────────────────────────────
     // 상품 (PRODUCT)
@@ -121,7 +124,9 @@ public enum ErrorCode {
     // ───────────────────────────────────────────
     // 주소 (ADDRESS)
     // ───────────────────────────────────────────
-    ADDRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "ADDRESS_001", "주소를 찾을 수 없습니다."),
+    ADDRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "ADDRESS_001", "존재하지 않거나 이미 삭제된 주소지입니다."),
+    UNAUTHORIZED_ACCESS(HttpStatus.FORBIDDEN, "ADDRESS_002", "해당 주소록에 대한 접근 권한이 없습니다."),
+    INVALID_ADDRESS_TYPE(HttpStatus.BAD_REQUEST, "ADDRESS_003", "올바르지 않은 주소지 설정 타입입니다."),
 
     // ───────────────────────────────────────────
     // 공통 (COMMON)
@@ -134,4 +139,4 @@ public enum ErrorCode {
     private final HttpStatus httpStatus; // 400, 500 대신 HttpStatus 객체로 명확히 관리
     private final String code;           // 프론트엔드가 식별할 비즈니스 커스텀 에러 코드 (ex: COMPANY_002)
     private final String message;        // 에러 메시지
-    }
+}

@@ -21,4 +21,3 @@ public interface AddressRepository extends JpaRepository<Address, Integer> {
     """)
     Optional<Address> findActiveCompanyAddress(@Param("addressId") Integer addressId, @Param("companyId") Integer companyId);
 }
-

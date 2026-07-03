@@ -1,12 +1,12 @@
 package kr.remerge.stylehub.domain.order.checkout.service;
 
+import kr.remerge.stylehub.domain.address.Address;
+import kr.remerge.stylehub.domain.address.AddressRepository;
 import kr.remerge.stylehub.domain.cart.dto.CartResponse;
 import kr.remerge.stylehub.domain.cart.entity.CartItem;
 import kr.remerge.stylehub.domain.cart.enumtype.CartType;
 import kr.remerge.stylehub.domain.cart.repository.CartRepository;
-import kr.remerge.stylehub.domain.company.entity.Address;
 import kr.remerge.stylehub.domain.company.entity.Company;
-import kr.remerge.stylehub.domain.company.repository.AddressRepository;
 import kr.remerge.stylehub.domain.order.checkout.dto.*;
 import kr.remerge.stylehub.domain.order.checkout.exception.CheckoutValidationException;
 import kr.remerge.stylehub.domain.order.entity.Order;

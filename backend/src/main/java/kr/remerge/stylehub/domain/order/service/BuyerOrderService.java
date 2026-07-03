@@ -1,23 +1,24 @@
 package kr.remerge.stylehub.domain.order.service;
 
+import kr.remerge.stylehub.domain.address.Address;
+import kr.remerge.stylehub.domain.address.AddressRepository;
 import kr.remerge.stylehub.domain.cart.entity.CartItem;
 import kr.remerge.stylehub.domain.cart.enumtype.CartType;
 import kr.remerge.stylehub.domain.cart.repository.CartRepository;
-import kr.remerge.stylehub.domain.company.entity.Address;
 import kr.remerge.stylehub.domain.company.entity.Company;
-import kr.remerge.stylehub.domain.company.repository.AddressRepository;
+import kr.remerge.stylehub.domain.order.dto.OrderCreateRequest;
+import kr.remerge.stylehub.domain.order.dto.OrderCreateResponse;
 import kr.remerge.stylehub.domain.order.dto.buyer.*;
-import kr.remerge.stylehub.domain.order.dto.*;
-import kr.remerge.stylehub.domain.order.enumtype.PaymentMethod;
-import kr.remerge.stylehub.domain.order.repository.OrderLogRepository;
-import kr.remerge.stylehub.domain.order.repository.OrderRepository;
 import kr.remerge.stylehub.domain.order.entity.Order;
 import kr.remerge.stylehub.domain.order.entity.OrderItem;
 import kr.remerge.stylehub.domain.order.entity.OrderLog;
 import kr.remerge.stylehub.domain.order.enumtype.OrderLogMemo;
 import kr.remerge.stylehub.domain.order.enumtype.OrderStatus;
 import kr.remerge.stylehub.domain.order.enumtype.OrderType;
+import kr.remerge.stylehub.domain.order.enumtype.PaymentMethod;
 import kr.remerge.stylehub.domain.order.repository.OrderItemRepository;
+import kr.remerge.stylehub.domain.order.repository.OrderLogRepository;
+import kr.remerge.stylehub.domain.order.repository.OrderRepository;
 import kr.remerge.stylehub.domain.product.entity.Product;
 import kr.remerge.stylehub.domain.product.entity.ProductOption;
 import kr.remerge.stylehub.domain.user.entity.User;
@@ -30,7 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 import static java.util.stream.Collectors.groupingBy;
 

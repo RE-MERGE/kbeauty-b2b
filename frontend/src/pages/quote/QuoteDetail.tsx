@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router";
+import { useState, useEffect } from "react";
+import { Link, useNavigate, useParams } from "react-router";
 import api from "@/api/axios";
 import {
   ChevronLeft, FileText, CheckCircle, Package,
@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 type QuoteStatus = "SUBMITTED" | "REVIEWING" | "APPROVED" | "REJECTED" | "NOT_SELECTED" | "NEGOTIATING" | "SAMPLE_REQUESTED" | "EXPIRED";
+type Perspective = "BUYER" | "SELLER" | "UNKNOWN";
 
 type QuoteItemData = {
   quoteItemId: number;
@@ -40,18 +41,19 @@ type QuoteData = {
   sellerName: string;
   companyName: string;
   submittedAt: string;
+  perspective: Perspective; // 백엔드가 authUser.companyId 기준으로 판단해서 내려줌
   items: QuoteItemData[];
 };
 
 const statusConfig: Record<QuoteStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
-  SUBMITTED:         { label: "제출됨",        color: "text-blue-700",   bg: "bg-blue-50 border-blue-200",     icon: <FileText size={13} />    },
-  REVIEWING:         { label: "검토 중",       color: "text-blue-700",   bg: "bg-blue-50 border-blue-200",     icon: <Clock size={13} />       },
-  APPROVED:          { label: "채택 완료",     color: "text-green-700",  bg: "bg-green-50 border-green-200",   icon: <CheckCircle size={13} /> },
-  REJECTED:          { label: "거절됨",        color: "text-red-700",    bg: "bg-red-50 border-red-200",       icon: <XCircle size={13} />     },
-  NOT_SELECTED:      { label: "미채택",        color: "text-slate-600",  bg: "bg-slate-100 border-slate-200",  icon: <XCircle size={13} />     },
-  NEGOTIATING:       { label: "협의 중",       color: "text-purple-700", bg: "bg-purple-50 border-purple-200", icon: <MessageCircle size={13}/> },
+  SUBMITTED:         { label: "제출됨",         color: "text-blue-700",   bg: "bg-blue-50 border-blue-200",     icon: <FileText size={13} />     },
+  REVIEWING:         { label: "검토 중",        color: "text-blue-700",   bg: "bg-blue-50 border-blue-200",     icon: <Clock size={13} />        },
+  APPROVED:          { label: "채택 완료",      color: "text-green-700",  bg: "bg-green-50 border-green-200",   icon: <CheckCircle size={13} />  },
+  REJECTED:          { label: "거절됨",         color: "text-red-700",    bg: "bg-red-50 border-red-200",       icon: <XCircle size={13} />      },
+  NOT_SELECTED:      { label: "미채택",         color: "text-slate-600",  bg: "bg-slate-100 border-slate-200",  icon: <XCircle size={13} />      },
+  NEGOTIATING:       { label: "협의 중",        color: "text-purple-700", bg: "bg-purple-50 border-purple-200", icon: <MessageCircle size={13} /> },
   SAMPLE_REQUESTED:  { label: "샘플 결제 진행", color: "text-amber-700",  bg: "bg-amber-50 border-amber-200",   icon: <FlaskConical size={13} /> },
-  EXPIRED:           { label: "기간 만료",     color: "text-slate-500",  bg: "bg-slate-100 border-slate-200",  icon: <RotateCcw size={13} />   },
+  EXPIRED:           { label: "기간 만료",      color: "text-slate-500",  bg: "bg-slate-100 border-slate-200",  icon: <RotateCcw size={13} />    },
 };
 
 function formatDate(isoStr: string) {
@@ -68,29 +70,21 @@ function formatPrice(value: number) {
   return `₩${value.toLocaleString()}`;
 }
 
-async function updateQuoteStatus(quoteId: number, status: string): Promise<void> {
-  await api.patch(`/quotes/${quoteId}/status`, { status });
-}
-
 async function fetchQuote(quoteId: string): Promise<QuoteData> {
   return api.get<QuoteData>(`/quotes/${quoteId}`);
 }
 
-export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
+async function updateQuoteStatus(quoteId: number, status: string): Promise<void> {
+  await api.patch(`/quotes/${quoteId}/status`, { status });
+}
+
+export function QuoteDetail() {
   const { quoteId } = useParams<{ quoteId: string }>();
+  const navigate = useNavigate();
+
   const [quote, setQuote] = useState<QuoteData>();
   const [pageLoading, setPageLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!quoteId) return;
-    fetchQuote(quoteId)
-        .then(setQuote)
-        .catch((e) => {
-          setLoadError(e instanceof Error ? e.message : "견적 조회에 실패했습니다.");
-        })
-        .finally(() => setPageLoading(false));
-  }, [quoteId]);
 
   const [action, setAction] = useState<"approve" | "reject" | "negotiate" | null>(null);
   const [negotiateText, setNegotiateText] = useState("");
@@ -98,9 +92,13 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const backPath = role === "buyer"
-      ? `/buyer/sourcing-detail/${quote?.sourcingRequestId}`
-      : "/seller/sourcing-requests";
+  useEffect(() => {
+    if (!quoteId) return;
+    fetchQuote(quoteId)
+        .then(setQuote)
+        .catch((e) => setLoadError(e instanceof Error ? e.message : "견적 조회에 실패했습니다."))
+        .finally(() => setPageLoading(false));
+  }, [quoteId]);
 
   if (pageLoading) {
     return (
@@ -127,6 +125,11 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
     );
   }
 
+  // perspective로 뒤로가기 경로 결정
+  const backPath = quote.perspective === "BUYER"
+      ? `/buyer/sourcing-detail/${quote.sourcingRequestId}`
+      : "/seller/quotes";
+
   const regularItems = quote.items.filter((item) => !item.isSample);
   const sampleItems  = quote.items.filter((item) => item.isSample);
   const totalQty     = regularItems.reduce((sum, item) => sum + item.quantity, 0);
@@ -138,6 +141,13 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
     setError(null);
     try {
       await updateQuoteStatus(quote.quoteId, newStatus);
+
+      // 샘플 결제는 상태 변경 후 결제 페이지로 이동
+      if (newStatus === "SAMPLE_REQUESTED") {
+        navigate(`/checkout?type=sample&quoteId=${quote.quoteId}`);
+        return;
+      }
+
       setQuote({ ...quote, status: newStatus as QuoteStatus });
       setDone(doneState);
     } catch (e) {
@@ -149,10 +159,10 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
 
   if (done) {
     const doneConfig = {
-      approved:         { icon: <CheckCircle size={36} className="text-green-500" />,    bg: "bg-green-50",   title: "견적을 확정했습니다",       sub: "셀러가 확인 후 계약서를 작성해 전달할 예정입니다.",                                      cta: "/buyer/quotes", ctaLabel: "견적 목록 확인" },
-      rejected:         { icon: <XCircle size={36} className="text-red-500" />,          bg: "bg-red-50",     title: "견적을 거절했습니다",       sub: "공급사에게 거절 알림이 전송되었습니다. 다른 견적을 계속 검토하세요.",                   cta: backPath,    ctaLabel: "소싱 목록으로" },
-      negotiated:       { icon: <MessageCircle size={36} className="text-purple-500" />, bg: "bg-purple-50",  title: "협의 요청을 보냈습니다",    sub: "공급사가 검토 후 답변드립니다. 협의 내역은 소싱 요청 상세에서 확인할 수 있습니다.", cta: backPath,    ctaLabel: "소싱 목록으로" },
-      sample_requested: { icon: <FlaskConical size={36} className="text-amber-500" />,   bg: "bg-amber-50",   title: "샘플 결제를 진행해 주세요", sub: "샘플 결제 완료 후 진행 상황은 주문 내역에서 확인할 수 있습니다.",                  cta: "/checkout", ctaLabel: "샘플 결제하러 가기" },
+      approved:         { icon: <CheckCircle size={36} className="text-green-500" />,    bg: "bg-green-50",  title: "견적을 확정했습니다",       sub: "셀러가 확인 후 계약서를 작성해 전달할 예정입니다.",                                      cta: "/buyer/quotes",  ctaLabel: "견적 목록 확인" },
+      rejected:         { icon: <XCircle size={36} className="text-red-500" />,          bg: "bg-red-50",    title: "견적을 거절했습니다",       sub: "공급사에게 거절 알림이 전송되었습니다. 다른 견적을 계속 검토하세요.",                   cta: backPath,         ctaLabel: "소싱 목록으로" },
+      negotiated:       { icon: <MessageCircle size={36} className="text-purple-500" />, bg: "bg-purple-50", title: "협의 요청을 보냈습니다",    sub: "공급사가 검토 후 답변드립니다. 협의 내역은 소싱 요청 상세에서 확인할 수 있습니다.", cta: backPath,         ctaLabel: "소싱 목록으로" },
+      sample_requested: { icon: <FlaskConical size={36} className="text-amber-500" />,   bg: "bg-amber-50",  title: "샘플 결제를 진행해 주세요", sub: "샘플 결제 완료 후 진행 상황은 주문 내역에서 확인할 수 있습니다.",                  cta: "/checkout",      ctaLabel: "샘플 결제하러 가기" },
     }[done];
 
     return (
@@ -181,7 +191,8 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
 
         <div className="mb-6">
           <Link to={backPath} className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 transition-colors mb-4">
-            <ChevronLeft size={16} /> 소싱 요청 목록으로
+            <ChevronLeft size={16} />
+            {quote.perspective === "BUYER" ? "소싱 요청으로" : "견적 목록으로"}
           </Link>
 
           <div className="bg-gradient-to-r from-[#1C1C1C] to-[#2a2a2a] text-white rounded-xl p-6">
@@ -191,8 +202,8 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
                   <FileText size={22} className="text-primary" />
                   <h1 className="text-xl font-bold">견적서 상세</h1>
                   <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${status.bg} ${status.color}`}>
-                  {status.icon} {status.label}
-                </span>
+                    {status.icon} {status.label}
+                  </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400">
                   <span className="font-mono">{quote.quoteNo}</span>
@@ -213,22 +224,50 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
 
         <div className="space-y-4">
 
-          {/* 공급사 정보 */}
-          <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
-              <Building2 size={15} className="text-primary" />
-              <h2 className="text-sm font-semibold text-slate-900">공급사 정보</h2>
-            </div>
-            <div className="p-5 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                <Building2 size={22} className="text-primary" />
-              </div>
-              <div>
-                <p className="font-semibold text-slate-900">{quote.companyName || "-"}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{quote.sellerName || "-"}</p>
-              </div>
-            </div>
-          </section>
+          {/* 공급사 정보 — BUYER 입장에서만 표시, APPROVED 전까지는 익명 */}
+          {quote.perspective === "BUYER" && (
+              <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
+                  <Building2 size={15} className="text-primary" />
+                  <h2 className="text-sm font-semibold text-slate-900">공급사 정보</h2>
+                </div>
+                <div className="p-5 flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <Building2 size={22} className="text-primary" />
+                  </div>
+                  <div>
+                    {/* APPROVED 전까지는 회사명 비공개 — 백엔드가 null로 내려주면 "공급사 (검토중)"으로 표시 */}
+                    <p className="font-semibold text-slate-900">
+                      {quote.status === "APPROVED" && quote.companyName
+                          ? quote.companyName
+                          : "공급사 (채택 전 비공개)"}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {quote.status === "APPROVED" ? quote.sellerName : "—"}
+                    </p>
+                  </div>
+                </div>
+              </section>
+          )}
+
+          {/* 바이어 정보 — SELLER 입장에서만 표시 */}
+          {quote.perspective === "SELLER" && (
+              <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-200 flex items-center gap-2">
+                  <Building2 size={15} className="text-primary" />
+                  <h2 className="text-sm font-semibold text-slate-900">바이어 정보</h2>
+                </div>
+                <div className="p-5 flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <Building2 size={22} className="text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900">{quote.buyerName || "—"}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">소싱 요청 #{quote.sourcingRequestId}</p>
+                  </div>
+                </div>
+              </section>
+          )}
 
           {/* 상품 정보 */}
           <section className="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -381,14 +420,16 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
             </div>
           </section>
 
-          {/* 주의사항 */}
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
-            <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
-            <div className="text-xs text-amber-700 leading-relaxed">
-              <span className="font-semibold">채택 전 확인하세요 — </span>
-              견적 채택 후에는 단가·배송비 등의 내용을 수정하기 어렵습니다.
-            </div>
-          </div>
+          {/* 주의사항 — BUYER만 */}
+          {quote.perspective === "BUYER" && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
+                <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-700 leading-relaxed">
+                  <span className="font-semibold">채택 전 확인하세요 — </span>
+                  견적 채택 후에는 단가·배송비 등의 내용을 수정하기 어렵습니다.
+                </div>
+              </div>
+          )}
 
           {/* 에러 메시지 */}
           {error && (
@@ -398,39 +439,45 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
               </div>
           )}
 
-          {/* 액션 버튼 - buyer만, SUBMITTED 상태일 때만 */}
-          {role === "buyer" && quote.status === "SUBMITTED" && !action && (
-              <div className="flex items-center gap-3 justify-end pb-4">
-                <button onClick={() => setAction("reject")} disabled={submitting} className="flex items-center gap-2 border border-red-200 text-red-600 hover:bg-red-50 px-5 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
-                  <XCircle size={15} /> 거절
-                </button>
-                <button onClick={() => setAction("negotiate")} disabled={submitting} className="flex items-center gap-2 border border-purple-200 text-purple-600 hover:bg-purple-50 px-5 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
-                  <MessageCircle size={15} /> 협의 요청
-                </button>
-                {needsSample ? (
-                    <button
-                        onClick={() => handleStatusChange("SAMPLE_REQUESTED", "sample_requested")}
-                        disabled={submitting}
-                        className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
-                    >
-                      <FlaskConical size={15} /> {submitting ? "처리 중..." : "샘플 결제하기"}
+          {/* ── BUYER 액션 버튼 — SUBMITTED/NEGOTIATING 상태일 때 */}
+          {quote.perspective === "BUYER"
+              && (quote.status === "SUBMITTED" || quote.status === "NEGOTIATING")
+              && !action && (
+                  <div className="flex items-center gap-3 justify-end pb-4">
+                    <button onClick={() => setAction("reject")} disabled={submitting}
+                            className="flex items-center gap-2 border border-red-200 text-red-600 hover:bg-red-50 px-5 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+                      <XCircle size={15} /> 거절
                     </button>
-                ) : (
-                    <button onClick={() => setAction("approve")} disabled={submitting} className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50">
-                      <CheckCircle size={15} /> 견적 채택
+                    <button onClick={() => setAction("negotiate")} disabled={submitting}
+                            className="flex items-center gap-2 border border-purple-200 text-purple-600 hover:bg-purple-50 px-5 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+                      <MessageCircle size={15} /> 협의 요청
                     </button>
-                )}
-                <button className="flex items-center gap-2 border border-slate-200 text-slate-500 hover:border-primary hover:text-primary px-4 py-2.5 rounded-lg text-sm transition-colors">
-                  <Download size={15} /> PDF
-                </button>
-              </div>
-          )}
+                    {needsSample ? (
+                        <button
+                            onClick={() => handleStatusChange("SAMPLE_REQUESTED", "sample_requested")}
+                            disabled={submitting}
+                            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                        >
+                          <FlaskConical size={15} /> {submitting ? "처리 중..." : "샘플 결제하기"}
+                        </button>
+                    ) : (
+                        <button onClick={() => setAction("approve")} disabled={submitting}
+                                className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50">
+                          <CheckCircle size={15} /> 견적 채택
+                        </button>
+                    )}
+                    <button className="flex items-center gap-2 border border-slate-200 text-slate-500 hover:border-primary hover:text-primary px-4 py-2.5 rounded-lg text-sm transition-colors">
+                      <Download size={15} /> PDF
+                    </button>
+                  </div>
+              )}
 
-          {role === "seller" && quote.status === "APPROVED" && (
+          {/* ── SELLER 액션 버튼 — APPROVED일 때 계약서 작성 */}
+          {quote.perspective === "SELLER" && quote.status === "APPROVED" && (
               <div className="flex justify-end pb-4">
                 <Link
                     to={`/seller/contracts/new/${quote.quoteId}`}
-                    className="inline-flex items-center gap-2 bg-primary px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary/90"
+                    className="inline-flex items-center gap-2 bg-primary px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-primary/90 rounded-lg"
                 >
                   <FileSignature size={15} />
                   계약서 작성
@@ -468,8 +515,12 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => setAction(null)} disabled={submitting} className="flex-1 border border-slate-200 text-slate-700 hover:border-primary py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">취소</button>
-                  <button onClick={() => handleStatusChange("APPROVED", "approved")} disabled={submitting} className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50">
+                  <button onClick={() => setAction(null)} disabled={submitting}
+                          className="flex-1 border border-slate-200 text-slate-700 hover:border-primary py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+                    취소
+                  </button>
+                  <button onClick={() => handleStatusChange("APPROVED", "approved")} disabled={submitting}
+                          className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50">
                     {submitting ? "처리 중..." : "채택 확정"}
                   </button>
                 </div>
@@ -484,10 +535,15 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
                   <h3 className="text-sm font-bold text-red-800">견적을 거절하시겠습니까?</h3>
                 </div>
                 <p className="text-xs text-red-700 leading-relaxed mb-4">거절 사유를 입력하면 공급사에게 전달됩니다. (선택사항)</p>
-                <textarea rows={3} placeholder="예: 단가가 희망 예산을 초과합니다." className="w-full border border-red-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-400 resize-none bg-white mb-3" />
+                <textarea rows={3} placeholder="예: 단가가 희망 예산을 초과합니다."
+                          className="w-full border border-red-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-400 resize-none bg-white mb-3" />
                 <div className="flex gap-2">
-                  <button onClick={() => setAction(null)} disabled={submitting} className="flex-1 border border-slate-200 text-slate-700 hover:border-red-300 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">취소</button>
-                  <button onClick={() => handleStatusChange("REJECTED", "rejected")} disabled={submitting} className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50">
+                  <button onClick={() => setAction(null)} disabled={submitting}
+                          className="flex-1 border border-slate-200 text-slate-700 hover:border-red-300 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+                    취소
+                  </button>
+                  <button onClick={() => handleStatusChange("REJECTED", "rejected")} disabled={submitting}
+                          className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50">
                     {submitting ? "처리 중..." : "거절 확정"}
                   </button>
                 </div>
@@ -525,7 +581,10 @@ export function QuoteDetail({ role = "buyer" }: { role?: "buyer" | "seller" }) {
                   />
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => setAction(null)} disabled={submitting} className="flex-1 border border-slate-200 text-slate-700 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">취소</button>
+                  <button onClick={() => setAction(null)} disabled={submitting}
+                          className="flex-1 border border-slate-200 text-slate-700 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50">
+                    취소
+                  </button>
                   <button
                       onClick={() => negotiateText.trim() && handleStatusChange("NEGOTIATING", "negotiated")}
                       disabled={!negotiateText.trim() || submitting}

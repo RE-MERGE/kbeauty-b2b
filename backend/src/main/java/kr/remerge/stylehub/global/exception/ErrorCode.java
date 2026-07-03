@@ -112,6 +112,11 @@ public enum ErrorCode {
     ADDRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "ADDRESS_001", "주소를 찾을 수 없습니다."),
 
     // ───────────────────────────────────────────
+    // 배송 (Delivery)
+    // ───────────────────────────────────────────
+    DELIVERY_NOT_FOUND(HttpStatus.NOT_FOUND, "DELIVERY_001", "배송 정보를 찾을 수 없습니다."),
+
+    // ───────────────────────────────────────────
     // 공통 (COMMON)
     // ───────────────────────────────────────────
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "COMMON_001", "잘못된 입력값입니다."),

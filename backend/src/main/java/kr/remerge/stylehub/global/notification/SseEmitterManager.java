@@ -7,6 +7,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -15,45 +17,92 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class SseEmitterManager {
 
-    private final Map<Long, SseEmitter> emitters = new ConcurrentHashMap<>();
+    // userId → emitter 목록 (같은 유저가 여러 탭 열 수 있음)
+    private final Map<Integer, List<SseEmitter>> userEmitters = new ConcurrentHashMap<>();
+
+    // companyId → emitter 목록 (회사 단위 브로드캐스트용)
+    private final Map<Integer, List<SseEmitter>> companyEmitters = new ConcurrentHashMap<>();
+
+    // role → emitter 목록 (ADMIN 브로드캐스트용)
+    private final Map<String, List<SseEmitter>> roleEmitters = new ConcurrentHashMap<>();
+
     private final ObjectMapper objectMapper;
 
-    public SseEmitter add(Long userId) {
+    public SseEmitter add(Integer userId, Integer companyId, String role) {
         SseEmitter emitter = new SseEmitter(30 * 60 * 1000L); // 30분 타임아웃
-        emitters.put(userId, emitter);
 
-        emitter.onCompletion(() -> emitters.remove(userId));
-        emitter.onTimeout(() -> emitters.remove(userId));
-        emitter.onError(e -> emitters.remove(userId));
+        // 각 맵에 등록
+        addToMap(userEmitters, userId, emitter);
+        if (companyId != null) addToMap(companyEmitters, companyId, emitter);
+        if (role != null) addToMap(roleEmitters, role, emitter);
+
+        emitter.onCompletion(() -> {
+            removeFromMap(userEmitters, userId, emitter);
+            if (companyId != null) removeFromMap(companyEmitters, companyId, emitter);
+            if (role != null) removeFromMap(roleEmitters, role, emitter);
+        });
+        emitter.onTimeout(() -> {
+            removeFromMap(userEmitters, userId, emitter);
+            if (companyId != null) removeFromMap(companyEmitters, companyId, emitter);
+            if (role != null) removeFromMap(roleEmitters, role, emitter);
+        });
+        emitter.onError(e -> {
+            removeFromMap(userEmitters, userId, emitter);
+            if (companyId != null) removeFromMap(companyEmitters, companyId, emitter);
+            if (role != null) removeFromMap(roleEmitters, role, emitter);
+        });
 
         // 연결 직후 더미 이벤트 (브라우저 연결 유지용)
         try {
             emitter.send(SseEmitter.event().name("connect").data("connected"));
         } catch (IOException e) {
-            emitters.remove(userId);
+            removeFromMap(userEmitters, userId, emitter);
+            if (companyId != null) removeFromMap(companyEmitters, companyId, emitter);
+            if (role != null) removeFromMap(roleEmitters, role, emitter);
         }
 
         return emitter;
     }
 
-    // 특정 유저에게만 전송
-    public void sendToUser(Long userId, String payload) {
-        SseEmitter emitter = emitters.get(userId);
-        if (emitter == null) return;
-        try {
-            emitter.send(SseEmitter.event().name("notification").data(payload));
-        } catch (IOException e) {
-            emitters.remove(userId);
-        }
-    }
-
-    // Redis subscriber에서 호출 - payload에 targetUserId 포함된 경우
+    // Redis subscriber에서 호출 — NotificationMessage 파싱 후 타겟에 맞게 발송
     public void broadcast(String payload) {
         try {
             NotificationMessage msg = objectMapper.readValue(payload, NotificationMessage.class);
-            sendToUser(msg.getTargetUserId(), payload);
+
+            if (msg.getTargetUserId() != null) {
+                sendToEmitters(userEmitters.get(msg.getTargetUserId()), payload);
+            } else if (msg.getTargetCompanyId() != null) {
+                sendToEmitters(companyEmitters.get(msg.getTargetCompanyId()), payload);
+            } else if (msg.getTargetRole() != null) {
+                sendToEmitters(roleEmitters.get(msg.getTargetRole()), payload);
+            }
         } catch (Exception e) {
             log.error("Failed to parse notification payload: {}", payload, e);
+        }
+    }
+
+    private void sendToEmitters(List<SseEmitter> emitters, String payload) {
+        if (emitters == null || emitters.isEmpty()) return;
+        List<SseEmitter> dead = new ArrayList<>();
+        for (SseEmitter emitter : emitters) {
+            try {
+                emitter.send(SseEmitter.event().name("notification").data(payload));
+            } catch (IOException e) {
+                dead.add(emitter);
+            }
+        }
+        emitters.removeAll(dead);
+    }
+
+    private <K> void addToMap(Map<K, List<SseEmitter>> map, K key, SseEmitter emitter) {
+        map.computeIfAbsent(key, k -> new ArrayList<>()).add(emitter);
+    }
+
+    private <K> void removeFromMap(Map<K, List<SseEmitter>> map, K key, SseEmitter emitter) {
+        List<SseEmitter> list = map.get(key);
+        if (list != null) {
+            list.remove(emitter);
+            if (list.isEmpty()) map.remove(key);
         }
     }
 }

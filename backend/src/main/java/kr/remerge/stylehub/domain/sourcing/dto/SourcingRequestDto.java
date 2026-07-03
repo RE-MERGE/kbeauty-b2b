@@ -1,5 +1,6 @@
 package kr.remerge.stylehub.domain.sourcing.dto;
 
+import kr.remerge.stylehub.domain.quote.constant.QuoteStatusCode;
 import kr.remerge.stylehub.domain.quote.entity.Quote;
 import kr.remerge.stylehub.domain.sourcing.entity.SourcingRequest;
 import kr.remerge.stylehub.domain.sourcing.entity.SourcingRequestFile;
@@ -206,6 +207,7 @@ public class SourcingRequestDto {
         private final LocalDateTime submittedAt;
         // Quote 필드
         private final Integer quoteId;
+        private final String quoteStatus;        // 추가
         private final Long totalAmount;
         private final Long unitPrice;
         private final Integer leadTimeDays;
@@ -216,14 +218,16 @@ public class SourcingRequestDto {
 
         public static BidResponse from(SourcingSupplier supplier) {
             Quote quote = supplier.getQuote();
+            boolean isApproved = quote != null && QuoteStatusCode.APPROVED.equals(quote.getStatus());
 
             return new BidResponse(
                     supplier.getSourcingSupplierSId(),
                     supplier.getSellerCompanyId(),
-                    quote != null ? quote.getCompanyName() : null,
+                    isApproved ? quote.getCompanyName() : null,   // APPROVED 아니면 회사명 비공개
                     supplier.getStatus().name(),
                     supplier.getRespondedAt(),
                     quote != null ? quote.getQuoteId() : null,
+                    quote != null ? quote.getStatus() : null,
                     quote != null ? quote.getTotalAmount() : null,
                     quote != null ? quote.getSubtotalAmount() : null,
                     quote != null ? quote.getLeadTimeDays() : null,
@@ -237,7 +241,7 @@ public class SourcingRequestDto {
         private BidResponse(
                 Integer sourcingSupplierId, Integer sellerCompanyId, String companyName,
                 String status, LocalDateTime submittedAt,
-                Integer quoteId, Long totalAmount, Long unitPrice, Integer leadTimeDays,
+                Integer quoteId, String quoteStatus, Long totalAmount, Long unitPrice, Integer leadTimeDays,
                 LocalDate availableDate, String sampleAvailable, String sellerMemo,
                 LocalDateTime validUntil
         ) {
@@ -247,6 +251,7 @@ public class SourcingRequestDto {
             this.status = status;
             this.submittedAt = submittedAt;
             this.quoteId = quoteId;
+            this.quoteStatus = quoteStatus;
             this.totalAmount = totalAmount;
             this.unitPrice = unitPrice;
             this.leadTimeDays = leadTimeDays;

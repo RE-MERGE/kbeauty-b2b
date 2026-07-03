@@ -46,6 +46,7 @@ import {SellerProductRegister} from "@/pages/product/SellerProductRegister";
 import {SellerQuoteWrite} from "@/pages/quote/SellerQuoteWrite";
 import {SellerQuoteList} from "@/pages/quote/SellerQuoteList";
 import BuyerQuoteList from "@/pages/quote/BuyerQuoteList";
+import { QuoteDetail } from "@/pages/quote/QuoteDetail";
 
 import {SellerDashboard} from "@/pages/seller/SellerDashboard";
 import {SellerProductManage} from "@/pages/seller/SellerProductManage";

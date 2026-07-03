@@ -95,7 +95,8 @@ public class QuoteService {
 
     public QuoteDetailResponse getQuoteDetail(
             Integer userId,
-            Integer quoteId
+            Integer quoteId,
+            Integer companyId
     ) {
         User user = userRepository.findByIdWithCompany(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
@@ -108,7 +109,7 @@ public class QuoteService {
         List<QuoteItem> items
                 = quoteItemRepository.findByQuote_QuoteId(quoteId);
 
-        return QuoteDetailResponse.from(quote, items);
+        return QuoteDetailResponse.from(quote, items, companyId);
     }
 
     private void validateQuoteAccess(User user, Quote quote) {

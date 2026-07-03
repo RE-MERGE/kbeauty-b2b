@@ -13,7 +13,7 @@ import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.repository.UserRepository;
 import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
 import kr.remerge.stylehub.global.common.ImageUploadService;
-import kr.remerge.stylehub.global.notification.NotificationService;
+import kr.remerge.stylehub.global.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -99,7 +99,6 @@ public class SourcingRequestService {
 
             SourcingRequest saved = sourcingRequestRepository.save(request);
             sourcingAutoAssignService.assign(saved);
-            notificationService.notifyNewSourcingRequest(1L, saved.getProductName(), saved.getSourcingRequestId().longValue());
 
             if (itemDto.getOptions() != null) {
                 for (SourcingRequestDto.OptionRequest opt : itemDto.getOptions()) {

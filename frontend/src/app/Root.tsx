@@ -272,7 +272,7 @@ export function Root() {
     const user = useAuthStore((state) => state.user);
     const clearUser = useAuthStore((state) => state.clearUser);
 
-    useNotification(user?.companyId ?? null);
+    useNotification(!!user);  // 로그인 상태일 때만 SSE 연결
 
     let dashboardPath = "/";
 

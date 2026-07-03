@@ -1,10 +1,13 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router";
-import { Package, ChevronRight, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
+import {
+  Package, ChevronRight, Loader2, Clock3, Handshake,
+  CheckCircle2, Ban, LayoutGrid,
+} from "lucide-react";
 
-// ── 타입 (백엔드 BuyerSourcingResponse 기준) ───────────────────────────────
+// ── 타입 (백엔드 BuyerSourcingBoardResponse 기준) ──────────────────────────
 type SourcingType = "READY" | "CUSTOM";
-type RequestStatus = "PENDING" | "QUOTED" | "TRADING" | "NEGOTIATING" | "CANCELLED" | "COMPLETED" | "WITHDRAWN";
+type RequestStatus = "PENDING" | "QUOTED" | "TRADING" | "NEGOTIATING" | "CANCELLED" | "COMPLETED" | "WITHDRAWN" | "EXPIRED";
 
 interface BuyerSourcingResponse {
   sourcingRequestId: number;
@@ -24,6 +27,21 @@ interface BuyerSourcingResponse {
   bidCount: number;
 }
 
+// 백엔드 BuyerSourcingCountResponse
+interface BuyerSourcingCounts {
+  all: number;
+  active: number;
+  trading: number;
+  completed: number;
+  closed: number;
+}
+
+// 백엔드 BuyerSourcingBoardResponse
+interface BuyerSourcingBoard {
+  requests: BuyerSourcingResponse[];
+  counts: BuyerSourcingCounts;
+}
+
 // ── 상태 스타일 ────────────────────────────────────────────────────────────
 const STATUS_LABEL: Record<RequestStatus, string> = {
   PENDING:     "대기중",
@@ -31,8 +49,9 @@ const STATUS_LABEL: Record<RequestStatus, string> = {
   NEGOTIATING: "협의중",
   TRADING:     "거래중",
   COMPLETED:   "완료",
-  CANCELLED:   "취소됨",
-  WITHDRAWN:   "취소됨",
+  CANCELLED:   "반려됨", // 공급사 전원 거절로 인한 자동 반려
+  WITHDRAWN:   "취소함", // 바이어가 직접 취소
+  EXPIRED:     "기한만료",
 };
 
 const STATUS_STYLE: Record<RequestStatus, string> = {
@@ -43,13 +62,31 @@ const STATUS_STYLE: Record<RequestStatus, string> = {
   COMPLETED:   "bg-green-50 text-green-600 border-green-200",
   CANCELLED:   "bg-red-50 text-red-500 border-red-200",
   WITHDRAWN:   "bg-secondary text-muted-foreground border-border",
+  EXPIRED:     "bg-secondary text-muted-foreground border-border",
 };
+
+// 종료(반려/취소/기한만료)된 요청은 접수견적 수치를 굳이 보여줄 필요가 없음
+const TERMINATED_STATUSES: RequestStatus[] = ["CANCELLED", "WITHDRAWN", "EXPIRED"];
+
+// ── 진행 상태 필터 (백엔드 status 그룹 파라미터와 1:1 대응) ──────────────────
+type StatusFilter = "ALL" | "ACTIVE" | "TRADING" | "COMPLETED" | "CLOSED";
+
+const FILTERS: Array<{ value: StatusFilter; label: string; icon: React.ReactNode; countKey: keyof BuyerSourcingCounts }> = [
+  { value: "ALL",       label: "전체",   icon: <LayoutGrid size={15} />,   countKey: "all" },
+  { value: "ACTIVE",    label: "진행중", icon: <Clock3 size={15} />,       countKey: "active" },
+  { value: "TRADING",   label: "거래중", icon: <Handshake size={15} />,    countKey: "trading" },
+  { value: "COMPLETED", label: "완료",   icon: <CheckCircle2 size={15} />, countKey: "completed" },
+  { value: "CLOSED",    label: "종료",   icon: <Ban size={15} />,          countKey: "closed" },
+];
 
 // ── API ───────────────────────────────────────────────────────────────────
 const BASE_URL = "/api/sourcing/buyer";
 
-async function fetchBuyerRequests(type: SourcingType): Promise<BuyerSourcingResponse[]> {
-  const res = await fetch(`${BASE_URL}/requests?type=${type}`, {
+async function fetchBuyerSourcingBoard(type: SourcingType, statusFilter: StatusFilter): Promise<BuyerSourcingBoard> {
+  const params = new URLSearchParams({ type });
+  if (statusFilter !== "ALL") params.set("status", statusFilter);
+
+  const res = await fetch(`${BASE_URL}/requests?${params.toString()}`, {
     credentials: "include", // JWT 쿠키 포함 → 백엔드 @LoginUser가 companyId 추출해서 buyerCompanyId로 필터링
   });
   if (!res.ok) throw new Error("소싱 요청 목록 조회 실패");
@@ -58,6 +95,8 @@ async function fetchBuyerRequests(type: SourcingType): Promise<BuyerSourcingResp
 
 // ── 요청 행 ───────────────────────────────────────────────────────────────
 function RequestRow({ request, onClick }: { request: BuyerSourcingResponse; onClick: () => void }) {
+  const isTerminated = TERMINATED_STATUSES.includes(request.status);
+
   return (
       <div
           onClick={onClick}
@@ -100,12 +139,14 @@ function RequestRow({ request, onClick }: { request: BuyerSourcingResponse; onCl
               </div>
               <div className="text-[10px] text-muted-foreground">희망납기</div>
             </div>
-            <div>
-              <div className={`font-mono font-bold text-sm ${request.bidCount > 0 ? "text-blue-600" : "text-muted-foreground"}`}>
-                {request.bidCount}건
-              </div>
-              <div className="text-[10px] text-muted-foreground">접수견적</div>
-            </div>
+            {!isTerminated && (
+                <div>
+                  <div className={`font-mono font-bold text-sm ${request.bidCount > 0 ? "text-blue-600" : "text-muted-foreground"}`}>
+                    {request.bidCount}건
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">접수견적</div>
+                </div>
+            )}
           </div>
           <ChevronRight size={16} className="text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
         </div>
@@ -118,23 +159,41 @@ export function BuyerSourcingList() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<SourcingType>("READY");
   const [requests, setRequests] = useState<BuyerSourcingResponse[]>([]);
+  const [counts, setCounts] = useState<BuyerSourcingCounts>({ all: 0, active: 0, trading: 0, completed: 0, closed: 0 });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedFilter = searchParams.get("status") as StatusFilter | null;
+  const activeFilter: StatusFilter = FILTERS.some((f) => f.value === requestedFilter)
+      ? requestedFilter!
+      : "ALL";
 
   useEffect(() => {
     setIsLoading(true);
     setError(null);
-    fetchBuyerRequests(activeTab)
-        .then(setRequests)
+    fetchBuyerSourcingBoard(activeTab, activeFilter)
+        .then((board) => {
+          setRequests(board.requests);
+          setCounts(board.counts);
+        })
         .catch((e) => setError(e.message))
         .finally(() => setIsLoading(false));
-  }, [activeTab]);
+  }, [activeTab, activeFilter]);
 
-  const readyCount = activeTab === "READY" ? requests.length : null;
-  const customCount = activeTab === "CUSTOM" ? requests.length : null;
+  const handleTabChange = (tab: SourcingType) => {
+    setActiveTab(tab);
+  };
+
+  const handleFilter = (filter: StatusFilter) => {
+    const next = new URLSearchParams(searchParams);
+    if (filter === "ALL") next.delete("status");
+    else next.set("status", filter);
+    setSearchParams(next);
+  };
 
   return (
-      <div className="max-w-[900px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
+      <div className="max-w-[1000px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
         <div className="flex items-center gap-2 mb-1">
           <Package size={22} className="text-primary" />
           <h1 className="text-2xl font-bold text-foreground">소싱 요청 관리</h1>
@@ -145,7 +204,7 @@ export function BuyerSourcingList() {
           {(["READY", "CUSTOM"] as const).map((tab) => (
               <button
                   key={tab}
-                  onClick={() => setActiveTab(tab)}
+                  onClick={() => handleTabChange(tab)}
                   className={`px-5 py-2 rounded text-sm font-semibold transition-colors ${
                       activeTab === tab
                           ? "bg-white text-foreground shadow-sm border border-border"
@@ -155,9 +214,31 @@ export function BuyerSourcingList() {
                 {tab === "READY" ? "🏷️ 기성품 사입" : "✂️ 주문제작"}
                 {activeTab === tab && !isLoading && (
                     <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full font-mono bg-primary text-white">
-                {requests.length}
+                {counts.all}
               </span>
                 )}
+              </button>
+          ))}
+        </div>
+
+        {/* 진행 상태 필터 카운트 카드 (서버에서 계산된 counts 사용) */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-5">
+          {FILTERS.map((f) => (
+              <button
+                  key={f.value}
+                  onClick={() => handleFilter(f.value)}
+                  className={`flex items-center justify-between rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                      activeFilter === f.value
+                          ? "border-primary bg-white shadow-sm ring-1 ring-primary/15"
+                          : "border-border bg-white hover:border-primary/40"
+                  }`}
+              >
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                  {f.icon} {f.label}
+                </span>
+                <span className={`text-sm font-bold ${activeFilter === f.value ? "text-primary" : "text-foreground"}`}>
+                  {counts[f.countKey]}
+                </span>
               </button>
           ))}
         </div>
@@ -189,7 +270,9 @@ export function BuyerSourcingList() {
               {requests.length === 0 && (
                   <div className="text-center py-20 text-muted-foreground">
                     <div className="text-4xl mb-3">📭</div>
-                    <div className="font-medium">등록된 소싱 요청이 없습니다</div>
+                    <div className="font-medium">
+                      {activeFilter === "ALL" ? "등록된 소싱 요청이 없습니다" : "조건에 맞는 소싱 요청이 없습니다"}
+                    </div>
                   </div>
               )}
             </div>

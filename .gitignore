@@ -94,3 +94,4 @@ application.yaml
 .codex-pdf-tools/
 frontend/src/pages.zip
 backend/src/main/resources/application (1).yaml
+/backend/src/test/http/

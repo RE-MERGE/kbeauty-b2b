@@ -22,4 +22,6 @@ public interface QuoteRepository extends JpaRepository<Quote, Integer> {
     List<Quote> findBySeller_UserIdOrderBySubmittedAtDesc(Integer userId);
 
     List<Quote> findByBuyer_UserIdOrderBySubmittedAtDesc(Integer userId);
+
+    List<Quote> findBySourcingRequest_SourcingRequestId(Integer sourcingRequestSourcingRequestId);
 }

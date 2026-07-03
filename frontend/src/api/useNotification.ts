@@ -1,22 +1,48 @@
 import { useEffect, useRef } from "react";
-import toast from "react-hot-toast"; // 또는 원하는 toast 라이브러리
+import toast from "react-hot-toast";
 
 interface NotificationMessage {
-  targetUserId: number;
   type: string;
   message: string;
-  requestId?: number;
+  referenceId?: number;
+  referenceType?: string;
+  targetUserId?: number;
+  targetCompanyId?: number;
+  targetRole?: string;
 }
 
-// TODO: JWT 연동 후 userId 파라미터 제거
-export function useNotification(userId: number | null) {
+const NOTIFICATION_ICONS: Record<string, string> = {
+  // 소싱
+  SOURCING_ASSIGNED:          "📦",
+  QUOTE_RECEIVED:             "📩",
+  QUOTE_APPROVED:             "✅",
+  QUOTE_REJECTED:             "❌",
+  QUOTE_NEGOTIATING:          "💬",
+  SAMPLE_REQUESTED:           "🧪",
+  // 주문/배송
+  ORDER_CONFIRMED:            "🛒",
+  ORDER_SHIPPED:              "🚚",
+  ORDER_DELIVERED:            "📫",
+  // 계약
+  CONTRACT_CREATED:           "📋",
+  CONTRACT_SIGNED:            "✍️",
+  // 관리자
+  USER_JOINED:                "👤",
+  COMPANY_APPROVAL_REQUESTED: "🏢",
+  SOURCING_CREATED:           "📝",
+  DISPUTE_RAISED:             "⚠️",
+};
+
+// JWT 쿠키 기반 — userId 파라미터 불필요
+// withCredentials 옵션이 없는 EventSource는 쿠키를 안 보내서
+// 커스텀 fetch + ReadableStream 방식 대신 withCredentials 지원하는 방식 사용
+export function useNotification(b: boolean) {
   const esRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    if (!userId) return;
-
     const es = new EventSource(
-      `${import.meta.env.VITE_API_URL}/api/notifications/subscribe?userId=${userId}`
+        `${import.meta.env.VITE_API_URL}/api/notifications/subscribe`,
+        { withCredentials: true }  // JWT 쿠키 포함
     );
     esRef.current = es;
 
@@ -28,7 +54,7 @@ export function useNotification(userId: number | null) {
       try {
         const data: NotificationMessage = JSON.parse(e.data);
         toast(data.message, {
-          icon: getIcon(data.type),
+          icon: NOTIFICATION_ICONS[data.type] ?? "🔔",
           duration: 4000,
         });
       } catch {
@@ -42,15 +68,7 @@ export function useNotification(userId: number | null) {
 
     return () => {
       es.close();
+      esRef.current = null;
     };
-  }, [userId]);
-}
-
-function getIcon(type: string): string {
-  switch (type) {
-    case "QUOTE_SUBMITTED": return "📩";
-    case "QUOTE_APPROVED":  return "✅";
-    case "QUOTE_DECLINED":  return "❌";
-    default:                return "🔔";
-  }
+  }, []); // 마운트 시 1회만 — 로그인 상태는 쿠키가 보장
 }

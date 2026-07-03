@@ -3,6 +3,7 @@ package kr.remerge.stylehub.domain.quote.service;
 import kr.remerge.stylehub.domain.quote.constant.QuoteStatusCode;
 import kr.remerge.stylehub.domain.quote.entity.Quote;
 import kr.remerge.stylehub.domain.quote.repository.QuoteRepository;
+import kr.remerge.stylehub.domain.sourcing.enumtype.SourcingStatus;
 import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.enumtype.UserRole;
 import kr.remerge.stylehub.domain.user.repository.UserRepository;
@@ -43,6 +44,10 @@ public class QuoteStatusService {
 
         quote.changeStatus(newStatus);
 
+        if (QuoteStatusCode.APPROVED.equals(newStatus)) {
+            rejectOtherQuotes(quote);
+            quote.getSourcingRequest().trade();
+        }
         if (QuoteStatusCode.APPROVED.equals(newStatus)) {
             rejectOtherQuotes(quote);
         }
@@ -92,6 +97,13 @@ public class QuoteStatusService {
                     QuoteStatusCode.APPROVED,
                     QuoteStatusCode.REJECTED
             ).contains(newStatus);
+
+            case QuoteStatusCode.NEGOTIATING ->
+                    Set.of(
+                            QuoteStatusCode.APPROVED,
+                            QuoteStatusCode.REJECTED,
+                            QuoteStatusCode.SAMPLE_REQUESTED
+                    ).contains(newStatus);
 
             default -> false;
         };

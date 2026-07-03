@@ -495,7 +495,7 @@ export function SellerQuoteWrite() {
       const quoteData =
           await api.post<QuoteCreateResponse>("/quotes", payload);
 
-      navigate(`/seller/quotes/${quoteData.quoteId}`);
+      navigate(`/seller/quotes`);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다.");
     } finally {

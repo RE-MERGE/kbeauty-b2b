@@ -13,7 +13,11 @@ import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.repository.UserRepository;
 import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
 import kr.remerge.stylehub.global.common.ImageUploadService;
-import kr.remerge.stylehub.global.notification.NotificationService;
+import kr.remerge.stylehub.global.exception.BusinessException;
+import kr.remerge.stylehub.global.exception.ErrorCode;
+import kr.remerge.stylehub.global.notification.NotificationMessage;
+import kr.remerge.stylehub.global.notification.enumtype.NotificationType;
+import kr.remerge.stylehub.global.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,9 +44,16 @@ public class SourcingRequestService {
 
     // ── 상세 조회 ────────────────────────────────────────────────────
     @Transactional(readOnly = true)
-    public SourcingRequestDto.DetailResponse getDetail(Integer sourcingRequestId) {
+    public SourcingRequestDto.DetailResponse getDetail(
+            Integer sourcingRequestId, Integer companyId, Integer userId, String role
+    ) {
         SourcingRequest request = sourcingRequestRepository.findById(sourcingRequestId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 소싱 요청: " + sourcingRequestId));
+
+        // 요청을 올린 바이어 회사가 아니면 접근 불가
+        if (!request.getBuyerCompanyId().equals(companyId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
 
         List<SourcingRequestDto.ItemResponse> items =
                 sourcingRequestItemRepository.findBySourcingRequest_SourcingRequestId(sourcingRequestId)
@@ -59,10 +70,10 @@ public class SourcingRequestService {
         List<SourcingRequestDto.BidResponse> bids =
                 sourcingSupplierRepository.findBySourcingRequest_SourcingRequestId(sourcingRequestId)
                         .stream()
-                        .map(SourcingRequestDto.BidResponse::from)
+                        .map(supplier -> SourcingRequestDto.BidResponse.from(supplier, userId, role))
                         .toList();
 
-        return SourcingRequestDto.DetailResponse.of(request, items, files, bids);
+        return SourcingRequestDto.DetailResponse.of(request, items, files, bids, userId, role);
     }
 
     // ── 1단계: JSON 데이터 저장 ─────────────────────────────────────
@@ -99,7 +110,13 @@ public class SourcingRequestService {
 
             SourcingRequest saved = sourcingRequestRepository.save(request);
             sourcingAutoAssignService.assign(saved);
-            notificationService.notifyNewSourcingRequest(1L, saved.getProductName(), saved.getSourcingRequestId().longValue());
+
+            // 새 소싱 요청 등록 → 관리자 승인 대기 알림
+            notificationService.send(NotificationMessage.toAdmin(
+                    NotificationType.SOURCING_CREATED,
+                    saved.getSourcingRequestId(),
+                    "SOURCING"
+            ));
 
             if (itemDto.getOptions() != null) {
                 for (SourcingRequestDto.OptionRequest opt : itemDto.getOptions()) {
@@ -121,9 +138,14 @@ public class SourcingRequestService {
 
     // ── 2단계: 파일 저장 ────────────────────────────────────────────
     @Transactional
-    public void uploadFiles(Integer sourcingRequestId, String fileType, List<MultipartFile> files) {
+    public void uploadFiles(Integer sourcingRequestId, Integer companyId, String fileType, List<MultipartFile> files) {
         SourcingRequest sourcingRequest = sourcingRequestRepository.findById(sourcingRequestId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 소싱 요청: " + sourcingRequestId));
+
+        // 요청을 올린 바이어 회사가 아니면 파일 첨부 불가
+        if (!sourcingRequest.getBuyerCompanyId().equals(companyId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
 
         boolean isCustom = sourcingRequest.getType().equals("CUSTOM");
 

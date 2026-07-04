@@ -129,6 +129,11 @@ public enum ErrorCode {
     INVALID_ADDRESS_TYPE(HttpStatus.BAD_REQUEST, "ADDRESS_003", "올바르지 않은 주소지 설정 타입입니다."),
 
     // ───────────────────────────────────────────
+    // 배송 (Delivery)
+    // ───────────────────────────────────────────
+    DELIVERY_NOT_FOUND(HttpStatus.NOT_FOUND, "DELIVERY_001", "배송 정보를 찾을 수 없습니다."),
+
+    // ───────────────────────────────────────────
     // 공통 (COMMON)
     // ───────────────────────────────────────────
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "COMMON_001", "잘못된 입력값입니다."),

@@ -46,6 +46,7 @@ import {SellerProductRegister} from "@/pages/product/SellerProductRegister";
 import {SellerQuoteWrite} from "@/pages/quote/SellerQuoteWrite";
 import {SellerQuoteList} from "@/pages/quote/SellerQuoteList";
 import BuyerQuoteList from "@/pages/quote/BuyerQuoteList";
+import { QuoteDetail } from "@/pages/quote/QuoteDetail";
 
 import {SellerDashboard} from "@/pages/seller/SellerDashboard";
 import {SellerProductManage} from "@/pages/seller/SellerProductManage";
@@ -140,6 +141,7 @@ export const router = createBrowserRouter([
                     {path: "orders", Component: Orders},
                     {path: "orders/:id", Component: OrderDetail},
                     {path: "quotes", Component: BuyerQuoteList},
+                    {path: "quotes/:quoteId", Component: QuoteDetail },
                     {path: "sourcing-request", Component: SourcingRequest},
                     {path: "contracts/:contractId/sign", Component: BuyerContractSign},
                     {path: "shipping-quotes", Component: BuyerShippingQuotes},
@@ -162,6 +164,7 @@ export const router = createBrowserRouter([
                     {path: "contracts/new/:quoteId", Component: SellerContractCreate},
                     {path: "contracts/quotes/:quoteId", Component: SellerContractSign},
                     {path: "quotes", Component: SellerQuoteList},
+                    {path: "quotes/:quoteId", Component: QuoteDetail},
                     {path: "sourcing-detail/:requestId", Component: SellerSourcingDetail},
                 ],
             },

@@ -1,16 +1,19 @@
 package kr.remerge.stylehub.domain.sourcing.dto;
 
+import kr.remerge.stylehub.domain.quote.constant.QuoteStatusCode;
 import kr.remerge.stylehub.domain.quote.entity.Quote;
 import kr.remerge.stylehub.domain.sourcing.entity.SourcingRequest;
 import kr.remerge.stylehub.domain.sourcing.entity.SourcingRequestFile;
 import kr.remerge.stylehub.domain.sourcing.entity.SourcingRequestItem;
 import kr.remerge.stylehub.domain.sourcing.entity.SourcingSupplier;
+import kr.remerge.stylehub.domain.sourcing.enumtype.SourcingStatus;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 
 public class SourcingRequestDto {
@@ -87,13 +90,24 @@ public class SourcingRequestDto {
         private final List<ItemResponse> items;
         private final List<FileResponse> files;
         private final List<BidResponse> bids;
+        // 취소(withdraw) 액션 가능 여부 — 작성자 본인 또는 회사 대표 + 취소 가능 상태(PENDING/QUOTED)일 때만 true
+        private final Boolean canWithdraw;
 
         public static DetailResponse of(
                 SourcingRequest req,
                 List<ItemResponse> items,
                 List<FileResponse> files,
-                List<BidResponse> bids
+                List<BidResponse> bids,
+                Integer actorUserId,
+                String actorRole
         ) {
+            boolean isWriter = Objects.equals(req.getBuyer().getUserId(), actorUserId);
+            boolean isPresident = "PRESIDENT".equals(actorRole);
+            boolean statusWithdrawable =
+                    req.getStatus() == SourcingStatus.PENDING || req.getStatus() == SourcingStatus.QUOTED;
+            boolean canWithdraw = statusWithdrawable && (isWriter || isPresident);
+            // bids는 호출부(Service)에서 이미 BidResponse.from(supplier, actorUserId, actorRole)로 매핑되어 넘어옴
+
             return new DetailResponse(
                     req.getSourcingRequestId(),
                     req.getSourcingNo(),
@@ -113,7 +127,8 @@ public class SourcingRequestDto {
                     req.getCreatedAt(),
                     items,
                     files,
-                    bids
+                    bids,
+                    canWithdraw
             );
         }
 
@@ -123,7 +138,7 @@ public class SourcingRequestDto {
                 String needSample, String mainMaterial, Long unitPrice, String refUrl,
                 Long totalBudget, String detail, LocalDate deliveryDate, LocalDate expiryDate,
                 LocalDateTime createdAt, List<ItemResponse> items, List<FileResponse> files,
-                List<BidResponse> bids
+                List<BidResponse> bids, Boolean canWithdraw
         ) {
             this.sourcingRequestId = sourcingRequestId;
             this.sourcingNo = sourcingNo;
@@ -144,6 +159,7 @@ public class SourcingRequestDto {
             this.items = items;
             this.files = files;
             this.bids = bids;
+            this.canWithdraw = canWithdraw;
         }
     }
 
@@ -206,6 +222,7 @@ public class SourcingRequestDto {
         private final LocalDateTime submittedAt;
         // Quote 필드
         private final Integer quoteId;
+        private final String quoteStatus;        // 추가
         private final Long totalAmount;
         private final Long unitPrice;
         private final Integer leadTimeDays;
@@ -213,33 +230,52 @@ public class SourcingRequestDto {
         private final String sampleAvailable;
         private final String sellerMemo;
         private final LocalDateTime validUntil;
+        // 이 견적에 대해 승인/거절/협의/샘플요청 액션을 할 수 있는지 (작성자 본인 or 대표 + 액션 가능 상태)
+        private final Boolean canManage;
 
-        public static BidResponse from(SourcingSupplier supplier) {
+        private static final java.util.Set<String> ACTIONABLE_QUOTE_STATUSES = java.util.Set.of(
+                QuoteStatusCode.SUBMITTED,
+                QuoteStatusCode.NEGOTIATING,
+                QuoteStatusCode.SAMPLE_REQUESTED
+        );
+
+        public static BidResponse from(SourcingSupplier supplier, Integer actorUserId, String actorRole) {
             Quote quote = supplier.getQuote();
+            boolean isApproved = quote != null && QuoteStatusCode.APPROVED.equals(quote.getStatus());
+
+            boolean canManage = false;
+            if (quote != null) {
+                boolean isWriter = Objects.equals(quote.getBuyer().getUserId(), actorUserId);
+                boolean isPresident = "PRESIDENT".equals(actorRole);
+                boolean isActionableStatus = ACTIONABLE_QUOTE_STATUSES.contains(quote.getStatus());
+                canManage = (isWriter || isPresident) && isActionableStatus;
+            }
 
             return new BidResponse(
                     supplier.getSourcingSupplierSId(),
                     supplier.getSellerCompanyId(),
-                    quote != null ? quote.getCompanyName() : null,
+                    isApproved ? quote.getCompanyName() : null,   // APPROVED 아니면 회사명 비공개
                     supplier.getStatus().name(),
                     supplier.getRespondedAt(),
                     quote != null ? quote.getQuoteId() : null,
+                    quote != null ? quote.getStatus() : null,
                     quote != null ? quote.getTotalAmount() : null,
                     quote != null ? quote.getSubtotalAmount() : null,
                     quote != null ? quote.getLeadTimeDays() : null,
                     quote != null ? quote.getSubmittedAt().toLocalDate().plusDays(quote.getLeadTimeDays()) : null,
                     quote != null ? quote.getSampleAvailable() : null,
                     quote != null ? quote.getSellerMemo() : null,
-                    quote != null ? quote.getValidUntil() : null
+                    quote != null ? quote.getValidUntil() : null,
+                    canManage
             );
         }
 
         private BidResponse(
                 Integer sourcingSupplierId, Integer sellerCompanyId, String companyName,
                 String status, LocalDateTime submittedAt,
-                Integer quoteId, Long totalAmount, Long unitPrice, Integer leadTimeDays,
+                Integer quoteId, String quoteStatus, Long totalAmount, Long unitPrice, Integer leadTimeDays,
                 LocalDate availableDate, String sampleAvailable, String sellerMemo,
-                LocalDateTime validUntil
+                LocalDateTime validUntil, Boolean canManage
         ) {
             this.sourcingSupplierId = sourcingSupplierId;
             this.sellerCompanyId = sellerCompanyId;
@@ -247,6 +283,7 @@ public class SourcingRequestDto {
             this.status = status;
             this.submittedAt = submittedAt;
             this.quoteId = quoteId;
+            this.quoteStatus = quoteStatus;
             this.totalAmount = totalAmount;
             this.unitPrice = unitPrice;
             this.leadTimeDays = leadTimeDays;
@@ -254,6 +291,7 @@ public class SourcingRequestDto {
             this.sampleAvailable = sampleAvailable;
             this.sellerMemo = sellerMemo;
             this.validUntil = validUntil;
+            this.canManage = canManage;
         }
     }
 }

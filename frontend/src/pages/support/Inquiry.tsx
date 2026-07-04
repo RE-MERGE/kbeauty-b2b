@@ -7,74 +7,66 @@
  *   PRESIDENT → 자기 회사 소속 전체 문의 조회 (본인 + 직원) + 본인 문의만 메시지 전송
  *   EMPLOYEE  → 본인이 생성한 문의만 조회 + 메시지 전송
  *
- * 웹소켓 연동
- *   useInquirySocket 훅으로 분리 — 백엔드 구현 완료 시 TODO 주석 교체
- *   현재는 mock 자동답변으로 동작
+ * API 연동
+ *   inquiry.service.ts (getInquiries / getInquiryMessages / readInquiryMessages /
+ *   createInquiry / sendInquiryMessage) 를 통해 백엔드와 통신합니다.
+ *   axios 인터셉터가 ApiResponse<T>를 언랩하여 T를 바로 리턴하므로,
+ *   이 컴포넌트에서는 항상 실제 데이터 타입만 다룹니다.
+ *   에러는 axios 인터셉터가 error.message를 백엔드 ErrorResponse.message(한국어)로
+ *   덮어써서 던지므로, catch 블록에서 e.message를 바로 사용하면 됩니다.
  *
- * 백엔드 엔티티 매핑
- *   Inquiry          → inquiries 테이블
- *   InquiryMessage   → inquiry_messages 테이블 (senderType 없음 — role로 판단)
- *   InquiryMessageRead → inquiry_message_reads 테이블 (unread 계산 기준)
+ * 웹소켓 연동
+ *   useInquirySocket 훅(STOMP)으로 실시간 메시지 수신 — /topic/support/inquiry/{id} 구독,
+ *   /app/support/inquiry/{id}/message 로 발행. 소켓 미연결 시에만 sendInquiryMessage(HTTP)로
+ *   폴백합니다.
  */
 
-import {type JSX, useEffect, useRef, useState} from "react";
+import {type JSX, useCallback, useEffect, useRef, useState} from "react";
 import {
-  CheckCircle,
-  Clock,
-  CreditCard,
-  HelpCircle,
-  Lock,
-  MessageCircle,
-  Package,
-  Plus,
-  Search,
-  Send,
-  ShieldCheck,
-  ShoppingBag,
-  User,
-  Users,
-  X,
-  XCircle,
+    CheckCircle,
+    Clock,
+    CreditCard,
+    HelpCircle,
+    Loader2,
+    Lock,
+    MessageCircle,
+    Package,
+    Plus,
+    Search,
+    Send,
+    ShieldCheck,
+    ShoppingBag,
+    Truck,
+    User,
+    Users,
+    X,
+    XCircle,
 } from "lucide-react";
 
-// ── 타입 ──────────────────────────────────────────────────────────────────────
-// 백엔드 UserRole enum과 1:1 매핑
-
-type UserRole = "ADMIN" | "PRESIDENT" | "EMPLOYEE";
-type InquiryStatus = "OPEN" | "WAITING" | "ANSWERED" | "CLOSED";
-
-// 백엔드 Inquiry 엔티티 기반 (DTO 응답 형태)
-interface Inquiry {
-    inquiryId: number;
-    companyId: number;
-    createdByUserId: number;
-    createdByUserName: string;
-    createdByUserRole: UserRole;        // 버블 방향 판단용
-    category: string;          // 엔티티가 String — "ACCOUNT" | "ORDER" | "PRODUCT" | "PAYMENT" | "ETC"
-    title: string;
-    status: InquiryStatus;
-    assignedAdminName: string | null;
-    lastMessageAt: string | null;   // ISO string, DTO에서 포맷
-    lastMessagePreview: string | null;   // DTO에서 추가 (엔티티에 없음 — 별도 쿼리)
-    createdAt: string;
-    closedAt: string | null;
-    unreadCount: number;          // InquiryMessageRead 기준으로 백엔드가 계산
-}
-
-// 백엔드 InquiryMessage 엔티티 기반
-interface InquiryMessage {
-    messageId: number;
-    inquiryId: number;
-    senderId: number;
-    senderName: string;
-    senderRole: UserRole;    // ADMIN이면 관리자 버블, 아니면 유저 버블
-    message: string;
-    createdAt: string;
-}
+import {
+    createInquiry,
+    getCompanies,
+    getCompanyEmployees,
+    getInquiries,
+    getInquiryDetail,
+    getInquiryMessages,
+    readInquiryMessages,
+    sendInquiryMessage,
+} from "@/api/support/inquiry.service";
+import type {
+    CategoryKey,
+    CompanyResponse,
+    EmployeeResponse,
+    InquiryMessageResponse as InquiryMessage,
+    InquiryResponse as Inquiry,
+    InquiryStatus,
+    UserRole,
+} from "@/api/support/inquiry.types";
+import {useAuthStore} from "@/store/useAuthStore";
+import {Client} from "@stomp/stompjs";
 
 // ── 카테고리/상태 메타데이터 ──────────────────────────────────────────────────
-
-type CategoryKey = "ACCOUNT" | "ORDER" | "PRODUCT" | "PAYMENT" | "ETC";
+// inquiry.types.ts의 CategoryKey ("ACCOUNT" | "ORDER" | "PAYMENT" | "DELIVERY" | "PRODUCT" | "ETC") 기준
 
 const CATEGORY_META: Record<CategoryKey, {
     label: string; icon: JSX.Element; color: string; bg: string; border: string;
@@ -92,6 +84,13 @@ const CATEGORY_META: Record<CategoryKey, {
         color: "text-blue-700",
         bg: "bg-blue-50",
         border: "border-blue-200"
+    },
+    DELIVERY: {
+        label: "배송",
+        icon: <Truck size={11}/>,
+        color: "text-cyan-700",
+        bg: "bg-cyan-50",
+        border: "border-cyan-200"
     },
     PRODUCT: {
         label: "상품",
@@ -150,156 +149,67 @@ const STATUS_META: Record<InquiryStatus, {
 };
 
 // ── 웹소켓 훅 ─────────────────────────────────────────────────────────────────
-// 백엔드 웹소켓 구현 완료 시 아래 TODO 주석 교체
-
 function useInquirySocket(
     inquiryId: number | null,
     onMessage: (msg: InquiryMessage) => void,
 ) {
+    const stompClientRef = useRef<Client | null>(null);
+
     useEffect(() => {
         if (!inquiryId) return;
 
-        // TODO: 웹소켓 연결
-        // const client = new Client({
-        //     brokerURL: "ws://localhost:8080/ws",           // TODO: 백엔드 웹소켓 엔드포인트
-        //     onConnect: () => {
-        //         // TODO: 구독 경로 확정 후 교체
-        //         client.subscribe(`/topic/inquiry/${inquiryId}`, (frame) => {
-        //             const msg: InquiryMessage = JSON.parse(frame.body);
-        //             onMessage(msg);
-        //         });
-        //     },
-        // });
-        // client.activate();
-        // return () => { client.deactivate(); };
+        // 1. STOMP 클라이언트 생성 및 설정
+        const client = new Client({
+            brokerURL: "ws://localhost:8080/ws",
+            // webSocketFactory: () => new SockJS("http://localhost:8080/ws"),
+            debug: (str) => console.log("[STOMP Debug]", str),
+            reconnectDelay: 5000,
+            heartbeatIncoming: 4000,
+            heartbeatOutgoing: 4000,
+
+            onConnect: () => {
+                // 2. 백엔드 매핑 경로 구독: /topic/support/inquiry/{inquiryId}
+                client.subscribe(`/topic/support/inquiry/${inquiryId}`, (frame) => {
+                    try {
+                        const msg: InquiryMessage = JSON.parse(frame.body);
+                        onMessage(msg);
+                    } catch (err) {
+                        console.error("웹소켓 메시지 파싱 에러:", err);
+                    }
+                });
+            },
+            onStompError: (frame) => {
+                console.error("STOMP 프로토콜 에러:", frame.headers["message"]);
+            }
+        });
+
+        client.activate();
+        stompClientRef.current = client;
+
+        // 3. 컴포넌트 언마운트 또는 다른 채팅방 이동 시 연결 해제
+        return () => {
+            client.deactivate();
+            stompClientRef.current = null;
+        };
+    }, [inquiryId, onMessage]);
+
+    const sendSocketMessage = useCallback((text: string) => {
+        const client = stompClientRef.current;
+        if (client && client.connected && inquiryId) {
+            client.publish({
+                destination: `/app/support/inquiry/${inquiryId}/message`,
+                body: JSON.stringify({message: text}), // Payload 매핑
+            });
+            return true;
+        }
+        return false;
     }, [inquiryId]);
 
-    const sendMessage = (text: string) => {
-        // TODO: 웹소켓 발행
-        // client.publish({
-        //     destination: `/app/inquiry/${inquiryId}/message`,  // TODO: 발행 경로 확정 후 교체
-        //     body: JSON.stringify({ message: text }),
-        // });
-    };
-
-    return {sendMessage};
+    return {sendSocketMessage};
 }
 
-// ── Mock 데이터 ───────────────────────────────────────────────────────────────
-
-const MOCK_CURRENT_USER = {userId: 1, name: "홍길동", role: "PRESIDENT" as UserRole, companyId: 1};
-
-const MOCK_INQUIRIES: Inquiry[] = [
-    {
-        inquiryId: 1, companyId: 1,
-        createdByUserId: 1, createdByUserName: "홍길동", createdByUserRole: "PRESIDENT",
-        category: "ORDER", title: "ORD-2024-0841 배송 지연 문의",
-        status: "ANSWERED", assignedAdminName: "김관리",
-        lastMessageAt: "방금 전", lastMessagePreview: "운송장 번호는 CJ대한통운 1234567890입니다.",
-        createdAt: "2024.06.10", closedAt: null, unreadCount: 1,
-    },
-    {
-        inquiryId: 2, companyId: 1,
-        createdByUserId: 1, createdByUserName: "홍길동", createdByUserRole: "PRESIDENT",
-        category: "ACCOUNT", title: "사업자등록증 재제출 관련",
-        status: "CLOSED", assignedAdminName: "박관리",
-        lastMessageAt: "3일 전", lastMessagePreview: "서류 확인되었습니다. 감사합니다.",
-        createdAt: "2024.06.07", closedAt: "2024.06.08", unreadCount: 0,
-    },
-    {
-        inquiryId: 3, companyId: 1,
-        createdByUserId: 2, createdByUserName: "이영희", createdByUserRole: "EMPLOYEE",
-        category: "PAYMENT", title: "5월 정산 내역 오류",
-        status: "WAITING", assignedAdminName: null,
-        lastMessageAt: "1시간 전", lastMessagePreview: "담당자 배정 후 빠르게 안내드리겠습니다.",
-        createdAt: "2024.06.09", closedAt: null, unreadCount: 0,
-    },
-    {
-        inquiryId: 4, companyId: 1,
-        createdByUserId: 3, createdByUserName: "김철수", createdByUserRole: "EMPLOYEE",
-        category: "PRODUCT", title: "상품 이미지 업로드 오류",
-        status: "OPEN", assignedAdminName: null,
-        lastMessageAt: "어제", lastMessagePreview: "안녕하세요, 이미지 업로드가 안 됩니다.",
-        createdAt: "2024.06.09", closedAt: null, unreadCount: 0,
-    },
-];
-
-const MOCK_MESSAGES: Record<number, InquiryMessage[]> = {
-    1: [
-        {
-            messageId: 1, inquiryId: 1, senderId: 1, senderName: "홍길동", senderRole: "PRESIDENT",
-            message: "안녕하세요. ORD-2024-0841 주문 건 배송이 3일 이상 지연되고 있는데 어떻게 된 건가요?",
-            createdAt: "2024.06.10 09:12"
-        },
-        {
-            messageId: 2, inquiryId: 1, senderId: 99, senderName: "김관리", senderRole: "ADMIN",
-            message: "불편을 드려서 죄송합니다. 해당 주문 바로 확인해 보겠습니다.",
-            createdAt: "2024.06.10 09:15"
-        },
-        {
-            messageId: 3, inquiryId: 1, senderId: 99, senderName: "김관리", senderRole: "ADMIN",
-            message: "확인 결과 출발지 물류센터에서 검수 지연이 발생했습니다. 금일 오후 출고 예정입니다.",
-            createdAt: "2024.06.10 09:21"
-        },
-        {
-            messageId: 4, inquiryId: 1, senderId: 1, senderName: "홍길동", senderRole: "PRESIDENT",
-            message: "혹시 정확한 배송 추적이 가능할까요?",
-            createdAt: "2024.06.10 09:24"
-        },
-        {
-            messageId: 5, inquiryId: 1, senderId: 99, senderName: "김관리", senderRole: "ADMIN",
-            message: "운송장 번호는 CJ대한통운 1234567890입니다. 홈페이지에서 실시간 추적 가능하십니다.",
-            createdAt: "2024.06.10 09:26"
-        },
-    ],
-    2: [
-        {
-            messageId: 10, inquiryId: 2, senderId: 1, senderName: "홍길동", senderRole: "PRESIDENT",
-            message: "사업자등록증 갱신 건으로 새 파일 재제출 드립니다.",
-            createdAt: "2024.06.07 14:00"
-        },
-        {
-            messageId: 11, inquiryId: 2, senderId: 99, senderName: "박관리", senderRole: "ADMIN",
-            message: "서류 접수되었습니다. 1~2 영업일 내 검토 후 안내드리겠습니다.",
-            createdAt: "2024.06.07 14:35"
-        },
-        {
-            messageId: 12, inquiryId: 2, senderId: 99, senderName: "박관리", senderRole: "ADMIN",
-            message: "서류 확인되었습니다. 정상 처리 완료되었습니다. 감사합니다.",
-            createdAt: "2024.06.08 10:10"
-        },
-    ],
-    3: [
-        {
-            messageId: 20, inquiryId: 3, senderId: 2, senderName: "이영희", senderRole: "EMPLOYEE",
-            message: "5월 정산 내역을 확인하니 계산한 금액과 128,000원 차이가 납니다.",
-            createdAt: "2024.06.09 11:00"
-        },
-        {
-            messageId: 21, inquiryId: 3, senderId: 99, senderName: "시스템", senderRole: "ADMIN",
-            message: "문의 접수되었습니다. 담당자 배정 후 빠르게 안내드리겠습니다.",
-            createdAt: "2024.06.09 11:00"
-        },
-    ],
-    4: [
-        {
-            messageId: 30, inquiryId: 4, senderId: 3, senderName: "김철수", senderRole: "EMPLOYEE",
-            message: "상품 등록 시 이미지가 업로드가 안 됩니다. PNG, JPG 모두 시도해봤는데 동일합니다.",
-            createdAt: "2024.06.09 15:30"
-        },
-    ],
-};
-
-const AUTO_REPLIES = [
-    "확인했습니다. 관련 내용 검토 후 빠르게 답변드리겠습니다.",
-    "감사합니다. 내용 파악했습니다. 확인 후 안내드리겠습니다.",
-    "네, 말씀하신 내용 확인 중입니다. 잠시만 기다려 주세요.",
-];
-
-const MOCK_EMPLOYEES = [
-    {userId: 2, name: "이영희"},
-    {userId: 3, name: "김철수"},
-];
+// ── 현재 로그인 유저 ──────────────────────────────────────────────────────────
+// useAuthStore(zustand)의 user를 그대로 사용합니다. (아래 컴포넌트 내부에서 구독)
 
 // ── 공통 UI ───────────────────────────────────────────────────────────────────
 
@@ -337,11 +247,92 @@ function StatusBadge({status}: { status: InquiryStatus }) {
     );
 }
 
+function ErrorBanner({message, onRetry}: { message: string; onRetry?: () => void }) {
+    return (
+        <div
+            className="flex items-center justify-between gap-3 px-4 py-2.5 text-xs bg-red-50 border border-red-200 text-red-700 rounded-lg m-3">
+            <span>{message}</span>
+            {onRetry && (
+                <button onClick={onRetry} className="font-semibold underline shrink-0">
+                    다시 시도
+                </button>
+            )}
+        </div>
+    );
+}
+
+// axios 응답 인터셉터가 에러 발생 시 error.message를 백엔드 ErrorResponse.message(한국어)로
+// 덮어써서 넘겨주므로, 여기서는 e.message를 그대로 사용하면 됩니다.
+// 필드별 검증 에러가 필요하면 (e as AxiosError<ErrorResponse>).response?.data?.data 를 참고하세요.
+function resolveErrorMessage(e: unknown, fallback: string): string {
+    if (e instanceof Error && e.message) {
+        return e.message;
+    }
+    return fallback;
+}
+
+// ── 날짜/시간 포맷 유틸 ──────────────────────────────────────────────────────
+// 백엔드가 LocalDateTime을 ISO 문자열(예: "2026-07-04T20:44:57.542693")로 내려주므로
+// Date로 파싱해서 사람이 보기 좋은 형태로 변환합니다.
+
+function parseDate(iso: string): Date {
+    return new Date(iso);
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+    return (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+    );
+}
+
+function isSameMinute(a: Date, b: Date): boolean {
+    return isSameDay(a, b) && a.getHours() === b.getHours() && a.getMinutes() === b.getMinutes();
+}
+
+// 채팅 내 날짜 구분선 — "오늘" / "어제" / "2026년 7월 3일"
+function formatDateDivider(date: Date): string {
+    const now = new Date();
+    if (isSameDay(date, now)) return "오늘";
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (isSameDay(date, yesterday)) return "어제";
+
+    return date.toLocaleDateString("ko-KR", {year: "numeric", month: "long", day: "numeric"});
+}
+
+// 메시지 버블 옆 시각 — "오후 8:44"
+function formatTime(date: Date): string {
+    return date.toLocaleTimeString("ko-KR", {hour: "numeric", minute: "2-digit", hour12: true});
+}
+
+// 문의 목록의 마지막 메시지 시각 — 오늘이면 시간만, 어제면 "어제", 그 외엔 날짜
+function formatListTimestamp(iso: string | null): string {
+    if (!iso) return "";
+    const date = parseDate(iso);
+    if (isNaN(date.getTime())) return "";
+
+    const now = new Date();
+    if (isSameDay(date, now)) return formatTime(date);
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (isSameDay(date, yesterday)) return "어제";
+
+    if (date.getFullYear() === now.getFullYear()) {
+        return date.toLocaleDateString("ko-KR", {month: "long", day: "numeric"});
+    }
+    return date.toLocaleDateString("ko-KR", {year: "numeric", month: "2-digit", day: "2-digit"});
+}
+
 // ── 새 문의 모달 ──────────────────────────────────────────────────────────────
 
-function NewInquiryModal({onClose, onCreate}: {
+function NewInquiryModal({onClose, onCreate, submitting}: {
     onClose: () => void;
-    onCreate: (category: string, title: string) => void;
+    onCreate: (category: CategoryKey, title: string) => void;
+    submitting: boolean;
 }) {
     const [category, setCategory] = useState<CategoryKey | null>(null);
     const [title, setTitle] = useState("");
@@ -349,6 +340,7 @@ function NewInquiryModal({onClose, onCreate}: {
     const options: { key: CategoryKey; label: string; icon: JSX.Element; desc: string }[] = [
         {key: "ACCOUNT", label: "계정", icon: <User size={16}/>, desc: "로그인, 회원정보, 권한"},
         {key: "ORDER", label: "주문", icon: <ShoppingBag size={16}/>, desc: "주문 조회, 취소, 배송"},
+        {key: "DELIVERY", label: "배송", icon: <Truck size={16}/>, desc: "배송 조회, 지연, 반품"},
         {key: "PRODUCT", label: "상품", icon: <Package size={16}/>, desc: "상품 등록, 수정, 오류"},
         {key: "PAYMENT", label: "결제", icon: <CreditCard size={16}/>, desc: "결제, 정산, 세금계산서"},
         {key: "ETC", label: "기타", icon: <HelpCircle size={16}/>, desc: "그 외 모든 문의"},
@@ -412,15 +404,17 @@ function NewInquiryModal({onClose, onCreate}: {
                 <div className="flex gap-2 px-5 pb-5">
                     <button
                         onClick={onClose}
-                        className="flex-1 py-2.5 border border-border rounded-lg text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                        disabled={submitting}
+                        className="flex-1 py-2.5 border border-border rounded-lg text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                     >
                         취소
                     </button>
                     <button
                         onClick={() => category && title.trim() && onCreate(category, title.trim())}
-                        disabled={!category || !title.trim()}
-                        className="flex-1 py-2.5 bg-primary hover:bg-primary/90 disabled:opacity-40 text-white rounded-lg text-sm font-semibold transition-colors"
+                        disabled={!category || !title.trim() || submitting}
+                        className="flex-1 py-2.5 bg-primary hover:bg-primary/90 disabled:opacity-40 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
                     >
+                        {submitting && <Loader2 size={14} className="animate-spin"/>}
                         문의 시작
                     </button>
                 </div>
@@ -431,24 +425,41 @@ function NewInquiryModal({onClose, onCreate}: {
 
 // ── 문의 목록 패널 ────────────────────────────────────────────────────────────
 
-function InquiryListPanel({inquiries, selectedId, viewerRole, currentUserId, onSelect, onNew}: {
+function InquiryListPanel({
+                              inquiries, selectedId, viewerRole, currentUserId, isLoading, error,
+                              employees, companies, companyFilter, onCompanyFilterChange,
+                              onSelect, onNew, onRetry,
+                          }: {
     inquiries: Inquiry[];
     selectedId: number | null;
     viewerRole: UserRole;
     currentUserId: number;
+    isLoading: boolean;
+    error: string | null;
+    employees: EmployeeResponse[];
+    companies: CompanyResponse[];
+    companyFilter: number | "all";
+    onCompanyFilterChange: (id: number | "all") => void;
     onSelect: (id: number) => void;
     onNew: () => void;
+    onRetry: () => void;
 }) {
     const [search, setSearch] = useState("");
     const [employeeFilter, setEmployeeFilter] = useState<number | "all">("all");
 
-    // 권한별 필터링
+    // 회사(companyFilter)가 바뀌면 그 전 직원 필터는 의미가 없으므로 초기화
+    useEffect(() => {
+        setEmployeeFilter("all");
+    }, [companyFilter]);
+
+    // 백엔드가 이미 권한별 목록을 필터링해서 내려주지만,
+    // PRESIDENT/ADMIN의 직원별 필터·검색은 프론트에서 한 번 더 좁혀줍니다.
     const visible = inquiries.filter((inq) => {
-        // EMPLOYEE: 본인 것만
-        if (viewerRole === "EMPLOYEE" && inq.createdByUserId !== currentUserId) return false;
-        // PRESIDENT: 직원 필터 적용
         if (viewerRole === "PRESIDENT" && employeeFilter !== "all" && inq.createdByUserId !== employeeFilter) return false;
-        // 검색
+        if (viewerRole === "ADMIN") {
+            if (companyFilter !== "all" && inq.companyId !== companyFilter) return false;
+            if (companyFilter !== "all" && employeeFilter !== "all" && inq.createdByUserId !== employeeFilter) return false;
+        }
         const q = search.trim().toLowerCase();
         return !q || inq.title.toLowerCase().includes(q) || inq.createdByUserName.includes(q);
     });
@@ -495,7 +506,7 @@ function InquiryListPanel({inquiries, selectedId, viewerRole, currentUserId, onS
                         >
                             내 문의
                         </button>
-                        {MOCK_EMPLOYEES.map((emp) => (
+                        {employees.map((emp) => (
                             <button
                                 key={emp.userId}
                                 onClick={() => setEmployeeFilter(emp.userId)}
@@ -511,11 +522,47 @@ function InquiryListPanel({inquiries, selectedId, viewerRole, currentUserId, onS
                     </div>
                 )}
 
-                {/* ADMIN: 회사별 필터 자리 (TODO) */}
                 {viewerRole === "ADMIN" && (
-                    <div className="text-[11px] text-muted-foreground bg-muted/40 rounded-lg px-3 py-1.5">
-                        {/* TODO: 회사 필터 드롭다운 */}
-                        전체 회사 문의 조회 중
+                    <div className="space-y-2">
+                        <select
+                            value={companyFilter}
+                            onChange={(e) => onCompanyFilterChange(e.target.value === "all" ? "all" : Number(e.target.value))}
+                            className="w-full text-[11px] border border-border rounded-lg px-2.5 py-1.5 outline-none focus:border-primary transition-colors bg-white"
+                        >
+                            <option value="all">전체 회사</option>
+                            {companies.map((c) => (
+                                <option key={c.companyId} value={c.companyId}>{c.companyName}</option>
+                            ))}
+                        </select>
+
+                        {/* 회사를 선택하면 그 회사 소속 직원별로 한 번 더 좁힐 수 있음 */}
+                        {companyFilter !== "all" && (
+                            <div className="flex flex-wrap gap-1.5">
+                                <button
+                                    onClick={() => setEmployeeFilter("all")}
+                                    className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${
+                                        employeeFilter === "all"
+                                            ? "bg-foreground text-background border-foreground"
+                                            : "border-border text-muted-foreground hover:border-foreground/30"
+                                    }`}
+                                >
+                                    전체 직원
+                                </button>
+                                {employees.map((emp) => (
+                                    <button
+                                        key={emp.userId}
+                                        onClick={() => setEmployeeFilter(emp.userId)}
+                                        className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${
+                                            employeeFilter === emp.userId
+                                                ? "bg-amber-500 text-white border-amber-500"
+                                                : "border-border text-muted-foreground hover:border-amber-400"
+                                        }`}
+                                    >
+                                        {emp.name}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -533,7 +580,14 @@ function InquiryListPanel({inquiries, selectedId, viewerRole, currentUserId, onS
 
             {/* 목록 */}
             <div className="flex-1 overflow-y-auto">
-                {visible.length === 0 ? (
+                {error && <ErrorBanner message={error} onRetry={onRetry}/>}
+
+                {isLoading ? (
+                    <div className="flex flex-col items-center justify-center h-40 gap-2">
+                        <Loader2 size={20} className="animate-spin text-muted-foreground/50"/>
+                        <p className="text-xs text-muted-foreground">문의 내역을 불러오는 중...</p>
+                    </div>
+                ) : visible.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-40 text-center px-4">
                         <MessageCircle size={24} className="text-muted-foreground/30 mb-2"/>
                         <p className="text-xs text-muted-foreground">문의 내역이 없습니다.</p>
@@ -556,7 +610,6 @@ function InquiryListPanel({inquiries, selectedId, viewerRole, currentUserId, onS
                                 <div className="flex items-start justify-between gap-2 mb-1.5">
                                     <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                                         <CategoryBadge category={inq.category}/>
-                                        {/* PRESIDENT/ADMIN: 작성자 표시 */}
                                         {(viewerRole === "PRESIDENT" || viewerRole === "ADMIN") && !isOwn && (
                                             <span
                                                 className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
@@ -565,7 +618,6 @@ function InquiryListPanel({inquiries, selectedId, viewerRole, currentUserId, onS
                                         )}
                                     </div>
                                     <div className="flex items-center gap-1.5 shrink-0">
-                                        {/* 읽지 않은 메시지 — InquiryMessageRead 기반 */}
                                         {inq.unreadCount > 0 && (
                                             <span
                                                 className="min-w-[18px] h-[18px] rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center px-1">
@@ -573,7 +625,7 @@ function InquiryListPanel({inquiries, selectedId, viewerRole, currentUserId, onS
                                             </span>
                                         )}
                                         <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                                            {inq.lastMessageAt ?? inq.createdAt}
+                                            {formatListTimestamp(inq.lastMessageAt ?? inq.createdAt)}
                                         </span>
                                     </div>
                                 </div>
@@ -598,21 +650,27 @@ function InquiryListPanel({inquiries, selectedId, viewerRole, currentUserId, onS
 
 // ── 채팅 패널 ─────────────────────────────────────────────────────────────────
 
-function ChatPanel({inquiry, messages, viewerRole, currentUserId, onSend}: {
+function ChatPanel({inquiry, messages, viewerRole, currentUserId, isLoading, error, sending, onSend, onRetry}: {
     inquiry: Inquiry | null;
     messages: InquiryMessage[];
     viewerRole: UserRole;
     currentUserId: number;
+    isLoading: boolean;
+    error: string | null;
+    sending: boolean;
     onSend: (text: string) => void;
+    onRetry: () => void;
 }) {
     const [input, setInput] = useState("");
-    const [typing, setTyping] = useState(false);
-    const bottomRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({behavior: "smooth"});
-    }, [messages, typing]);
+        const el = scrollContainerRef.current;
+        if (el) {
+            el.scrollTop = el.scrollHeight;
+        }
+    }, [messages]);
 
     if (!inquiry) {
         return (
@@ -634,24 +692,16 @@ function ChatPanel({inquiry, messages, viewerRole, currentUserId, onSend}: {
     // PRESIDENT: 본인 문의만 전송 (직원 문의는 읽기 전용)
     // EMPLOYEE: 본인 문의만 전송
     const canSend = !isClosed && (viewerRole === "ADMIN" || isOwn);
-    const isReadOnly = !isClosed && !canSend; // 읽기 전용 상태
+    const isReadOnly = !isClosed && !canSend;
 
     const handleSend = () => {
         const text = input.trim();
-        if (!text || !canSend) return;
+        if (!text || !canSend || sending) return;
         setInput("");
         if (textareaRef.current) {
             textareaRef.current.style.height = "auto";
         }
         onSend(text);
-        // mock: 관리자 자동 답변 (웹소켓 연동 후 제거)
-        if (viewerRole !== "ADMIN") {
-            setTimeout(() => setTyping(true), 800);
-            setTimeout(() => {
-                setTyping(false);
-                onSend("__admin__" + AUTO_REPLIES[Math.floor(Math.random() * AUTO_REPLIES.length)]);
-            }, 2800);
-        }
     };
 
     return (
@@ -663,7 +713,6 @@ function ChatPanel({inquiry, messages, viewerRole, currentUserId, onSend}: {
                         <div className="flex items-center gap-2 flex-wrap mb-1">
                             <CategoryBadge category={inquiry.category}/>
                             <StatusBadge status={inquiry.status}/>
-                            {/* PRESIDENT/ADMIN: 작성자가 다른 사람이면 표시 */}
                             {(viewerRole === "PRESIDENT" || viewerRole === "ADMIN") && !isOwn && (
                                 <span className="text-xs text-amber-600 font-semibold flex items-center gap-1">
                                     <Users size={11}/> {inquiry.createdByUserName} 님의 문의
@@ -683,84 +732,84 @@ function ChatPanel({inquiry, messages, viewerRole, currentUserId, onSend}: {
             </div>
 
             {/* 메시지 목록 */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 bg-muted/[0.03]">
-                {messages.map((msg, idx) => {
-                    const isAdminMsg = msg.senderRole === "ADMIN";
-                    const isMineMsg = msg.senderId === currentUserId;
+            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4 bg-muted/[0.03]">
+                {error && <ErrorBanner message={error} onRetry={onRetry}/>}
 
-                    // 버블 방향 결정
-                    // - ADMIN이 보는 경우: 유저 메시지=왼쪽, 관리자(본인)=오른쪽
-                    // - PRESIDENT/EMPLOYEE: 본인=오른쪽, 관리자=왼쪽, 다른 유저=왼쪽(amber)
-                    const alignRight = viewerRole === "ADMIN" ? isAdminMsg : isMineMsg;
+                {isLoading ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2">
+                        <Loader2 size={20} className="animate-spin text-muted-foreground/50"/>
+                        <p className="text-xs text-muted-foreground">대화 내용을 불러오는 중...</p>
+                    </div>
+                ) : (
+                    messages.map((msg, idx) => {
+                        const isAdminMsg = msg.senderRole === "ADMIN";
+                        const isMineMsg = msg.senderId === currentUserId;
 
-                    // 날짜 구분선
-                    const prevMsg = messages[idx - 1];
-                    const showDate = !prevMsg || msg.createdAt.split(" ")[0] !== prevMsg.createdAt.split(" ")[0];
+                        // 버블 방향 결정
+                        // - ADMIN이 보는 경우: 유저 메시지=왼쪽, 관리자(본인)=오른쪽
+                        // - PRESIDENT/EMPLOYEE: 본인=오른쪽, 관리자=왼쪽, 다른 유저=왼쪽(amber)
+                        const alignRight = viewerRole === "ADMIN" ? isAdminMsg : isMineMsg;
 
-                    return (
-                        <div key={msg.messageId}>
-                            {showDate && (
-                                <div className="flex items-center gap-3 my-2">
-                                    <div className="flex-1 h-px bg-border"/>
-                                    <span className="text-[11px] text-muted-foreground font-medium">
-                                        {msg.createdAt.split(" ")[0]}
-                                    </span>
-                                    <div className="flex-1 h-px bg-border"/>
-                                </div>
-                            )}
+                        const prevMsg = messages[idx - 1];
+                        const msgDate = parseDate(msg.createdAt);
+                        const showDate = !prevMsg || !isSameDay(msgDate, parseDate(prevMsg.createdAt));
 
-                            <div className={`flex items-end gap-2 ${alignRight ? "flex-row-reverse" : "flex-row"}`}>
-                                {!alignRight && (
-                                    <Avatar name={msg.senderName} isAdmin={isAdminMsg} size="sm"/>
+                        // 같은 발신자 + 같은 분(minute)으로 이어지는 메시지는 시간을 숨기고
+                        // 그 묶음의 마지막 메시지에만 시간을 표시합니다.
+                        const nextMsg = messages[idx + 1];
+                        const showTime = !nextMsg
+                            || nextMsg.senderId !== msg.senderId
+                            || !isSameMinute(msgDate, parseDate(nextMsg.createdAt));
+
+                        return (
+                            <div key={msg.messageId}>
+                                {showDate && (
+                                    <div className="flex items-center gap-3 my-2">
+                                        <div className="flex-1 h-px bg-border"/>
+                                        <span className="text-[11px] text-muted-foreground font-medium">
+                                            {formatDateDivider(msgDate)}
+                                        </span>
+                                        <div className="flex-1 h-px bg-border"/>
+                                    </div>
                                 )}
 
-                                <div
-                                    className={`flex flex-col gap-1 max-w-[72%] ${alignRight ? "items-end" : "items-start"}`}>
-                                    {/* 발신자 이름 — 오른쪽 버블엔 표시 안 함 */}
+                                <div className={`flex items-end gap-2 ${alignRight ? "flex-row-reverse" : "flex-row"}`}>
                                     {!alignRight && (
-                                        <span className="text-[10px] font-semibold text-muted-foreground px-1">
-                                            {isAdminMsg ? `🛡 ${msg.senderName}` : msg.senderName}
-                                        </span>
+                                        <Avatar name={msg.senderName} isAdmin={isAdminMsg} size="sm"/>
                                     )}
 
-                                    <div className={`flex items-end gap-1.5 ${alignRight ? "flex-row-reverse" : ""}`}>
-                                        <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                                            alignRight
-                                                ? "bg-primary text-white rounded-br-md"
-                                                : isAdminMsg
-                                                    ? "bg-white border border-border text-foreground rounded-bl-md shadow-sm"
-                                                    : "bg-amber-50 border border-amber-200 text-foreground rounded-bl-md"
-                                        }`}>
-                                            {msg.message}
+                                    <div
+                                        className={`flex flex-col gap-1 max-w-[72%] ${alignRight ? "items-end" : "items-start"}`}>
+                                        {!alignRight && (
+                                            <span className="text-[10px] font-semibold text-muted-foreground px-1">
+                                                {isAdminMsg ? `🛡 ${msg.senderName}` : msg.senderName}
+                                            </span>
+                                        )}
+
+                                        <div
+                                            className={`flex items-end gap-1.5 ${alignRight ? "flex-row-reverse" : ""}`}>
+                                            <div className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                                                alignRight
+                                                    ? "bg-primary text-white rounded-br-md"
+                                                    : isAdminMsg
+                                                        ? "bg-white border border-border text-foreground rounded-bl-md shadow-sm"
+                                                        : "bg-amber-50 border border-amber-200 text-foreground rounded-bl-md"
+                                            }`}>
+                                                {msg.message}
+                                            </div>
+                                            {showTime && (
+                                                <span
+                                                    className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 mb-0.5">
+                                                    {formatTime(msgDate)}
+                                                </span>
+                                            )}
                                         </div>
-                                        <span
-                                            className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 mb-0.5">
-                                            {msg.createdAt.split(" ")[1]}
-                                        </span>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    );
-                })}
-
-                {/* 관리자 입력 중 표시 (mock — 웹소켓 연동 후 실제 타이핑 이벤트로 교체) */}
-                {typing && (
-                    <div className="flex items-end gap-2">
-                        <Avatar name="관리" isAdmin size="sm"/>
-                        <div className="bg-white border border-border rounded-2xl rounded-bl-md px-4 py-3 shadow-sm">
-                            <div className="flex gap-1 items-center">
-                                {[0, 150, 300].map((delay) => (
-                                    <div key={delay}
-                                         className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce"
-                                         style={{animationDelay: `${delay}ms`}}/>
-                                ))}
-                            </div>
-                        </div>
-                        <span className="text-[10px] text-muted-foreground mb-1">관리자 입력 중...</span>
-                    </div>
+                        );
+                    })
                 )}
-                <div ref={bottomRef}/>
             </div>
 
             {/* 입력 영역 */}
@@ -778,6 +827,7 @@ function ChatPanel({inquiry, messages, viewerRole, currentUserId, onSend}: {
                         <textarea
                             ref={textareaRef}
                             value={input}
+                            disabled={sending}
                             onChange={(e) => {
                                 setInput(e.target.value);
                                 e.currentTarget.style.height = "auto";
@@ -791,14 +841,14 @@ function ChatPanel({inquiry, messages, viewerRole, currentUserId, onSend}: {
                             }}
                             placeholder="메시지를 입력하세요... (Enter 전송 / Shift+Enter 줄바꿈)"
                             rows={1}
-                            className="flex-1 resize-none border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors max-h-[120px] leading-relaxed"
+                            className="flex-1 resize-none border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors max-h-[120px] leading-relaxed disabled:opacity-60"
                         />
                         <button
                             onClick={handleSend}
-                            disabled={!input.trim()}
+                            disabled={!input.trim() || sending}
                             className="w-10 h-10 flex items-center justify-center bg-primary hover:bg-primary/90 disabled:opacity-40 text-white rounded-xl transition-colors shrink-0"
                         >
-                            <Send size={15}/>
+                            {sending ? <Loader2 size={15} className="animate-spin"/> : <Send size={15}/>}
                         </button>
                     </div>
                 )}
@@ -810,147 +860,205 @@ function ChatPanel({inquiry, messages, viewerRole, currentUserId, onSend}: {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 export function Inquiry() {
-    // TODO: useAuthStore에서 실제 유저 정보로 교체
-    // const { user } = useAuthStore();
-    // const currentUser = { userId: user.userId, name: user.name, role: user.role as UserRole, companyId: user.companyId };
-    const currentUser = MOCK_CURRENT_USER;
+    // 로그인한 유저 정보 — zustand auth store에서 구독
+    const user = useAuthStore((state) => state.user);
+    const isAuthLoading = useAuthStore((state) => state.isLoading);
 
-    const [inquiries, setInquiries] = useState<Inquiry[]>(MOCK_INQUIRIES);
-    const [allMessages, setAllMessages] = useState<Record<number, InquiryMessage[]>>(MOCK_MESSAGES);
+    const [inquiries, setInquiries] = useState<Inquiry[]>([]);
+    const [allMessages, setAllMessages] = useState<Record<number, InquiryMessage[]>>({});
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [showModal, setShowModal] = useState(false);
 
-    // 데모용 role 토글 (실제에선 제거)
-    const [demoRole, setDemoRole] = useState<UserRole>(currentUser.role);
+    const [isLoadingList, setIsLoadingList] = useState(false);
+    const [listError, setListError] = useState<string | null>(null);
+
+    const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+    const [messagesError, setMessagesError] = useState<string | null>(null);
+
+    const [isCreating, setIsCreating] = useState(false);
+    const [isSending, setIsSending] = useState(false);
+
+    const [employees, setEmployees] = useState<EmployeeResponse[]>([]);
+    const [companies, setCompanies] = useState<CompanyResponse[]>([]);
+    const [companyFilter, setCompanyFilter] = useState<number | "all">("all");
 
     const selectedInquiry = inquiries.find((i) => i.inquiryId === selectedId) ?? null;
     const currentMessages = selectedId ? (allMessages[selectedId] ?? []) : [];
 
-    // 웹소켓 훅 — 연결 후 서버에서 오는 메시지를 allMessages에 추가
-    useInquirySocket(selectedId, (msg) => {
-        setAllMessages((prev) => ({
-            ...prev,
-            [msg.inquiryId]: [...(prev[msg.inquiryId] ?? []), msg],
-        }));
-    });
+    // ── 문의 목록 조회: GET /support/inquiries ──────────────────────────────
+    const loadInquiries = useCallback(async () => {
+        setIsLoadingList(true);
+        setListError(null);
+        try {
+            const data = await getInquiries();
+            setInquiries(data);
+        } catch (e) {
+            setListError(resolveErrorMessage(e, "문의 내역을 불러오지 못했습니다."));
+        } finally {
+            setIsLoadingList(false);
+        }
+    }, []);
+
+    // PRESIDENT: 직원 목록 조회
+    useEffect(() => {
+        if (!user || user.role !== "PRESIDENT") return;
+        getCompanyEmployees(user.companyId)
+            .then(setEmployees)
+            .catch((e) => console.error("직원 목록 조회 실패:", e));
+    }, [user]);
+
+    // ADMIN: 회사 목록 조회
+    useEffect(() => {
+        if (!user || user.role !== "ADMIN") return;
+        getCompanies()
+            .then(setCompanies)
+            .catch((e) => console.error("회사 목록 조회 실패:", e));
+    }, [user]);
+
+    // ADMIN: 회사를 선택하면 그 회사 소속 직원 목록 조회 (드릴다운)
+    useEffect(() => {
+        if (!user || user.role !== "ADMIN") return;
+        if (companyFilter === "all") {
+            setEmployees([]);
+            return;
+        }
+        getCompanyEmployees(companyFilter)
+            .then(setEmployees)
+            .catch((e) => console.error("직원 목록 조회 실패:", e));
+    }, [user, companyFilter]);
+    useEffect(() => {
+        if (user) {
+            loadInquiries();
+        }
+    }, [user, loadInquiries]);
+
+    // ── 대화 메시지 조회: GET /support/inquiries/{id}/messages + 읽음 처리 ──
+    const loadMessages = useCallback(async (inquiryId: number) => {
+        setIsLoadingMessages(true);
+        setMessagesError(null);
+        try {
+            const data = await getInquiryMessages(inquiryId);
+            setAllMessages((prev) => ({...prev, [inquiryId]: data}));
+
+            // 읽음 처리 — POST /support/inquiries/{id}/read
+            setInquiries((prev) => {
+                const targetInquiry = prev.find((i) => i.inquiryId === inquiryId);
+
+                // 안 읽은 메시지가 있을 때만 백엔드에 호출
+                if (targetInquiry && targetInquiry.unreadCount > 0) {
+                    // 비동기로 호출하되 상태 업데이트 흐름을 방해하지 않음
+                    readInquiryMessages(inquiryId).catch(console.error);
+                }
+
+                // 화면의 unreadCount를 0으로 카운트 초기화하여 반영
+                return prev.map((i) =>
+                    i.inquiryId === inquiryId ? {...i, unreadCount: 0} : i
+                );
+            });
+        } catch (e) {
+            setMessagesError(resolveErrorMessage(e, "대화 내용을 불러오지 못했습니다."));
+        } finally {
+            setIsLoadingMessages(false);
+        }
+    }, []);
 
     const handleSelect = (id: number) => {
         setSelectedId(id);
-        // 읽음 처리 — TODO: POST /api/inquiries/{id}/read
+        loadMessages(id);
+    };
+
+    // 웹소켓 훅 — 서버에서 소켓으로 오는 메시지를 allMessages에 실시간 반영
+    const handleSocketMessage = useCallback((msg: InquiryMessage) => {
+        setAllMessages((prev) => {
+            const currentRoomMessages = prev[msg.inquiryId] ?? [];
+            const isDuplicate = currentRoomMessages.some(m => m.messageId === msg.messageId);
+            if (isDuplicate) return prev;
+            return {...prev, [msg.inquiryId]: [...currentRoomMessages, msg]};
+        });
         setInquiries((prev) =>
-            prev.map((i) => i.inquiryId === id ? {...i, unreadCount: 0} : i),
+            prev.map((i) => i.inquiryId === msg.inquiryId
+                ? {...i, lastMessagePreview: msg.message, lastMessageAt: msg.createdAt}
+                : i
+            )
         );
-    };
+    }, []);
 
-    const handleCreate = (category: string, title: string) => {
-        // TODO: POST /api/inquiries { category, title }
-        const newId = Date.now();
-        const newInquiry: Inquiry = {
-            inquiryId: newId, companyId: currentUser.companyId,
-            createdByUserId: currentUser.userId,
-            createdByUserName: currentUser.name,
-            createdByUserRole: demoRole,
-            category, title,
-            status: "OPEN", assignedAdminName: null,
-            lastMessageAt: "방금 전",
-            lastMessagePreview: "문의가 접수되었습니다.",
-            createdAt: new Date().toLocaleDateString("ko-KR"),
-            closedAt: null, unreadCount: 0,
-        };
-        const systemMsg: InquiryMessage = {
-            messageId: Date.now() + 1, inquiryId: newId,
-            senderId: 99, senderName: "시스템", senderRole: "ADMIN",
-            message: "문의가 접수되었습니다. 담당자 배정 후 빠르게 답변드리겠습니다.",
-            createdAt: new Date().toLocaleString("ko-KR"),
-        };
-        setInquiries((prev) => [newInquiry, ...prev]);
-        setAllMessages((prev) => ({...prev, [newId]: [systemMsg]}));
-        setSelectedId(newId);
-        setShowModal(false);
-    };
-
-    const handleSend = (text: string) => {
-        if (!selectedId) return;
-        const now = new Date().toLocaleString("ko-KR");
-
-        if (text.startsWith("__admin__")) {
-            // mock 자동답변 (웹소켓 연동 후 제거)
-            const adminMsg: InquiryMessage = {
-                messageId: Date.now(), inquiryId: selectedId,
-                senderId: 99, senderName: "김관리", senderRole: "ADMIN",
-                message: text.replace("__admin__", ""),
-                createdAt: now,
-            };
-            setAllMessages((prev) => ({
-                ...prev,
-                [selectedId]: [...(prev[selectedId] ?? []), adminMsg],
-            }));
-            setInquiries((prev) => prev.map((i) =>
-                i.inquiryId === selectedId
-                    ? {
-                        ...i,
-                        status: "ANSWERED",
-                        assignedAdminName: "김관리",
-                        lastMessageAt: "방금 전",
-                        lastMessagePreview: adminMsg.message
-                    }
-                    : i,
-            ));
-        } else {
-            // TODO: 웹소켓 연동 시 POST가 아닌 소켓 발행으로 교체
-            // TODO: POST /api/inquiries/{selectedId}/messages { message: text }
-            const userMsg: InquiryMessage = {
-                messageId: Date.now(), inquiryId: selectedId,
-                senderId: currentUser.userId, senderName: currentUser.name,
-                senderRole: demoRole,
-                message: text, createdAt: now,
-            };
-            setAllMessages((prev) => ({
-                ...prev,
-                [selectedId]: [...(prev[selectedId] ?? []), userMsg],
-            }));
-            setInquiries((prev) => prev.map((i) =>
-                i.inquiryId === selectedId
-                    ? {...i, status: "WAITING", lastMessageAt: "방금 전", lastMessagePreview: text}
-                    : i,
-            ));
+    // ── 새 문의 생성: POST /support/inquiries ───────────────────────────────
+    const handleCreate = async (category: CategoryKey, title: string) => {
+        setIsCreating(true);
+        try {
+            const newInquiry = await createInquiry({category, title});
+            setInquiries((prev) => [newInquiry, ...prev]);
+            setSelectedId(newInquiry.inquiryId);
+            setShowModal(false);
+            // 생성 직후 시스템 메시지 등을 서버가 내려줄 수 있으므로 바로 조회
+            await loadMessages(newInquiry.inquiryId);
+        } catch (e) {
+            setListError(resolveErrorMessage(e, "문의 생성에 실패했습니다."));
+        } finally {
+            setIsCreating(false);
         }
+    };
+
+    const {sendSocketMessage} = useInquirySocket(selectedId, handleSocketMessage);
+
+    // ── 메시지 전송: POST /support/inquiries/{id}/messages ──────────────────
+    // (웹소켓 연동 완료 시 이 부분을 socket publish로 교체)
+    const handleSend = async (text: string) => {
+        if (!selectedId) return;
+        setIsSending(true);
+        setMessagesError(null);
+        try {
+            // 1. 먼저 웹소켓 발행을 시도합니다.
+            const isSentViaSocket = sendSocketMessage(text);
+
+            // 2. 소켓 연결 실패 시에만 기존 HTTP API를 fallback으로 사용합니다.
+            if (!isSentViaSocket) {
+                const newMessage = await sendInquiryMessage(selectedId, text);
+                setAllMessages((prev) => ({
+                    ...prev,
+                    [selectedId]: [...(prev[selectedId] ?? []), newMessage],
+                }));
+            }
+
+            // 3. 메시지 전송 후 방 정보(상태, 담당자 등) 갱신을 위해 상세 데이터 동기화
+            const refreshed = await getInquiryDetail(selectedId);
+            setInquiries((prev) => prev.map((i) => i.inquiryId === selectedId ? refreshed : i));
+        } catch (e) {
+            setMessagesError(resolveErrorMessage(e, "메시지 전송에 실패했습니다."));
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    // 앱 첫 로드 시 서버 인증 확인 중
+    if (isAuthLoading) {
+        return (
+            <div className="max-w-5xl mx-auto px-4 py-8 flex items-center justify-center" style={{height: 680}}>
+                <Loader2 size={20} className="animate-spin text-muted-foreground/50"/>
+            </div>
+        );
+    }
+
+    // 비로그인 상태 — ProtectedLayout에서 대부분 걸러지지만 방어적으로 처리
+    if (!user) {
+        return (
+            <div className="max-w-5xl mx-auto px-4 py-8 text-center text-sm text-muted-foreground">
+                로그인이 필요한 페이지입니다.
+            </div>
+        );
+    }
+
+    // ⚠️ UserResponse의 실제 필드명이 다르면 여기만 맞춰주면 됩니다.
+    const currentUser = {
+        userId: user.userId,
+        name: user.name,
+        role: user.role,
+        companyId: user.companyId,
     };
 
     return (
         <div className="max-w-5xl mx-auto px-4 py-8">
-            {/* 페이지 헤더 */}
-            <div className="flex items-center justify-between mb-5">
-                <div>
-                    <h1 className="text-2xl font-bold text-foreground">1:1 문의</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                        관리자와 실시간으로 문의하고 답변을 받아보세요.
-                    </p>
-                </div>
-
-                {/* 데모용 role 토글 — 실제 배포 시 제거 */}
-                <div className="flex items-center gap-2 bg-muted/40 border border-border rounded-lg p-1">
-                    {(["EMPLOYEE", "PRESIDENT", "ADMIN"] as UserRole[]).map((r) => (
-                        <button
-                            key={r}
-                            onClick={() => {
-                                setDemoRole(r);
-                                setSelectedId(null);
-                            }}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold transition-colors ${
-                                demoRole === r
-                                    ? "bg-white shadow-sm text-foreground"
-                                    : "text-muted-foreground hover:text-foreground"
-                            }`}
-                        >
-                            {r === "ADMIN" ? <ShieldCheck size={12}/> : r === "PRESIDENT" ? <Users size={12}/> :
-                                <User size={12}/>}
-                            {r}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
             {/* 2패널 레이아웃 */}
             <div className="flex border border-border rounded-xl overflow-hidden bg-white shadow-sm"
                  style={{height: 680}}>
@@ -958,23 +1066,38 @@ export function Inquiry() {
                     <InquiryListPanel
                         inquiries={inquiries}
                         selectedId={selectedId}
-                        viewerRole={demoRole}
+                        viewerRole={currentUser.role}
                         currentUserId={currentUser.userId}
+                        isLoading={isLoadingList}
+                        error={listError}
+                        employees={employees}
+                        companies={companies}
+                        companyFilter={companyFilter}
+                        onCompanyFilterChange={setCompanyFilter}
                         onSelect={handleSelect}
                         onNew={() => setShowModal(true)}
+                        onRetry={loadInquiries}
                     />
                 </div>
                 <ChatPanel
                     inquiry={selectedInquiry}
                     messages={currentMessages}
-                    viewerRole={demoRole}
+                    viewerRole={currentUser.role}
                     currentUserId={currentUser.userId}
+                    isLoading={isLoadingMessages}
+                    error={messagesError}
+                    sending={isSending}
                     onSend={handleSend}
+                    onRetry={() => selectedId && loadMessages(selectedId)}
                 />
             </div>
 
             {showModal && (
-                <NewInquiryModal onClose={() => setShowModal(false)} onCreate={handleCreate}/>
+                <NewInquiryModal
+                    onClose={() => setShowModal(false)}
+                    onCreate={handleCreate}
+                    submitting={isCreating}
+                />
             )}
         </div>
     );

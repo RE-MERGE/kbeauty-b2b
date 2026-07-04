@@ -82,4 +82,8 @@ public class SourcingRequest extends BaseEntity {
     public void withdraw() {
         this.status = SourcingStatus.WITHDRAWN;
     }
+
+    public void trade() {
+        this.status = SourcingStatus.TRADING;
+    }
 }

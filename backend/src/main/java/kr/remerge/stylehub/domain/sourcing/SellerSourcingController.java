@@ -1,4 +1,4 @@
-package kr.remerge.stylehub.domain.sourcing.controller;
+package kr.remerge.stylehub.domain.sourcing;
 
 import kr.remerge.stylehub.domain.sourcing.dto.SellerDeclineRequest;
 import kr.remerge.stylehub.domain.sourcing.dto.SellerSourcingResponse;

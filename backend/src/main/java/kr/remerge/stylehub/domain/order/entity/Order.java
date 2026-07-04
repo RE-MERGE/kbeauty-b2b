@@ -168,4 +168,8 @@ public class Order extends BaseEntity {
         this.trackingNumber = trackingNumber;
         this.shippedAt = LocalDateTime.now();
     }
+    public void markDelivered() {
+        this.status = OrderStatus.DELIVERED;
+        this.deliveredAt = LocalDateTime.now();
+    }
 }

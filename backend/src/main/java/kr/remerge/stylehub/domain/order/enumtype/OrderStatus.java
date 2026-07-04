@@ -9,5 +9,5 @@ public enum OrderStatus {
     COMPLETED, //바이어가 거래를 확정한 상태. 정산 생성 대상
     DISPUTE, // 이의제기가 접수되어 처리 중인 상태
     CANCELED, //주문이 취소된 상태
-    REFUNDED, // 환불 처리가 완료된 상태
+    REFUNDED,  // 환불 처리가 완료된 상태
 }

@@ -2,6 +2,12 @@
 
 import React, { ReactElement, useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router"
+import {
+  getNotifications,
+  getUnreadCount,
+  markAllAsRead as apiMarkAllAsRead,
+  type NotificationResponse,
+} from "@/api/notification/notification.service";
 
 export interface NavItem {
   label: string;
@@ -35,7 +41,7 @@ export interface AdminHeaderProps {
 const DEFAULT_NAV: NavItem[] = [
   { label: "홈", href: "/admin", icon: "home" },
   { label: "사용자", href: "/admin/users", icon: "users" },
-  { label: "결제", href: "/admin/settlements", icon: "receipt" }, 
+  { label: "결제", href: "/admin/settlements", icon: "receipt" },
   { label: "통계", href: "/admin/analytics", icon: "chart-bar" },
 ];
 
@@ -45,198 +51,217 @@ const DEFAULT_USER = {
   role: "관리자",
 };
 
+// 백엔드 NotificationResponse → 헤더 표시용 Notification으로 변환
+function toDisplayNotification(n: NotificationResponse): Notification {
+  return {
+    id: String(n.notificationId),
+    message: n.message,
+    time: formatRelativeTime(n.createdAt),
+    read: n.isRead,
+  };
+}
+
+function formatRelativeTime(isoStr: string): string {
+  try {
+    const diffMs = Date.now() - new Date(isoStr).getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return "방금 전";
+    if (diffMin < 60) return `${diffMin}분 전`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return `${diffHour}시간 전`;
+    return new Date(isoStr).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" });
+  } catch {
+    return isoStr;
+  }
+}
+
 export default function AdminHeader({
-  logo,
-  brandName = "AdminHub",
-  navItems = DEFAULT_NAV,
-  user = DEFAULT_USER,
-  notificationCount = 3,
-  onSearch,
-  onSettingsClick,
-  onNotificationClick,
-  onUserMenuClick,
-}: AdminHeaderProps) {
+                                      logo,
+                                      brandName = "AdminHub",
+                                      navItems = DEFAULT_NAV,
+                                      user = DEFAULT_USER,
+                                      notificationCount, // 더 이상 초기값으로만 쓰지 않고, 실제 API 조회로 덮어씀
+                                      onSearch,
+                                      onSettingsClick,
+                                      onNotificationClick,
+                                      onUserMenuClick,
+                                    }: AdminHeaderProps) {
   const location = useLocation();
   const [activeHref, setActiveHref] = useState(navItems[0]?.href ?? "");
   const [searchQuery, setSearchQuery] = useState("");
-  const [notifCount, setNotifCount] = useState(notificationCount);
+  const [notifCount, setNotifCount] = useState(notificationCount ?? 0);
   const [notifOpen, setNotifOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const navigate = useNavigate();
 
-useEffect(() => {
-  const es = new EventSource('/events');
+  // 마운트 시 안읽음 개수 + 목록 조회
+  // (실시간 push는 AdminLayout의 useNotification 훅이 toast로 별도 처리하므로,
+  //  여기선 자체 EventSource 없이 REST로만 최신 상태를 가져옴)
+  useEffect(() => {
+    getUnreadCount()
+        .then(setNotifCount)
+        .catch((e) => console.error("안읽음 개수 조회 실패:", e));
 
-  es.addEventListener('notification', (e: MessageEvent) => {
-  const data = JSON.parse(e.data);
-  const newNotif: Notification = {
-    id: Date.now().toString(),
-    message: data.message,
-    time: '방금 전',
-    read: false,
-  };
-  setNotifications(prev => [newNotif, ...prev]);
-  setNotifCount(prev => prev + 1);
-});
+    getNotifications()
+        .then((list) => setNotifications(list.map(toDisplayNotification)))
+        .catch((e) => console.error("알림 목록 조회 실패:", e));
+  }, []);
 
-  es.onerror = () => console.warn('SSE 재연결 중...');
+  useEffect(() => {
+    if (!notifOpen) return;
 
-  return () => es.close();
-}, []);
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-notif-panel]')) {
+        setNotifOpen(false);
+      }
+    };
 
-useEffect(() => {
-  if (!notifOpen) return;
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [notifOpen]);
 
-  const handleClickOutside = (e: MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (!target.closest('[data-notif-panel]')) {
-      setNotifOpen(false);
-    }
-  };
-
-  document.addEventListener('mousedown', handleClickOutside);
-  return () => document.removeEventListener('mousedown', handleClickOutside);
-}, [notifOpen]);
-
-const [notifications, setNotifications] = useState<Notification[]>([
-  { id: '1', message: '새 사용자가 가입했습니다.', time: '방금 전', read: false },
-  { id: '2', message: '결제 승인이 완료됐습니다.', time: '5분 전', read: false },
-  { id: '3', message: '서버 점검 예정 안내', time: '1시간 전', read: true },
-]);
-
-useEffect(() => {
-  if (!userMenuOpen) return;
-  const handleClickOutside = (e: MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (!target.closest('[data-user-menu]')) setUserMenuOpen(false);
-  };
-  document.addEventListener('mousedown', handleClickOutside);
-  return () => document.removeEventListener('mousedown', handleClickOutside);
-}, [userMenuOpen]);
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-user-menu]')) setUserMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [userMenuOpen]);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
     onSearch?.(e.target.value);
-};
-const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-  if (e.key === 'Enter' && searchQuery.trim()) {
-    navigate(`/admin/search?q=${encodeURIComponent(searchQuery.trim())}`);
-  }
-};
+  };
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchQuery.trim()) {
+      navigate(`/admin/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
 
-const handleLogout = async () => {
-  try {
-    const response = await fetch('/admin/logout', { method: 'POST' });
-  } catch (error) {
-    console.error('로그아웃 실패:', error);
-  } finally {
-    navigate('/auth/login', { replace: true });
-    onUserMenuClick?.();
-  }
-};
+  const handleLogout = async () => {
+    try {
+      const response = await fetch('/admin/logout', { method: 'POST' });
+    } catch (error) {
+      console.error('로그아웃 실패:', error);
+    } finally {
+      navigate('/auth/login', { replace: true });
+      onUserMenuClick?.();
+    }
+  };
+
+  // 알림 벨 클릭 → 열기 + 전체 읽음 처리(서버 반영)
+  const handleBellClick = async () => {
+    const opening = !notifOpen;
+    setNotifOpen(opening);
+    onNotificationClick?.();
+
+    if (opening && notifCount > 0) {
+      setNotifCount(0);
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      try {
+        await apiMarkAllAsRead();
+      } catch (e) {
+        console.error("알림 읽음 처리 실패:", e);
+      }
+    }
+  };
 
   return (
-    <header style={styles.header}>
-      {/* Left — Brand + Nav */}
-      <div style={styles.left}>
-        <div style={styles.brand}>
-          <Link to="/" style={{ textDecoration: 'none' }}>
-          {logo ? logo : (
-      <>
-        <div style={styles.brandIcon}>
+      <header style={styles.header}>
+        {/* Left — Brand + Nav */}
+        <div style={styles.left}>
+          <div style={styles.brand}>
+            <Link to="/" style={{ textDecoration: 'none' }}>
+              {logo ? logo : (
+                  <>
+                    <div style={styles.brandIcon}>
 
-        </div>
-        <span style={styles.brandName}>{brandName}</span>
-      </>
-    )}
-    </Link>
-        </div>
+                    </div>
+                    <span style={styles.brandName}>{brandName}</span>
+                  </>
+              )}
+            </Link>
+          </div>
 
-        <nav style={styles.nav} aria-label="주 메뉴">
+          <nav style={styles.nav} aria-label="주 메뉴">
             {navItems.map((item) => {
-            const isActive = location.pathname === item.href;
-            return (
-                <Link
-                    key={item.href}
-                    to={item.href}
-                    style={{
+              const isActive = location.pathname === item.href;
+              return (
+                  <Link
+                      key={item.href}
+                      to={item.href}
+                      style={{
                         ...(isActive ? styles.navLinkActive : styles.navLinkInactive),
                         ...styles.navLink,
-                    }}
-                        >
+                      }}
+                  >
                     <NavIcon name={item.icon} />
-                        {item.label}
-                </Link>
-            );
+                    {item.label}
+                  </Link>
+              );
             })}
-        </nav>
+          </nav>
         </div>
 
-      {/* Right — Search + Actions + User */}
+        {/* Right — Search + Actions + User */}
         <div style={styles.right}>
-        {/* Search */}
-        <div style={styles.searchWrap}>
+          {/* Search */}
+          <div style={styles.searchWrap}>
             <SearchIcon />
             <input
-            type="search"
-            placeholder="검색..."
-            value={searchQuery}
-            onChange={handleSearchChange}
-            onKeyDown={handleSearchKeyDown}
-            style={styles.searchInput}
-            aria-label="검색"
-          />
-        </div>
-
-        {/* Notification */}
-        <div style={{ position: 'relative' }} data-notif-panel>
-  <button
-    onClick={() => {
-      setNotifOpen(prev => !prev);
-      setNotifCount(0);
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    }}
-    aria-label={`알림 ${notifCount}개`}
-    style={styles.iconBtn}
-  >
-    <BellIcon />
-    {notifCount > 0 && <span style={styles.badge} aria-hidden="true" />}
-  </button>
-
-  {notifOpen && (
-    <div style={styles.dropdown}>
-      <div style={styles.dropdownHeader}>
-        <span style={styles.dropdownTitle}>알림</span>
-        <button
-          style={styles.clearBtn}
-          onClick={() => setNotifications([])}
-        >
-          모두 지우기
-        </button>
-      </div>
-
-      {notifications.length === 0 ? (
-        <p style={styles.empty}>알림이 없습니다.</p>
-      ) : (
-        notifications.map(n => (
-          <div key={n.id} style={{
-            ...styles.notifItem,
-            background: n.read ? 'transparent' : 'var(--color-background-secondary)',
-          }}>
-            {!n.read && <span style={styles.unreadDot} />}
-            <div style={{ flex: 1 }}>
-              <p style={styles.notifMsg}>{n.message}</p>
-              <p style={styles.notifTime}>{n.time}</p>
-            </div>
+                type="search"
+                placeholder="검색..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                onKeyDown={handleSearchKeyDown}
+                style={styles.searchInput}
+                aria-label="검색"
+            />
           </div>
-        ))
-      )}
-    </div>
-  )}
-</div>
 
-        {/* Settings */}
-        {/*<button
+          {/* Notification */}
+          <div style={{ position: 'relative' }} data-notif-panel>
+            <button
+                onClick={handleBellClick}
+                aria-label={`알림 ${notifCount}개`}
+                style={styles.iconBtn}
+            >
+              <BellIcon />
+              {notifCount > 0 && <span style={styles.badge} aria-hidden="true" />}
+            </button>
+
+            {notifOpen && (
+                <div style={styles.dropdown}>
+                  <div style={styles.dropdownHeader}>
+                    <span style={styles.dropdownTitle}>알림</span>
+                  </div>
+
+                  {notifications.length === 0 ? (
+                      <p style={styles.empty}>알림이 없습니다.</p>
+                  ) : (
+                      notifications.map(n => (
+                          <div key={n.id} style={{
+                            ...styles.notifItem,
+                            background: n.read ? 'transparent' : 'var(--color-background-secondary)',
+                          }}>
+                            {!n.read && <span style={styles.unreadDot} />}
+                            <div style={{ flex: 1 }}>
+                              <p style={styles.notifMsg}>{n.message}</p>
+                              <p style={styles.notifTime}>{n.time}</p>
+                            </div>
+                          </div>
+                      ))
+                  )}
+                </div>
+            )}
+          </div>
+
+          {/* Settings */}
+          {/*<button
           onClick={onSettingsClick}
           aria-label="설정"
           style={styles.iconBtn}
@@ -247,85 +272,85 @@ const handleLogout = async () => {
         <div style={styles.divider} aria-hidden="true" />
         */}
 
-        {/* User menu */}
-        <div style={{ position: 'relative' }} data-user-menu>
-  <button
-    onClick={() => setUserMenuOpen(prev => !prev)}
-    aria-label="사용자 메뉴 열기"
-    aria-haspopup="true"
-    style={styles.userBtn}
-  >
-    <div style={styles.avatar}>
-      <span style={styles.avatarText}>{user.initials}</span>
-    </div>
-    <div style={styles.userInfo}>
-      <p style={styles.userName}>{user.name}</p>
-      <p style={styles.userRole}>{user.role}</p>
-    </div>
-    <ChevronIcon />
-  </button>
+          {/* User menu */}
+          <div style={{ position: 'relative' }} data-user-menu>
+            <button
+                onClick={() => setUserMenuOpen(prev => !prev)}
+                aria-label="사용자 메뉴 열기"
+                aria-haspopup="true"
+                style={styles.userBtn}
+            >
+              <div style={styles.avatar}>
+                <span style={styles.avatarText}>{user.initials}</span>
+              </div>
+              <div style={styles.userInfo}>
+                <p style={styles.userName}>{user.name}</p>
+                <p style={styles.userRole}>{user.role}</p>
+              </div>
+              <ChevronIcon />
+            </button>
 
-  {userMenuOpen && (
-    <div style={styles.dropdown}>
-      <div style={styles.dropdownHeader}>
-        <p style={styles.userDropdownName}>{user.name}</p>
-        <p style={styles.userDropdownRole}>{user.role}</p>
-      </div>
-      <div style={styles.userDropdownDivider} />
-      <button
-        onClick={handleLogout}
-        style={styles.logoutBtn}
-      >
-        <LogoutIcon />
-        로그아웃
-      </button>
-    </div>
-  )}
-</div>
-      </div>
-    </header>
+            {userMenuOpen && (
+                <div style={styles.dropdown}>
+                  <div style={styles.dropdownHeader}>
+                    <p style={styles.userDropdownName}>{user.name}</p>
+                    <p style={styles.userDropdownRole}>{user.role}</p>
+                  </div>
+                  <div style={styles.userDropdownDivider} />
+                  <button
+                      onClick={handleLogout}
+                      style={styles.logoutBtn}
+                  >
+                    <LogoutIcon />
+                    로그아웃
+                  </button>
+                </div>
+            )}
+          </div>
+        </div>
+      </header>
   );
 }
 function LogoutIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+        <polyline points="16 17 21 12 16 7" />
+        <line x1="21" y1="12" x2="9" y2="12" />
+      </svg>
   );
 }
 
 function NavIcon({ name }: { name: string }) {
   const icons: Record<string, React.ReactElement> = {
     home: (
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-        <polyline points="9 22 9 12 15 12 15 22" />
-      </svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
     ),
     users: (
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-      </svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
     ),
     receipt: (
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z" />
-        <line x1="8" y1="10" x2="16" y2="10" />
-        <line x1="8" y1="14" x2="16" y2="14" />
-      </svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1z" />
+          <line x1="8" y1="10" x2="16" y2="10" />
+          <line x1="8" y1="14" x2="16" y2="14" />
+        </svg>
     ),
     "chart-bar": (
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <line x1="18" y1="20" x2="18" y2="10" />
-        <line x1="12" y1="20" x2="12" y2="4" />
-        <line x1="6" y1="20" x2="6" y2="14" />
-        <line x1="2" y1="20" x2="22" y2="20" />
-      </svg>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <line x1="18" y1="20" x2="18" y2="10" />
+          <line x1="12" y1="20" x2="12" y2="4" />
+          <line x1="6" y1="20" x2="6" y2="14" />
+          <line x1="2" y1="20" x2="22" y2="20" />
+        </svg>
     ),
   };
   return icons[name] ?? null;
@@ -333,32 +358,32 @@ function NavIcon({ name }: { name: string }) {
 
 function SearchIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", left: 10, color: "var(--color-text-secondary)" }} aria-hidden="true">
-      <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", left: 10, color: "var(--color-text-secondary)" }} aria-hidden="true">
+        <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </svg>
   );
 }
 function BellIcon() {
   return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </svg>
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </svg>
   );
 }
 function SettingsIcon() {
   return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      </svg>
   );
 }
 function ChevronIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-text-secondary)" }} aria-hidden="true">
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--color-text-secondary)" }} aria-hidden="true">
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
   );
 }
 
@@ -520,113 +545,113 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.3,
   },
   dropdown: {
-  position: 'absolute',
-  top: 'calc(100% + 8px)',
-  right: 0,
-  width: 320,
-  background: '#ffffff',  
-  border: '0.5px solid var(--color-border-secondary)',
-  borderRadius: 12,
-  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.07), 0 12px 32px rgba(0,0,0,0.12)',  // 그림자 강화
-  zIndex: 100,
-  overflow: 'hidden',
-},
-dropdownHeader: {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  padding: '12px 16px',
-  borderBottom: '0.5px solid var(--color-border-tertiary)',
-  position: 'relative',
-  zIndex: 50,
-},
-dropdownTitle: {
-  fontSize: 13,
-  fontWeight: 500,
-  color: 'var(--color-text-primary)',
-},
-clearBtn: {
-  fontSize: 12,
-  color: 'var(--color-text-secondary)',
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  padding: 0,
-},
-notifItem: {
-  display: 'flex',
-  alignItems: 'flex-start',
-  gap: 10,
-  padding: '12px 16px',
-  borderBottom: '0.5px solid var(--color-border-tertiary)',
-},
-unreadDot: {
-  width: 6,
-  height: 6,
-  borderRadius: '50%',
-  background: '#E24B4A',
-  flexShrink: 0,
-  marginTop: 5,
-},
-notifMsg: {
-  fontSize: 13,
-  color: 'var(--color-text-primary)',
-  margin: 0,
-  lineHeight: 1.4,
-},
-notifTime: {
-  fontSize: 11,
-  color: 'var(--color-text-secondary)',
-  margin: '3px 0 0',
-},
-empty: {
-  fontSize: 13,
-  color: 'var(--color-text-secondary)',
-  textAlign: 'center',
-  padding: '24px 0',
-  margin: 0,
-},
-userDropdown: {
-  position: 'absolute',
-  top: 'calc(100% + 8px)',
-  right: 0,
-  width: 200,
-  background: 'var(--color-background-primary)',
-  border: '0.5px solid var(--color-border-secondary)',
-  borderRadius: 12,
-  boxShadow: '0 8px 24px rgba(0,0,0,0.10)',
-  zIndex: 100,
-  overflow: 'hidden',
-},
-userDropdownInfo: {
-  padding: '12px 16px',
-},
-userDropdownName: {
-  fontSize: 13,
-  fontWeight: 500,
-  color: 'var(--color-text-primary)',
-  margin: 0,
-},
-userDropdownRole: {
-  fontSize: 11,
-  color: 'var(--color-text-secondary)',
-  margin: '2px 0 0',
-},
-userDropdownDivider: {
-  height: 0.5,
-  background: 'var(--color-border-tertiary)',
-},
-logoutBtn: {
-  width: '100%',
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  padding: '10px 16px',
-  fontSize: 13,
-  color: '#E24B4A',
-  background: 'none',
-  border: 'none',
-  cursor: 'pointer',
-  textAlign: 'left' as const,
-},
+    position: 'absolute',
+    top: 'calc(100% + 8px)',
+    right: 0,
+    width: 320,
+    background: '#ffffff',
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 12,
+    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.07), 0 12px 32px rgba(0,0,0,0.12)',  // 그림자 강화
+    zIndex: 100,
+    overflow: 'hidden',
+  },
+  dropdownHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '12px 16px',
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
+    position: 'relative',
+    zIndex: 50,
+  },
+  dropdownTitle: {
+    fontSize: 13,
+    fontWeight: 500,
+    color: 'var(--color-text-primary)',
+  },
+  clearBtn: {
+    fontSize: 12,
+    color: 'var(--color-text-secondary)',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: 0,
+  },
+  notifItem: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: '12px 16px',
+    borderBottom: '0.5px solid var(--color-border-tertiary)',
+  },
+  unreadDot: {
+    width: 6,
+    height: 6,
+    borderRadius: '50%',
+    background: '#E24B4A',
+    flexShrink: 0,
+    marginTop: 5,
+  },
+  notifMsg: {
+    fontSize: 13,
+    color: 'var(--color-text-primary)',
+    margin: 0,
+    lineHeight: 1.4,
+  },
+  notifTime: {
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+    margin: '3px 0 0',
+  },
+  empty: {
+    fontSize: 13,
+    color: 'var(--color-text-secondary)',
+    textAlign: 'center',
+    padding: '24px 0',
+    margin: 0,
+  },
+  userDropdown: {
+    position: 'absolute',
+    top: 'calc(100% + 8px)',
+    right: 0,
+    width: 200,
+    background: 'var(--color-background-primary)',
+    border: '0.5px solid var(--color-border-secondary)',
+    borderRadius: 12,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.10)',
+    zIndex: 100,
+    overflow: 'hidden',
+  },
+  userDropdownInfo: {
+    padding: '12px 16px',
+  },
+  userDropdownName: {
+    fontSize: 13,
+    fontWeight: 500,
+    color: 'var(--color-text-primary)',
+    margin: 0,
+  },
+  userDropdownRole: {
+    fontSize: 11,
+    color: 'var(--color-text-secondary)',
+    margin: '2px 0 0',
+  },
+  userDropdownDivider: {
+    height: 0.5,
+    background: 'var(--color-border-tertiary)',
+  },
+  logoutBtn: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '10px 16px',
+    fontSize: 13,
+    color: '#E24B4A',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    textAlign: 'left' as const,
+  },
 };

@@ -3,9 +3,10 @@ package kr.remerge.stylehub.domain.quote.service;
 import kr.remerge.stylehub.domain.quote.constant.QuoteStatusCode;
 import kr.remerge.stylehub.domain.quote.entity.Quote;
 import kr.remerge.stylehub.domain.quote.repository.QuoteRepository;
+import kr.remerge.stylehub.domain.sourcing.enumtype.SourcingStatus;
 import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.enumtype.UserRole;
-import kr.remerge.stylehub.domain.user.repository.UserRepository;
+import kr.remerge.stylehub.domain.user.support.UserReader;
 import kr.remerge.stylehub.global.exception.BusinessException;
 import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -21,16 +22,13 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class QuoteStatusService {
 
-    private final UserRepository userRepository;
+    private final UserReader userReader;
     private final QuoteRepository quoteRepository;
 
     @Transactional
     public void updateStatus(Integer userId, Integer quoteId, String newStatus) {
 
-        User actor = userRepository.findById(userId)
-                .orElseThrow(() ->
-                        new BusinessException(ErrorCode.USER_NOT_FOUND)
-                );
+        User actor = userReader.getUser(userId);
 
         Quote quote = quoteRepository.findById(quoteId)
                 .orElseThrow(() ->
@@ -45,8 +43,8 @@ public class QuoteStatusService {
 
         if (QuoteStatusCode.APPROVED.equals(newStatus)) {
             rejectOtherQuotes(quote);
+            quote.getSourcingRequest().trade();
         }
-
 
     }
 
@@ -56,14 +54,14 @@ public class QuoteStatusService {
                 .getSourcingRequestId();
 
         quoteRepository.findBySourcingRequest_SourcingRequestIdAndQuoteIdNot(
-                sourcingRequestId,
-                approvedQuote.getQuoteId()
-        )
+                        sourcingRequestId,
+                        approvedQuote.getQuoteId()
+                )
                 .stream()
                 .filter(quote ->
                         QuoteStatusCode.SUBMITTED.equals(quote.getStatus())
-                        || QuoteStatusCode.NEGOTIATING.equals(quote.getStatus())
-                        || QuoteStatusCode.SAMPLE_REQUESTED.equals(quote.getStatus())
+                                || QuoteStatusCode.NEGOTIATING.equals(quote.getStatus())
+                                || QuoteStatusCode.SAMPLE_REQUESTED.equals(quote.getStatus())
                 )
                 .forEach(quote ->
                         quote.changeStatus(QuoteStatusCode.NOT_SELECTED));
@@ -82,16 +80,23 @@ public class QuoteStatusService {
 
             case QuoteStatusCode.SUBMITTED ->
                     Set.of(
-                    QuoteStatusCode.APPROVED,
-                    QuoteStatusCode.REJECTED,
-                    QuoteStatusCode.NEGOTIATING,
-                    QuoteStatusCode.SAMPLE_REQUESTED
-            ).contains(newStatus);
+                            QuoteStatusCode.APPROVED,
+                            QuoteStatusCode.REJECTED,
+                            QuoteStatusCode.NEGOTIATING,
+                            QuoteStatusCode.SAMPLE_REQUESTED
+                    ).contains(newStatus);
 
             case QuoteStatusCode.SAMPLE_REQUESTED -> Set.of(
                     QuoteStatusCode.APPROVED,
                     QuoteStatusCode.REJECTED
             ).contains(newStatus);
+
+            case QuoteStatusCode.NEGOTIATING ->
+                    Set.of(
+                            QuoteStatusCode.APPROVED,
+                            QuoteStatusCode.REJECTED,
+                            QuoteStatusCode.SAMPLE_REQUESTED
+                    ).contains(newStatus);
 
             default -> false;
         };
@@ -103,6 +108,8 @@ public class QuoteStatusService {
 
     }
 
+    // 액션(상태 변경) 권한: 관리자 / 견적을 요청한 바이어 본인 / 바이어 회사 대표
+    // (조회 쪽 validateQuoteAccess와 셀러측 "본인+대표" 패턴을 바이어측에도 대칭 적용)
     private void validateStatusChangeAuthority(User actor, Quote quote) {
 
         if (actor.getRole() == UserRole.ADMIN) {
@@ -114,7 +121,15 @@ public class QuoteStatusService {
                 actor.getUserId()
         );
 
-        if (!isBuyer) {
+        boolean isBuyerCompanyPresident =
+                actor.getRole() == UserRole.PRESIDENT
+                        && actor.getCompany() != null
+                        && Objects.equals(
+                        quote.getBuyer().getCompany().getCompanyId(),
+                        actor.getCompany().getCompanyId()
+                );
+
+        if (!isBuyer && !isBuyerCompanyPresident) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }

@@ -41,6 +41,11 @@ public class Contract {
     @Column(name = "contract_no", nullable = false, unique = true, length = 30)
     private String contractNo;
 
+    // 기존 계약 데이터와의 호환을 위해 컬럼은 우선 nullable로 추가한다.
+    // 신규 생성과 수정 요청에서는 DTO와 엔티티에서 계약명을 필수 검증한다.
+    @Column(name = "contract_name", length = 150)
+    private String contractName;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_contract_id")
     private Contract parentContract;
@@ -93,23 +98,32 @@ public class Contract {
     @Column(name = "special_terms")
     private String specialTerms;
 
+    @Column(name = "pdf_hash", length = 64)
+    private String pdfHash;
+
+    @Column(name = "shipping_fee", nullable = false)
+    private Long shippingFee;
+
     private Contract(
             Quote quote,
             Company company,
             String buyerCompanyName,
             String sellerCompanyName,
             String contractNo,
+            String contractName,
             Long contractAmount,
             LocalDate deliveryDate,
             String paymentTerms,
             String returnPolicy,
-            String specialTerms
+            String specialTerms,
+            Long shippingFee
     ) {
         this.quote = quote;
         this.company = company;
         this.buyerCompanyName = buyerCompanyName;
         this.sellerCompanyName = sellerCompanyName;
         this.contractNo = contractNo;
+        this.contractName = contractName;
         this.contractAmount = contractAmount;
         this.deliveryDate = deliveryDate;
         this.paymentTerms = paymentTerms;
@@ -117,6 +131,7 @@ public class Contract {
         this.specialTerms = specialTerms;
         this.status = ContractStatus.DRAFT;
         this.version = 1;
+        this.shippingFee = shippingFee;
     }
 
     public void sellerSign() {
@@ -157,7 +172,17 @@ public class Contract {
         this.contractHash = contractHash;
     }
 
+    public void completePdf(
+            String pdfUrl,
+            String pdfHash
+    ) {
+        this.pdfUrl = pdfUrl;
+
+        this.pdfHash = pdfHash;
+    }
+
     public void updateDraft(
+            String contractName,
             LocalDate deliveryDate,
             String paymentTerms,
             String returnPolicy,
@@ -166,6 +191,18 @@ public class Contract {
         if (this.status != ContractStatus.DRAFT) {
             throw new IllegalStateException(
                     "초안 상태의 계약서만 수정할 수 있습니다."
+            );
+        }
+
+        if (contractName == null || contractName.isBlank()) {
+            throw new IllegalArgumentException(
+                    "계약명은 필수입니다."
+            );
+        }
+
+        if (contractName.trim().length() > 150) {
+            throw new IllegalArgumentException(
+                    "계약명은 150자 이하여야 합니다."
             );
         }
 
@@ -187,6 +224,7 @@ public class Contract {
             );
         }
 
+        this.contractName = contractName.trim();
         this.deliveryDate = deliveryDate;
         this.paymentTerms = paymentTerms;
         this.returnPolicy = returnPolicy;
@@ -196,11 +234,20 @@ public class Contract {
     public static Contract createDraftFromQuote(
             Quote quote,
             String contractNo,
+            String contractName,
             LocalDate deliveryDate,
             String paymentTerms,
             String returnPolicy,
             String specialTerms
     ) {
+
+        if (contractName == null || contractName.isBlank()) {
+            throw new IllegalArgumentException("계약명은 필수입니다.");
+        }
+
+        if (contractName.trim().length() > 150) {
+            throw new IllegalArgumentException("계약명은 150자 이하여야 합니다.");
+        }
 
         if (deliveryDate == null) {
             throw new IllegalArgumentException("납품 예정일은 필수입니다.");
@@ -220,11 +267,13 @@ public class Contract {
                 quote.getBuyer().getCompany().getName(),
                 quote.getCompany().getName(),
                 contractNo,
+                contractName.trim(),
                 quote.getTotalAmount(),
                 deliveryDate,
                 paymentTerms,
                 returnPolicy,
-                specialTerms
+                specialTerms,
+                quote.getShippingFee()
         );
     }
 }

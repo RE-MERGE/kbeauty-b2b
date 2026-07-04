@@ -6,12 +6,14 @@ import kr.remerge.stylehub.domain.contract.enumtype.ContractStatus;
 public record SellerContractCreateResponse(
         Integer contractId,
         Integer quoteId,
+        String contractName,
         ContractStatus status
 ) {
     public static SellerContractCreateResponse from(Contract contract) {
         return new SellerContractCreateResponse(
                 contract.getContractId(),
                 contract.getQuote().getQuoteId(),
+                contract.getContractName(),
                 contract.getStatus()
         );
     }

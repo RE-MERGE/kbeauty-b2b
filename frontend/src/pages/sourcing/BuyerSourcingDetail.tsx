@@ -354,7 +354,7 @@ function BidDetailModal({
                     <button
                         onClick={() => alert("TODO: 거절 API")}
                         className="flex-1 py-2.5 border border-red-200 text-red-500 hover:bg-red-50 rounded font-semibold text-sm transition-colors flex items-center justify-center gap-1.5"
-                    >
+                    >새
                       <XCircle size={14} /> 거절
                     </button>
 

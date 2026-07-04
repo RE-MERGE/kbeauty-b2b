@@ -13,6 +13,7 @@ public record BuyerContractDetailResponse(
 
         Integer contractId,
         String contractNo,
+        String contractName,
 
         Integer quoteId,
         String quoteNo,
@@ -54,6 +55,7 @@ public record BuyerContractDetailResponse(
         return new BuyerContractDetailResponse(
                 contract.getContractId(),
                 contract.getContractNo(),
+                contract.getContractName(),
 
                 quote.getQuoteId(),
                 quote.getQuoteNo(),

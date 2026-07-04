@@ -2,6 +2,7 @@ package kr.remerge.stylehub.domain.negotiation.entity;
 
 import jakarta.persistence.*;
 import kr.remerge.stylehub.domain.contract.entity.Contract;
+import kr.remerge.stylehub.domain.negotiation.dto.NegotiationCreateRequest;
 import kr.remerge.stylehub.domain.quote.entity.Quote;
 import kr.remerge.stylehub.domain.user.entity.User;
 import lombok.AccessLevel;
@@ -81,6 +82,10 @@ public class Negotiation {
         this.title = title;
         this.status = "OPEN";
         this.openedAt = LocalDateTime.now();
+    }
+
+    public static Negotiation from(NegotiationCreateRequest request) {
+        return null;
     }
 
     @PrePersist

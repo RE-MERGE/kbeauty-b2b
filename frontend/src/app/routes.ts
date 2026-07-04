@@ -46,6 +46,7 @@ import {SellerProductRegister} from "@/pages/product/SellerProductRegister";
 import {SellerQuoteWrite} from "@/pages/quote/SellerQuoteWrite";
 import {SellerQuoteList} from "@/pages/quote/SellerQuoteList";
 import BuyerQuoteList from "@/pages/quote/BuyerQuoteList";
+import {QuoteDetailBuyer, QuoteDetailSeller} from "@/pages/quote/QuoteDetailWrappers";
 
 import {SellerDashboard} from "@/pages/seller/SellerDashboard";
 import {SellerProductManage} from "@/pages/seller/SellerProductManage";
@@ -140,11 +141,13 @@ export const router = createBrowserRouter([
                     {path: "orders", Component: Orders},
                     {path: "orders/:id", Component: OrderDetail},
                     {path: "quotes", Component: BuyerQuoteList},
+                    {path: "quotes/:quoteId", Component: QuoteDetailBuyer},
                     {path: "sourcing-request", Component: SourcingRequest},
                     {path: "contracts/:contractId/sign", Component: BuyerContractSign},
                     {path: "shipping-quotes", Component: BuyerShippingQuotes},
                     {path: "my-sourcing", Component: BuyerSourcingList},
                     {path: "sourcing-detail/:requestId", Component: BuyerSourcingDetail},
+
                 ],
             },
             {
@@ -162,6 +165,7 @@ export const router = createBrowserRouter([
                     {path: "contracts/new/:quoteId", Component: SellerContractCreate},
                     {path: "contracts/quotes/:quoteId", Component: SellerContractSign},
                     {path: "quotes", Component: SellerQuoteList},
+                    {path: "quotes/:quoteId", Component: QuoteDetailSeller},
                     {path: "sourcing-detail/:requestId", Component: SellerSourcingDetail},
                 ],
             },

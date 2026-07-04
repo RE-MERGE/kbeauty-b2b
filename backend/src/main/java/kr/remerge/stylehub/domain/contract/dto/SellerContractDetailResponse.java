@@ -11,6 +11,7 @@ import java.util.List;
 public record SellerContractDetailResponse(
         Integer contractId,
         String contractNo,
+        String contractName,
         Integer quoteId,
         String quoteNo,
         ContractStatus status,
@@ -41,6 +42,7 @@ public record SellerContractDetailResponse(
         return new SellerContractDetailResponse(
                 contract.getContractId(),
                 contract.getContractNo(),
+                contract.getContractName(),
                 contract.getQuote().getQuoteId(),
                 contract.getQuote().getQuoteNo(),
                 contract.getStatus(),

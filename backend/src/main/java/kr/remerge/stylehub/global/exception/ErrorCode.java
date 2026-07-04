@@ -93,6 +93,7 @@ public enum ErrorCode {
     INVALID_QUOTE_STATUS(HttpStatus.BAD_REQUEST, "QUOTE_003", "변경할 수 없는 견적 상태입니다."),
     QUOTE_SAMPLE_NOT_AVAILABLE(HttpStatus.BAD_REQUEST,"QUOTE_004","샘플 제공이 불가능한 견적서입니다."),
     QUOTE_SAMPLE_ITEM_NOT_FOUND(HttpStatus.BAD_REQUEST,"QUOTE_005","결제할 샘플 품목이 없습니다."),
+    QUOTE_ALREADY_SUBMITTED(HttpStatus.CONFLICT,"QUOTE_006","이미 해당 소싱 요청에 견적서를 제출했습니다."),
 
     // ───────────────────────────────────────────
     // 계약 (CONTRACT)
@@ -101,6 +102,8 @@ public enum ErrorCode {
     CONTRACT_ALREADY_SIGNED(HttpStatus.BAD_REQUEST, "CONTRACT_002", "이미 서명된 계약서입니다."),
     CONTRACT_ALREADY_EXISTS(HttpStatus.CONFLICT, "CONTRACT_003", "이미 생성된 계약서가 있습니다."),
     INVALID_CONTRACT_STATUS(HttpStatus.BAD_REQUEST, "CONTRACT_004", "현재 상태에서는 계약서를 처리할 수 없습니다."),
+    CONTRACT_CONTENT_CHANGED(HttpStatus.CONFLICT,"CONTRACT_006","서명 이후 계약 내용이 변경되어 진행할 수 없습니다."),
+
     // ───────────────────────────────────────────
     // 소싱 (SOURCING)
     // ───────────────────────────────────────────

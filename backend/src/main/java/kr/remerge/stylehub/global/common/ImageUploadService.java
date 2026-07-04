@@ -79,4 +79,42 @@ public class ImageUploadService {
             throw new RuntimeException("PDF 업로드 실패", e);
         }
     }
+
+    public String uploadPdf(byte[] pdfBytes, String folder) {
+
+        if (pdfBytes == null || pdfBytes.length == 0) {
+            throw new IllegalArgumentException("업로드할 PDF 데이터가 없습니다");
+        }
+
+        String fileName =
+                folder + "/" + UUID.randomUUID() + ".pdf";
+
+        String uploadUrl =
+                supabaseUrl
+                        + "/storage/v1/object"
+                        + pdfBucket
+                        + "/"
+                        + fileName;
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(supabaseKey);
+        headers.setContentType(MediaType.APPLICATION_PDF);
+
+        HttpEntity<byte[]> entity =
+                new HttpEntity<>(pdfBytes, headers);
+
+        restTemplate.exchange(
+                uploadUrl,
+                HttpMethod.POST,
+                entity,
+                String.class
+        );
+
+        return supabaseUrl
+                + "/storage/v1/object/public/"
+                + pdfBucket
+                + "/"
+                + fileName;
+
+    }
 }

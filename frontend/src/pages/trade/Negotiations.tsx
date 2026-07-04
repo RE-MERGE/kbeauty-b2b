@@ -45,6 +45,7 @@ type Negotiation = {
   sellerName: string;
   status: NegotiationStatus;
   lastUpdatedAt: string;
+  items: NegotiationItem[];
 };
 
 const statusConfig: Record<
@@ -77,120 +78,11 @@ const statusConfig: Record<
   },
 };
 
-const sampleNegotiations: Negotiation[] = [
-  {
-    id: "NEG-2024-001",
-    targetType: "QUOTE",
-    targetId: "QT-2024-0142",
-    title: "여성 린넨 오버핏 블라우스 견적 단가 협의",
-    buyerName: "스타일마켓㈜",
-    sellerName: "르블랑 어패럴",
-    status: "APPROVED",
-    lastUpdatedAt: "2024.05.20 14:30",
-    items: [
-      {
-        id: "ITEM-001",
-        writer: "BUYER",
-        writerName: "스타일마켓㈜",
-        status: "APPROVED",
-        title: "수량 증가 시 단가 조정 요청",
-        content:
-          "200장 기준 단가가 14,000원으로 확인됩니다. 300장 주문 시 추가 할인 가능 여부를 확인 부탁드립니다.",
-        createdAt: "2024.05.20 10:12",
-        approvedAt: "2024.05.20 10:40",
-        adminMemo: "외부 연락처 없음. 가격 협의 내용 정상 확인 후 전달.",
-        files: ["작업지시서_v1.xlsx", "블라우스_참고이미지.zip"],
-      },
-      {
-        id: "ITEM-002",
-        writer: "SELLER",
-        writerName: "르블랑 어패럴",
-        status: "APPROVED",
-        title: "300장 기준 수정 견적 전달",
-        content:
-          "300장 이상 주문 시 장당 13,500원까지 조정 가능합니다. 단, 샘플 확인 후 본 생산 진행 조건입니다.",
-        createdAt: "2024.05.20 13:10",
-        approvedAt: "2024.05.20 14:30",
-        adminMemo: "수정 견적서 첨부 확인 완료.",
-        files: ["수정견적서_QT-2024-0142.pdf"],
-      },
-    ],
-  },
-  {
-    id: "NEG-2024-002",
-    targetType: "ORDER",
-    targetId: "ORD-2024-0841",
-    title: "출고 일정 및 포장 방식 협의",
-    buyerName: "스타일마켓㈜",
-    sellerName: "르블랑 어패럴",
-    status: "PENDING",
-    lastUpdatedAt: "2024.05.21 09:40",
-    items: [
-      {
-        id: "ITEM-003",
-        writer: "SELLER",
-        writerName: "르블랑 어패럴",
-        status: "APPROVED",
-        title: "원단 입고 지연 안내",
-        content:
-          "원단 입고가 하루 지연되어 출고일이 1일 늦어질 수 있습니다. 납기 변경 가능 여부 확인 부탁드립니다.",
-        createdAt: "2024.05.21 09:10",
-        approvedAt: "2024.05.21 09:25",
-        files: ["입고지연_공급사확인서.pdf"],
-      },
-      {
-        id: "ITEM-004",
-        writer: "BUYER",
-        writerName: "스타일마켓㈜",
-        status: "PENDING",
-        title: "포장 방식 추가 요청",
-        content:
-          "출고 지연은 괜찮습니다. 대신 컬러별로 별도 포장 후 박스 라벨에 컬러명을 표기해 주세요.",
-        createdAt: "2024.05.21 09:40",
-        files: ["포장라벨_예시.png"],
-      },
-    ],
-  },
-  {
-    id: "NEG-2024-003",
-    targetType: "ORDER",
-    targetId: "ORD-2024-0791",
-    title: "주문 취소 전 수량 조정 협의",
-    buyerName: "온라인샵 패션픽",
-    sellerName: "어반드레스",
-    status: "DONE",
-    lastUpdatedAt: "2024.05.18 16:20",
-    items: [
-      {
-        id: "ITEM-005",
-        writer: "BUYER",
-        writerName: "온라인샵 패션픽",
-        status: "APPROVED",
-        title: "수량 조정 요청",
-        content: "45장에서 30장으로 수량 조정이 가능한지 문의드립니다.",
-        createdAt: "2024.05.18 15:30",
-        approvedAt: "2024.05.18 15:45",
-        files: [],
-      },
-      {
-        id: "ITEM-006",
-        writer: "SELLER",
-        writerName: "어반드레스",
-        status: "APPROVED",
-        title: "최소 생산 수량 미달 안내",
-        content: "최소 생산 수량 미달로 30장 진행은 어렵습니다.",
-        createdAt: "2024.05.18 16:20",
-        approvedAt: "2024.05.18 16:40",
-        files: [],
-      },
-    ],
-  },
-];
 
 export function Negotiations() {
 
   const [negotiations, setNegotiations] = useState<Negotiation[]>([]);
-  const [selectedId, setSelectedId] = useState<String | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"ALL" | TargetType>("ALL");
   const [search, setSearch] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);

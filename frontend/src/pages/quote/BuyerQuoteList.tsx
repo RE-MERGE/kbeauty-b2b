@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
   Check,
   CheckCircle2,
   Clock3,
-  Eye,
   FileText,
   FlaskConical,
+  MessageSquareText,
   Search,
   X,
   XCircle,
@@ -22,67 +22,38 @@ type QuoteStatus =
   | "NOT_SELECTED"
   | "EXPIRED";
 
+type SampleOrderStatus =
+  | "PENDING"
+  | "CONFIRMED"
+  | "PREPARING"
+  | "SHIPPED"
+  | "DELIVERED"
+  | "COMPLETED"
+  | "DISPUTE"
+  | "CANCELED"
+  | "REFUNDED";
+
 type BuyerQuote = {
   quoteId: number;
   quoteNo: string;
   sourcingRequestId: number;
   productName: string;
-  sellerName: string;
-  companyName: string;
   totalAmount: number;
   leadTimeDays: number;
   validUntil: string;
   sampleAvailable: boolean;
   status: QuoteStatus;
   submittedAt: string;
+  viewedAt?: string | null;
+  sampleOrderId: number | null;
+  sampleOrderStatus: SampleOrderStatus | null;
 };
 
 type QuoteFilter = "ALL" | "REVIEW" | "APPROVED" | "CLOSED";
 
 type PendingAction = {
   quote: BuyerQuote;
-  status: "APPROVED" | "REJECTED";
-};
-
-const statusConfig: Record<
-  QuoteStatus,
-  { label: string; className: string; icon: ReactNode }
-> = {
-  SUBMITTED: {
-    label: "검토 가능",
-    className: "border-blue-200 bg-blue-50 text-blue-700",
-    icon: <FileText size={12} />,
-  },
-  NEGOTIATING: {
-    label: "협의 중",
-    className: "border-violet-200 bg-violet-50 text-violet-700",
-    icon: <Clock3 size={12} />,
-  },
-  SAMPLE_REQUESTED: {
-    label: "샘플 진행",
-    className: "border-amber-200 bg-amber-50 text-amber-700",
-    icon: <FlaskConical size={12} />,
-  },
-  APPROVED: {
-    label: "채택 완료",
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    icon: <CheckCircle2 size={12} />,
-  },
-  REJECTED: {
-    label: "거절",
-    className: "border-slate-200 bg-slate-100 text-slate-600",
-    icon: <XCircle size={12} />,
-  },
-  NOT_SELECTED: {
-    label: "미채택",
-    className: "border-slate-200 bg-slate-100 text-slate-600",
-    icon: <XCircle size={12} />,
-  },
-  EXPIRED: {
-    label: "기간 만료",
-    className: "border-rose-200 bg-rose-50 text-rose-700",
-    icon: <Clock3 size={12} />,
-  },
+  status: "APPROVED" | "REJECTED" | "NEGOTIATING";
 };
 
 const filters: Array<{ value: QuoteFilter; label: string }> = [
@@ -114,6 +85,71 @@ function getRemainingDays(value: string) {
   return Math.ceil(
     (end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
   );
+}
+
+function getSampleOrderDisplay(status: SampleOrderStatus | null) {
+  switch (status) {
+    case "PENDING":
+      return {
+        label: "샘플 결제 대기",
+        className: "border-amber-200 bg-amber-50 text-amber-700",
+      };
+    case "CONFIRMED":
+    case "PREPARING":
+      return {
+        label: "샘플 결제 완료",
+        className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      };
+    case "SHIPPED":
+      return {
+        label: "샘플 배송 중",
+        className: "border-blue-200 bg-blue-50 text-blue-700",
+      };
+    case "DELIVERED":
+    case "COMPLETED":
+      return {
+        label: "샘플 수령 완료",
+        className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      };
+    case "DISPUTE":
+      return {
+        label: "샘플 확인 필요",
+        className: "border-rose-200 bg-rose-50 text-rose-700",
+      };
+    default:
+      return null;
+  }
+}
+
+function getQuoteResultDisplay(status: QuoteStatus) {
+  switch (status) {
+    case "APPROVED":
+      return {
+        label: "계약서 수신 대기",
+        className: "border-blue-200 bg-blue-50 text-blue-700",
+        icon: <Clock3 size={13} />,
+      };
+    case "REJECTED":
+      return {
+        label: "거절 완료",
+        className: "border-rose-200 bg-rose-50 text-rose-700",
+        icon: <X size={13} />,
+      };
+    case "NOT_SELECTED":
+      return {
+        label: "미채택",
+        className: "border-slate-200 bg-slate-100 text-slate-600",
+        icon: <X size={13} />,
+      };
+    case "EXPIRED":
+      return {
+        label: "기간 만료",
+        className: "border-slate-200 bg-slate-100 text-slate-500",
+        icon: <Clock3 size={13} />,
+      };
+    default:
+      return null;
+  }
 }
 
 function matchesFilter(status: QuoteStatus, filter: QuoteFilter) {
@@ -179,8 +215,6 @@ export default function BuyerQuoteList() {
         keyword.length === 0 ||
         quote.quoteNo.toLowerCase().includes(keyword) ||
         quote.productName.toLowerCase().includes(keyword) ||
-        quote.sellerName?.toLowerCase().includes(keyword) ||
-        quote.companyName?.toLowerCase().includes(keyword) ||
         String(quote.sourcingRequestId).includes(keyword);
 
       return matchesSearch && matchesFilter(quote.status, activeFilter);
@@ -198,6 +232,27 @@ export default function BuyerQuoteList() {
 
     return Array.from(groups.entries());
   }, [visibleQuotes]);
+
+  const supplierAliases = useMemo(() => {
+    const aliases = new Map<number, string>();
+    const groups = new Map<number, BuyerQuote[]>();
+
+    quotes.forEach((quote) => {
+      const group = groups.get(quote.sourcingRequestId) ?? [];
+      group.push(quote);
+      groups.set(quote.sourcingRequestId, group);
+    });
+
+    groups.forEach((group) => {
+      group
+        .sort((left, right) => left.quoteId - right.quoteId)
+        .forEach((quote, index) => {
+          aliases.set(quote.quoteId, String.fromCharCode(65 + index));
+        });
+    });
+
+    return aliases;
+  }, [quotes]);
 
   const counts = {
     sourcing: new Set(quotes.map((quote) => quote.sourcingRequestId)).size,
@@ -252,9 +307,20 @@ export default function BuyerQuoteList() {
       setActionMessage(
         status === "APPROVED"
           ? "견적을 확정했습니다. 셀러가 계약서를 작성한 후 전달할 예정입니다."
-          : "견적을 거절했습니다."
+          : status === "NEGOTIATING"
+            ? "견적 협의를 요청했습니다."
+            : "견적을 거절했습니다."
       );
       setPendingAction(null);
+
+      if (status === "NEGOTIATING") {
+        navigate("/negotiations", {
+          state: {
+            quoteId: quote.quoteId,
+            requestId: quote.sourcingRequestId,
+          },
+        });
+      }
     } catch (error) {
       console.error("견적 상태 변경 실패", error);
       setActionError(
@@ -267,35 +333,65 @@ export default function BuyerQuoteList() {
     }
   };
 
+  const handleSamplePayment = async (quote: BuyerQuote) => {
+    try {
+      setIsUpdating(true);
+      setActionError("");
+
+      if (quote.status !== "SAMPLE_REQUESTED") {
+        await api.patch(`/quotes/${quote.quoteId}/status`, {
+          status: "SAMPLE_REQUESTED",
+        });
+
+        setQuotes((currentQuotes) =>
+          currentQuotes.map((currentQuote) =>
+            currentQuote.quoteId === quote.quoteId
+              ? { ...currentQuote, status: "SAMPLE_REQUESTED" }
+              : currentQuote
+          )
+        );
+      }
+
+      navigate(`/checkout?type=sample&quoteId=${quote.quoteId}`);
+    } catch (error) {
+      console.error("샘플 결제 요청 실패", error);
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "샘플 결제를 시작하지 못했습니다."
+      );
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
-        <header className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="min-h-screen bg-[#f7f9fb]">
+      <main className="mx-auto w-full max-w-[1440px] px-4 py-7 sm:px-6 lg:px-10">
+        <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-bold text-primary">소싱 관리</p>
-            <h1 className="mt-1 text-2xl font-black text-slate-950">
-              받은 견적
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              소싱 요청별로 접수된 견적의 금액과 납기 조건을 비교합니다.
+            <h1 className="text-2xl font-black text-slate-950">받은 견적</h1>
+            <p className="mt-2 text-sm text-slate-500">
+              진행 중인 소싱 요청에 도착한 견적의 금액과 납기 조건을
+              비교합니다.
             </p>
           </div>
           <button
             type="button"
             onClick={() => navigate("/buyer/my-sourcing")}
-            className="h-10 border border-slate-200 bg-white px-4 text-sm font-bold text-slate-600 shadow-sm transition hover:border-primary hover:text-primary"
+            className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-primary hover:text-primary"
           >
             소싱 요청 목록
           </button>
         </header>
 
-        <section className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <section className="mb-7 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5">
           {[
             {
               label: "소싱 요청",
               value: counts.sourcing,
               icon: <FileText size={17} />,
-              tone: "bg-slate-100 text-slate-600",
+              tone: "bg-slate-100 text-slate-700",
             },
             {
               label: "접수 견적",
@@ -318,19 +414,20 @@ export default function BuyerQuoteList() {
           ].map((item) => (
             <div
               key={item.label}
-              className="border border-slate-200 bg-white px-4 py-4 shadow-sm"
+              className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:border-slate-300"
             >
               <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-slate-500">
-                  {item.label}
-                </span>
                 <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-md ${item.tone}`}
+                  className={`flex h-9 w-9 items-center justify-center rounded-md ${item.tone}`}
                 >
                   {item.icon}
                 </span>
+                <span className="text-xs font-bold text-slate-400">현재</span>
               </div>
-              <p className="mt-2 text-2xl font-black text-slate-950">
+              <p className="mt-4 text-sm font-bold text-slate-500">
+                {item.label}
+              </p>
+              <p className="mt-1 text-2xl font-black text-slate-950">
                 {item.value}
                 <span className="ml-1 text-sm font-bold text-slate-400">
                   건
@@ -340,26 +437,37 @@ export default function BuyerQuoteList() {
           ))}
         </section>
 
-        <section className="mb-5 border border-slate-200 bg-white px-4 pt-4 shadow-sm sm:px-5">
+        <section className="mb-5 border-b border-slate-300">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex gap-1 overflow-x-auto">
+            <div className="flex gap-3 overflow-x-auto">
               {filters.map((filter) => (
                 <button
                   key={filter.value}
                   type="button"
                   onClick={() => handleFilter(filter.value)}
-                  className={`h-9 shrink-0 border-b-2 px-3 text-sm font-bold transition-colors ${
+                  className={`h-11 shrink-0 border-b-2 px-2 text-sm font-bold transition-colors ${
                     activeFilter === filter.value
-                      ? "border-primary text-primary"
+                      ? "border-blue-600 text-blue-700"
                       : "border-transparent text-slate-500 hover:text-slate-900"
                   }`}
                 >
                   {filter.label}
+                  <span className="ml-1 text-xs text-slate-400">
+                    {filter.value === "ALL"
+                      ? counts.all
+                      : filter.value === "REVIEW"
+                        ? counts.review
+                        : filter.value === "APPROVED"
+                          ? counts.approved
+                          : quotes.filter((quote) =>
+                              matchesFilter(quote.status, "CLOSED")
+                            ).length}
+                  </span>
                 </button>
               ))}
             </div>
 
-            <label className="relative mb-3 block w-full lg:w-96">
+            <label className="relative mb-3 block w-full lg:w-80">
               <Search
                 size={16}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -367,8 +475,8 @@ export default function BuyerQuoteList() {
               <input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="견적번호, 상품명, 공급사, 소싱 요청 ID"
-                className="h-10 w-full border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:bg-white"
+                placeholder="견적번호, 상품명, 요청번호 검색"
+                className="h-10 w-full rounded-md border border-slate-300 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
               />
             </label>
           </div>
@@ -436,100 +544,166 @@ export default function BuyerQuoteList() {
                 ...groupQuotes.map((quote) => quote.leadTimeDays)
               );
               const representativeProduct = groupQuotes[0]?.productName ?? "-";
+              const groupHasApprovedQuote = quotes.some(
+                (quote) =>
+                  quote.sourcingRequestId === sourcingRequestId &&
+                  quote.status === "APPROVED"
+              );
 
               return (
                 <section
                   key={sourcingRequestId}
-                  className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
+                  className="overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm"
                 >
-                  <header className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-sm font-black text-slate-950">
-                          소싱 요청 #{sourcingRequestId}
+                  <header className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span
+                        className={`shrink-0 rounded px-2 py-1 text-[11px] font-black ${
+                          groupHasApprovedQuote
+                            ? "bg-slate-600 text-white"
+                            : "bg-slate-950 text-white"
+                        }`}
+                      >
+                        {groupHasApprovedQuote ? "선정 완료" : "진행 중"}
+                      </span>
+                      <div className="min-w-0">
+                        <h2 className="truncate text-sm font-black text-slate-950">
+                          소싱 요청 #{sourcingRequestId} ·{" "}
+                          {representativeProduct}
                         </h2>
-                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
-                          견적 {groupQuotes.length}건
-                        </span>
+                        <p className="mt-1 text-xs font-semibold text-slate-500">
+                          수신 견적 {groupQuotes.length}건
+                        </p>
                       </div>
-                      <p className="mt-1 text-sm font-semibold text-slate-600">
-                        {representativeProduct}
-                      </p>
                     </div>
                     <button
                       type="button"
                       onClick={() =>
                         navigate(`/buyer/sourcing-detail/${sourcingRequestId}`)
                       }
-                      className="text-left text-xs font-bold text-slate-500 transition hover:text-primary sm:text-right"
+                      className="shrink-0 text-left text-xs font-bold text-blue-700 transition hover:text-blue-900 sm:text-right"
                     >
-                      소싱 요청 확인
+                      요청 상세 보기
                     </button>
                   </header>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[1120px] table-fixed text-left">
-                      <thead className="border-b border-slate-100 text-xs font-bold text-slate-500">
+                    <table className="w-full min-w-[1360px] table-fixed text-left">
+                      <thead className="border-b border-slate-200 bg-white text-xs font-bold text-slate-500">
                         <tr>
-                          <th className="w-[16%] px-5 py-3">견적번호</th>
-                          <th className="w-[16%] px-4 py-3">공급사</th>
-                          <th className="w-[12%] px-4 py-3">상태</th>
-                          <th className="w-[13%] px-4 py-3 text-right">총 견적 금액</th>
-                          <th className="w-[10%] px-4 py-3">납기</th>
-                          <th className="w-[10%] px-4 py-3">샘플</th>
-                          <th className="w-[14%] px-4 py-3">유효기간</th>
-                          <th className="w-[17%] px-5 py-3 text-right">처리</th>
+                          <th className="w-[14%] px-4 py-4">견적번호</th>
+                          <th className="w-[14%] px-4 py-4">공급업체</th>
+                          <th className="w-[9%] px-4 py-4">열람 상태</th>
+                          <th className="w-[12%] px-4 py-4 text-right">총 견적 금액</th>
+                          <th className="w-[7%] px-4 py-4">납기</th>
+                          <th className="w-[7%] px-4 py-4">샘플</th>
+                          <th className="w-[9%] px-4 py-4">유효기간</th>
+                          <th className="w-[28%] px-4 py-4 text-right">관리</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {groupQuotes.map((quote) => {
-                          const status =
-                            statusConfig[quote.status] ??
-                            statusConfig.SUBMITTED;
                           const remainingDays =
                             getRemainingDays(quote.validUntil);
                           const isLowest = quote.totalAmount === lowestAmount;
                           const isFastest =
                             quote.leadTimeDays === shortestLeadTime;
-                          const groupHasApprovedQuote =
-                            groupQuotes.some(
-                              (groupQuote) =>
-                                groupQuote.status === "APPROVED"
-                            );
+                          const sampleOrderDisplay =
+                            getSampleOrderDisplay(quote.sampleOrderStatus);
+                          const quoteResultDisplay =
+                            getQuoteResultDisplay(quote.status);
+                          const canCreateSampleOrder =
+                            quote.sampleOrderStatus === null ||
+                            quote.sampleOrderStatus === "CANCELED" ||
+                            quote.sampleOrderStatus === "REFUNDED";
                           const canRespond =
+                            (
+                              quote.status === "SUBMITTED" ||
+                              quote.status === "SAMPLE_REQUESTED"
+                            ) &&
+                            !groupHasApprovedQuote;
+                          const canStartSamplePayment =
+                            quote.sampleAvailable &&
                             quote.status === "SUBMITTED" &&
+                            canCreateSampleOrder &&
+                            !groupHasApprovedQuote;
+                          const canContinueSamplePayment =
+                            quote.status === "SAMPLE_REQUESTED" &&
+                            canCreateSampleOrder &&
+                            !groupHasApprovedQuote;
+                          const canOpenNegotiation =
+                            (
+                              quote.status === "SUBMITTED" ||
+                              quote.status === "NEGOTIATING" ||
+                              quote.status === "SAMPLE_REQUESTED"
+                            ) &&
                             !groupHasApprovedQuote;
 
                           return (
                             <tr
                               key={quote.quoteId}
-                              className="align-middle transition-colors hover:bg-slate-50/70"
+                              role="link"
+                              tabIndex={0}
+                              aria-label={`${quote.quoteNo} 견적 상세 보기`}
+                              onClick={() =>
+                                navigate(`/buyer/quotes/${quote.quoteId}`)
+                              }
+                              onKeyDown={(event) => {
+                                if (
+                                  event.target === event.currentTarget &&
+                                  event.key === "Enter"
+                                ) {
+                                  navigate(
+                                    `/buyer/quotes/${quote.quoteId}`
+                                  );
+                                }
+                              }}
+                              className="cursor-pointer align-middle outline-none transition-colors hover:bg-blue-50/50 focus-visible:bg-blue-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
                             >
-                              <td className="px-5 py-4">
-                                <p className="font-mono text-sm font-black text-slate-950">
+                              <td className="px-4 py-5">
+                                <p className="truncate font-mono text-sm font-black text-slate-950">
                                   {quote.quoteNo}
                                 </p>
-                                <p className="mt-1 text-xs text-slate-400">
-                                  {formatDate(quote.submittedAt)} 제출
+                                <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                                  <Check size={11} />
+                                  수신 완료
+                                  <span className="font-normal text-slate-400">
+                                    · {formatDate(quote.submittedAt)}
+                                  </span>
                                 </p>
                               </td>
-                              <td className="px-4 py-4">
-                                <p className="truncate text-sm font-bold text-slate-900">
-                                  {quote.companyName || "공급사"}
+                              <td className="px-4 py-5">
+                                <p className="text-sm font-bold text-slate-900">
+                                  공급업체 ({supplierAliases.get(quote.quoteId)})
                                 </p>
-                                <p className="mt-1 truncate text-xs text-slate-400">
-                                  {quote.sellerName || "-"}
+                                <p className="mt-1 text-[11px] leading-4 text-slate-400">
+                                  계약 단계 전까지 정보가 숨겨집니다.
                                 </p>
                               </td>
-                              <td className="px-4 py-4">
-                                <span
-                                  className={`inline-flex items-center gap-1 border px-2 py-1 text-xs font-bold ${status.className}`}
-                                >
-                                  {status.icon}
-                                  {status.label}
-                                </span>
+                              <td className="px-4 py-5">
+                                <div>
+                                  <span
+                                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-bold ${
+                                      quote.viewedAt
+                                        ? "border-slate-200 bg-slate-100 text-slate-600"
+                                        : "border-blue-200 bg-blue-50 text-blue-700"
+                                    }`}
+                                  >
+                                    {quote.viewedAt ? (
+                                      <Check size={12} />
+                                    ) : (
+                                      <Clock3 size={12} />
+                                    )}
+                                    {quote.viewedAt ? "열람" : "미열람"}
+                                  </span>
+                                  {quote.viewedAt && (
+                                    <p className="mt-1 whitespace-nowrap text-[11px] text-slate-400">
+                                      {formatDate(quote.viewedAt)}
+                                    </p>
+                                  )}
+                                </div>
                               </td>
-                              <td className="px-4 py-4 text-right">
+                              <td className="px-4 py-5 text-right">
                                 <p className="text-sm font-black text-slate-950">
                                   {formatPrice(quote.totalAmount)}
                                 </p>
@@ -539,7 +713,7 @@ export default function BuyerQuoteList() {
                                   </span>
                                 )}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-4 py-5">
                                 <p className="text-sm font-bold text-slate-700">
                                   {quote.leadTimeDays}일
                                 </p>
@@ -549,7 +723,7 @@ export default function BuyerQuoteList() {
                                   </p>
                                 )}
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-4 py-5">
                                 <span
                                   className={`inline-flex items-center gap-1 text-xs font-bold ${
                                     quote.sampleAvailable
@@ -565,9 +739,9 @@ export default function BuyerQuoteList() {
                                   {quote.sampleAvailable ? "가능" : "불가"}
                                 </span>
                               </td>
-                              <td className="px-4 py-4">
+                              <td className="px-4 py-5">
                                 <p
-                                  className={`text-sm font-bold ${
+                                  className={`whitespace-nowrap text-sm font-bold ${
                                     remainingDays < 0
                                       ? "text-rose-600"
                                       : remainingDays <= 3
@@ -577,7 +751,7 @@ export default function BuyerQuoteList() {
                                 >
                                   {formatDate(quote.validUntil)}
                                 </p>
-                                <p className="mt-1 text-xs font-semibold text-slate-400">
+                                <p className="mt-1 whitespace-nowrap text-xs font-semibold text-slate-400">
                                   {remainingDays < 0
                                     ? "기간 만료"
                                     : remainingDays === 0
@@ -585,49 +759,101 @@ export default function BuyerQuoteList() {
                                       : `D-${remainingDays}`}
                                 </p>
                               </td>
-                              <td className="px-5 py-4 text-right">
-                                <div className="flex items-center justify-end gap-2">
+                              <td className="px-4 py-5 text-right">
+                                <div className="flex min-h-9 items-center justify-end gap-2">
+                                  {sampleOrderDisplay && (
+                                    <span
+                                      className={`inline-flex h-9 shrink-0 items-center rounded-md border px-3 text-xs font-bold ${sampleOrderDisplay.className}`}
+                                    >
+                                      {sampleOrderDisplay.label}
+                                    </span>
+                                  )}
+                                  {canOpenNegotiation && (
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        if (quote.status === "SUBMITTED") {
+                                          setPendingAction({
+                                            quote,
+                                            status: "NEGOTIATING",
+                                          });
+                                          return;
+                                        }
+
+                                        navigate("/negotiations", {
+                                          state: {
+                                            quoteId: quote.quoteId,
+                                            requestId:
+                                              quote.sourcingRequestId,
+                                          },
+                                        });
+                                      }}
+                                      className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950 active:translate-y-0"
+                                    >
+                                      <MessageSquareText size={14} />
+                                      {quote.status === "NEGOTIATING"
+                                        ? "협의 계속"
+                                        : "협의"}
+                                    </button>
+                                  )}
                                   {canRespond && (
                                     <>
                                       <button
                                         type="button"
-                                        onClick={() =>
+                                        onClick={(event) => {
+                                          event.stopPropagation();
                                           setPendingAction({
                                             quote,
                                             status: "REJECTED",
-                                          })
-                                        }
-                                        className="h-9 border border-slate-200 px-3 text-xs font-bold text-slate-600 transition hover:border-rose-300 hover:text-rose-600"
+                                          });
+                                        }}
+                                        className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-500 shadow-sm transition hover:-translate-y-0.5 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 active:translate-y-0"
                                       >
+                                        <X size={14} />
                                         거절
                                       </button>
+                                      {(canStartSamplePayment ||
+                                        canContinueSamplePayment) && (
+                                        <button
+                                          type="button"
+                                          disabled={isUpdating}
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            void handleSamplePayment(quote);
+                                          }}
+                                          className="inline-flex h-9 min-w-[94px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-amber-200 bg-amber-50 px-3 text-xs font-bold text-amber-800 shadow-sm transition hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-100 active:translate-y-0 disabled:translate-y-0 disabled:opacity-50"
+                                        >
+                                          <FlaskConical size={14} />
+                                          샘플 결제
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
-                                        onClick={() =>
+                                        onClick={(event) => {
+                                          event.stopPropagation();
                                           setPendingAction({
                                             quote,
                                             status: "APPROVED",
-                                          })
-                                        }
-                                        className="h-9 bg-primary px-3 text-xs font-bold text-white transition hover:bg-primary/90"
+                                          });
+                                        }}
+                                        className="inline-flex h-9 min-w-[100px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-slate-950 bg-slate-950 px-3 text-xs font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800 active:translate-y-0"
                                       >
-                                        확정
+                                        <CheckCircle2 size={14} />
+                                        최종 확정
                                       </button>
                                     </>
                                   )}
-                                  <button
-                                    type="button"
-                                    title="견적 상세"
-                                    aria-label={`${quote.quoteNo} 상세 보기`}
-                                    onClick={() =>
-                                      navigate(
-                                        `/buyer/quotes/${quote.quoteId}`
-                                      )
-                                    }
-                                    className="inline-flex h-9 w-9 items-center justify-center border border-slate-200 text-slate-500 transition hover:border-primary hover:text-primary"
-                                  >
-                                    <Eye size={16} />
-                                  </button>
+                                  {!canRespond &&
+                                    !canOpenNegotiation &&
+                                    quoteResultDisplay && (
+                                    <span
+                                      className={`inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-3 text-xs font-bold ${quoteResultDisplay.className}`}
+                                    >
+                                      {quoteResultDisplay.icon}
+                                      {quoteResultDisplay.label}
+                                    </span>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -654,11 +880,15 @@ export default function BuyerQuoteList() {
                 className={`flex h-10 w-10 items-center justify-center rounded-full ${
                   pendingAction.status === "APPROVED"
                     ? "bg-emerald-50 text-emerald-700"
-                    : "bg-rose-50 text-rose-600"
+                    : pendingAction.status === "NEGOTIATING"
+                      ? "bg-violet-50 text-violet-700"
+                      : "bg-rose-50 text-rose-600"
                 }`}
               >
                 {pendingAction.status === "APPROVED" ? (
                   <CheckCircle2 size={20} />
+                ) : pendingAction.status === "NEGOTIATING" ? (
+                  <Clock3 size={20} />
                 ) : (
                   <XCircle size={20} />
                 )}
@@ -670,13 +900,17 @@ export default function BuyerQuoteList() {
               >
                 {pendingAction.status === "APPROVED"
                   ? "이 견적을 확정하시겠습니까?"
-                  : "이 견적을 거절하시겠습니까?"}
+                  : pendingAction.status === "NEGOTIATING"
+                    ? "이 견적의 협의를 요청하시겠습니까?"
+                    : "이 견적을 거절하시겠습니까?"}
               </h2>
 
               <p className="mt-2 text-sm leading-6 text-slate-500">
                 {pendingAction.status === "APPROVED"
                   ? "확정하면 나머지 견적은 미채택 처리되며, 셀러가 확인 후 계약서를 작성해 전달합니다."
-                  : "거절한 견적은 다시 확정할 수 없습니다."}
+                  : pendingAction.status === "NEGOTIATING"
+                    ? "견적 상태가 협의 중으로 변경되며, 상세 조건은 협의 내역에서 이어갈 수 있습니다."
+                    : "거절한 견적은 다시 확정할 수 없습니다."}
               </p>
 
               <div className="mt-4 border-y border-slate-100 py-3">
@@ -707,14 +941,18 @@ export default function BuyerQuoteList() {
                   className={`h-10 flex-1 text-sm font-bold text-white disabled:opacity-50 ${
                     pendingAction.status === "APPROVED"
                       ? "bg-primary"
-                      : "bg-rose-600"
+                      : pendingAction.status === "NEGOTIATING"
+                        ? "bg-violet-600"
+                        : "bg-rose-600"
                   }`}
                 >
                   {isUpdating
                     ? "처리 중..."
                     : pendingAction.status === "APPROVED"
                       ? "견적 확정"
-                      : "견적 거절"}
+                      : pendingAction.status === "NEGOTIATING"
+                        ? "협의 요청"
+                        : "견적 거절"}
                 </button>
               </div>
             </div>

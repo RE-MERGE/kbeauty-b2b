@@ -4,6 +4,7 @@ import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.contract.dto.SellerContractCreateRequest;
 import kr.remerge.stylehub.domain.contract.entity.Contract;
 import kr.remerge.stylehub.domain.contract.entity.ContractItem;
+import kr.remerge.stylehub.domain.contract.enumtype.ContractStatus;
 import kr.remerge.stylehub.domain.contract.repository.ContractItemRepository;
 import kr.remerge.stylehub.domain.contract.repository.ContractRepository;
 import kr.remerge.stylehub.domain.quote.entity.Quote;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -32,7 +34,27 @@ public class ContractService {
     @Transactional
     public Contract createDraft(Quote quote, SellerContractCreateRequest request) {
 
-        validateContractNotExists(quote.getQuoteId());
+        Optional<Contract> existingContract
+                = contractRepository.findByQuote_QuoteId(quote.getQuoteId());
+
+        if (existingContract.isPresent()) {
+            Contract contract = existingContract.get();
+
+            if (contract.getStatus() != ContractStatus.DRAFT) {
+                throw new BusinessException(ErrorCode.CONTRACT_ALREADY_EXISTS);
+            }
+
+            contract.updateDraft(
+                    request.contractName(),
+                    request.deliveryDate(),
+                    request.paymentTerms(),
+                    request.returnPolicy(),
+                    request.specialTerms()
+            );
+
+            return contract;
+        }
+
 
         Company buyerCompany = quote.getBuyer().getCompany();
         Company sellerCompany = quote.getCompany();
@@ -44,6 +66,7 @@ public class ContractService {
         Contract contract =
                 Contract.createDraftFromQuote(quote,
                         createContractNo(),
+                        request.contractName(),
                         request.deliveryDate(),
                         request.paymentTerms(),
                         request.returnPolicy(),

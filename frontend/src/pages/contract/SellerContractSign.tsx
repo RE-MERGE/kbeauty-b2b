@@ -44,6 +44,7 @@ type ContractItem = {
 type SellerContractDetail = {
   contractId: number;
   contractNo: string;
+  contractName: string | null;
   quoteId: number;
   quoteNo: string;
   status: ContractStatus;
@@ -423,8 +424,11 @@ export function SellerContractSign() {
                 </span>
               </div>
               <h1 className="mt-2 text-2xl font-black text-slate-950">
-                {contract.contractNo}
+                {contract.contractName || contract.productName}
               </h1>
+              <p className="mt-1 font-mono text-xs font-semibold text-slate-500">
+                {contract.contractNo}
+              </p>
               <p className="mt-1 text-sm text-slate-500">
                 채택된 견적 내용을 확인하고 서명해 바이어에게
                 전달합니다.

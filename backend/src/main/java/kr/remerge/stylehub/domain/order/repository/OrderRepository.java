@@ -3,6 +3,7 @@ package kr.remerge.stylehub.domain.order.repository;
 import io.lettuce.core.dynamic.annotation.Param;
 import kr.remerge.stylehub.domain.order.entity.Order;
 import kr.remerge.stylehub.domain.order.enumtype.OrderStatus;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -34,4 +35,10 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     );
 
     List<Order> findByOrderNoInAndBuyer_UserId(List<String> orderNos, Integer userId);
+
+    @EntityGraph(attributePaths = "quote")
+    List<Order> findByQuote_QuoteIdInAndBuyer_UserIdAndIsSampleTrueOrderByCreatedAtDesc(
+            List<Integer> quoteIds,
+            Integer buyerId
+    );
 }

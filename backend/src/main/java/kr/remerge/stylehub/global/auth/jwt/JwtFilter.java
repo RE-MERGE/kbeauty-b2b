@@ -8,15 +8,17 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import kr.remerge.stylehub.global.auth.AuthService;
+import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.List;
 
 /*
 ───────────────────────────────────────────
@@ -72,14 +74,19 @@ public class JwtFilter extends OncePerRequestFilter {
             Claims claims = jwtProvider.parseClaims(token);
 
             Integer userId = Integer.parseInt(claims.getSubject());
+            Integer companyId = claims.get("companyId", Integer.class);
+            String role = claims.get("role", String.class);
+            String businessRole = claims.get("businessRole", String.class);
 
-            UserDetails userDetails = authService.loadUserByUserId(userId);
+            AuthUser authUser = new AuthUser(userId, companyId, role, businessRole);
 
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
-                            userDetails,
+                            authUser,
                             null,
-                            userDetails.getAuthorities()
+                            List.of(
+                                    new SimpleGrantedAuthority("ROLE_" + role),
+                                    new SimpleGrantedAuthority("ROLE_" + businessRole))
                     );
 
             SecurityContextHolder.getContext().setAuthentication(authentication);

@@ -1,4 +1,4 @@
-package kr.remerge.stylehub.domain.inquiry.enumtype;
+package kr.remerge.stylehub.domain.support.inquiry.enumtype;
 
 public enum InquiryStatus {
     OPEN,      // 문의 접수

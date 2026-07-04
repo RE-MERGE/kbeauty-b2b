@@ -15,12 +15,12 @@ import kr.remerge.stylehub.domain.product.repository.ProductOptionRepository;
 import kr.remerge.stylehub.domain.product.repository.ProductRepository;
 import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.repository.UserRepository;
-import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
+import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
+import kr.remerge.stylehub.global.auth.security.LoginUser;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -40,8 +40,8 @@ public class ProductService {
 
     // [CREATE] 상품 등록
     @Transactional
-    public ProductDto.DetailResponse create(CustomUserDetails userDetails, ProductDto.CreateRequest request) {
-        User seller = userRepository.findById(userDetails.getUserId())
+    public ProductDto.DetailResponse create(@LoginUser AuthUser userDetails, ProductDto.CreateRequest request) {
+        User seller = userRepository.findById(userDetails.userId())
                 .orElseThrow(() -> new IllegalArgumentException("회원 정보를 찾을 수 없습니다."));
         Category category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new IllegalArgumentException("카테고리를 찾을 수 없습니다."));
@@ -141,8 +141,8 @@ public class ProductService {
     }
 
     // [READ] 내 상품 목록 (셀러용)
-    public List<ProductDto.SummaryResponse> getMy(CustomUserDetails userDetails) {
-        return productRepository.findBySeller_UserId(userDetails.getUserId())
+    public List<ProductDto.SummaryResponse> getMy(@LoginUser AuthUser userDetails) {
+        return productRepository.findBySeller_UserId(userDetails.userId())
                 .stream()
                 .map(ProductDto.SummaryResponse::from)
                 .toList();

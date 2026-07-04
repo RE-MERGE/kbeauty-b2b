@@ -35,8 +35,8 @@ public class JwtProvider {
 
     // 액세스 토큰 생성
     // userId, role, businessRole을 토큰 안에 담아서 발급
-    public String generateAccessToken(Integer userId) {
-        return buildToken(userId, jwtProperties.getAccessTokenExpiration());
+    public String generateAccessToken(Integer userId, Integer companyId, String role, String businessRole) {
+        return buildToken(userId, companyId, role, businessRole, jwtProperties.getAccessTokenExpiration());
     }
 
     // 리프레시 토큰 생성
@@ -52,9 +52,12 @@ public class JwtProvider {
     }
 
     // 실제 토큰을 조립하는 내부 메서드
-    private String buildToken(Integer userId, long expiration) {
+    private String buildToken(Integer userId, Integer companyId, String role, String businessRole, long expiration) {
         JwtBuilder builder = Jwts.builder()
                 .subject(String.valueOf(userId))  // 토큰 주인 (userId)
+                .claim("companyId", companyId)    // 회사 ID 클레임
+                .claim("role", role)              // 권한(ADMIN, PRESIDENT, EMPLOYEE 등)
+                .claim("BusinessRole", businessRole)
                 .issuedAt(new Date())             // 발급 시각
                 .expiration(new Date(System.currentTimeMillis() + expiration)) // 만료 시각
                 .signWith(getSigningKey());    // 서명

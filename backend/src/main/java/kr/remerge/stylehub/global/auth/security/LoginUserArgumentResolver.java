@@ -20,7 +20,8 @@ public class LoginUserArgumentResolver implements HandlerMethodArgumentResolver 
     // @LoginUser 어노테이션이 붙어있으면 true
     @Override
     public boolean supportsParameter(MethodParameter parameter) {
-        return parameter.hasParameterAnnotation(LoginUser.class);
+        return parameter.hasParameterAnnotation(LoginUser.class)
+                && AuthUser.class.isAssignableFrom(parameter.getParameterType());
     }
 
     // 실제로 파라미터에 들어갈 값을 만들어서 반환
@@ -31,22 +32,16 @@ public class LoginUserArgumentResolver implements HandlerMethodArgumentResolver 
                                   WebDataBinderFactory binderFactory) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-        // 인증 정보가 아예 없거나, 인증되지 않은 상태면 null 반환
         if (authentication == null || !authentication.isAuthenticated()) {
             return null;
         }
 
         Object principal = authentication.getPrincipal();
 
-        // 로그인을 안 해서 principal이 "anonymousUser"(String)인 경우 null 반환
-        if (principal instanceof String) {
-            return null;
+        if (principal instanceof AuthUser) {
+            return principal;
         }
-        // JwtFilter가 이미 SecurityContext에 인증 정보를 저장해둔 상태
-        // 거기서 CustomUserDetails를 꺼냄
-        CustomUserDetails userDetails = (CustomUserDetails) principal;
 
-        // CustomUserDetails → LoginUserInfo로 변환해서 반환
-        return AuthUser.from(userDetails);
+        return null;
     }
 }

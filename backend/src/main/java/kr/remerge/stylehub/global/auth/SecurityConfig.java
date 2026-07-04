@@ -50,6 +50,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 무인증 통과 주소 적용
                         .requestMatchers(PUBLIC_URLS).permitAll()
+                        // 웹소켓 핸드셰이크 경로는 시큐리티 검사 제외
+                        .requestMatchers("/ws/**").permitAll()
                         // 관리자 전용 기능 제어
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         // 그 외 모든 요청은 기본 인증 필요

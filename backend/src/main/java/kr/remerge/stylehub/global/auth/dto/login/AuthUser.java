@@ -1,19 +1,13 @@
 package kr.remerge.stylehub.global.auth.dto.login;
 
-import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
+
+import java.io.Serializable;
 
 public record AuthUser(
         Integer userId,
         Integer companyId,
         String role,
         String businessRole
-) {
-    public static AuthUser from(CustomUserDetails userDetails) {
-        return new AuthUser(
-                userDetails.getUserId(),
-                userDetails.getCompanyId(),
-                userDetails.getRole(),
-                userDetails.getBusinessRole()
-        );
-    }
+) implements Serializable {
+    private static final long serialVersionUID = 1L;
 }

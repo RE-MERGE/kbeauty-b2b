@@ -9,6 +9,8 @@ import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
 import kr.remerge.stylehub.global.auth.security.LoginUser;
 import kr.remerge.stylehub.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,9 +27,9 @@ public class AddressController {
      * GET /api/addresses
      */
     @GetMapping
-    public ApiResponse<List<AddressResponse>> getCompanyAddresses(@LoginUser AuthUser user) {
+    public ResponseEntity<ApiResponse<List<AddressResponse>>> getCompanyAddresses(@LoginUser AuthUser user) {
         List<AddressResponse> response = addressService.getCompanyAddresses(user.companyId());
-        return ApiResponse.success(response);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     /**
@@ -35,9 +37,9 @@ public class AddressController {
      * GET /api/addresses/defaults
      */
     @GetMapping("/defaults")
-    public ApiResponse<AddressDefaultsResponse> getAddressDefaults(@LoginUser AuthUser user) {
+    public ResponseEntity<ApiResponse<AddressDefaultsResponse>> getAddressDefaults(@LoginUser AuthUser user) {
         AddressDefaultsResponse response = addressService.getAddressDefaults(user.userId(), user.companyId());
-        return ApiResponse.success(response);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     /**
@@ -45,9 +47,9 @@ public class AddressController {
      * POST /api/addresses
      */
     @PostMapping
-    public ApiResponse<AddressResponse> createAddress(@Valid @RequestBody AddressSaveRequest request, @LoginUser AuthUser user) {
+    public ResponseEntity<ApiResponse<AddressResponse>> createAddress(@Valid @RequestBody AddressSaveRequest request, @LoginUser AuthUser user) {
         AddressResponse response = addressService.createAddress(user.companyId(), request);
-        return ApiResponse.success(response);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
     }
 
     /**
@@ -55,12 +57,12 @@ public class AddressController {
      * PUT /api/addresses/{addressId}
      */
     @PutMapping("/{addressId}")
-    public ApiResponse<AddressResponse> updateAddress(
+    public ResponseEntity<ApiResponse<AddressResponse>> updateAddress(
             @PathVariable Integer addressId,
             @Valid @RequestBody AddressSaveRequest request,
             @LoginUser AuthUser user) {
         AddressResponse response = addressService.updateAddress(user.companyId(), addressId, request);
-        return ApiResponse.success(response);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     /**
@@ -68,9 +70,9 @@ public class AddressController {
      * DELETE /api/addresses/{addressId}
      */
     @DeleteMapping("/{addressId}")
-    public ApiResponse<Void> deleteAddress(@PathVariable Integer addressId, @LoginUser AuthUser user) {
+    public ResponseEntity<ApiResponse<Void>> deleteAddress(@PathVariable Integer addressId, @LoginUser AuthUser user) {
         addressService.deleteAddress(user.companyId(), addressId);
-        return ApiResponse.success(null);
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -78,9 +80,9 @@ public class AddressController {
      * PATCH /api/addresses/defaults
      */
     @PatchMapping("/defaults")
-    public ApiResponse<Void> updateDefaultAddress(
+    public ResponseEntity<ApiResponse<Void>> updateDefaultAddress(
             @Valid @RequestBody UpdateDefaultAddressRequest request, @LoginUser AuthUser user) {
         addressService.updateDefaultAddress(user.userId(), user.companyId(), request);
-        return ApiResponse.success(null);
+        return ResponseEntity.ok(ApiResponse.success());
     }
 }

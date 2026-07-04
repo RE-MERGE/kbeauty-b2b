@@ -1,8 +1,9 @@
-package kr.remerge.stylehub.domain.inquiry.entity;
+package kr.remerge.stylehub.domain.support.inquiry.entity;
 
 import jakarta.persistence.*;
 import kr.remerge.stylehub.domain.user.entity.User;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -10,7 +11,12 @@ import java.time.LocalDateTime;
 
 @Getter
 @Entity
-@Table(name = "inquiry_message_reads")
+@Table(
+        name = "inquiry_message_reads",
+        indexes = {
+                @Index(name = "idx_message_user", columnList = "message_id, user_id")
+        }
+)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class InquiryMessageRead {
 
@@ -30,10 +36,8 @@ public class InquiryMessageRead {
     @Column(name = "read_at")
     private LocalDateTime readAt;
 
-    public InquiryMessageRead(
-            InquiryMessage message,
-            User user
-    ) {
+    @Builder
+    public InquiryMessageRead(InquiryMessage message, User user) {
         this.message = message;
         this.user = user;
     }

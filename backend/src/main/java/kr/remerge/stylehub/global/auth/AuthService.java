@@ -9,14 +9,12 @@ import kr.remerge.stylehub.global.auth.dto.login.LoginRequest;
 import kr.remerge.stylehub.global.auth.dto.token.TokenResponse;
 import kr.remerge.stylehub.global.auth.jwt.JwtProperties;
 import kr.remerge.stylehub.global.auth.jwt.JwtProvider;
-import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
 import kr.remerge.stylehub.global.common.RedisRepository;
 import kr.remerge.stylehub.global.common.service.EmailService;
 import kr.remerge.stylehub.global.common.service.SmsService;
 import kr.remerge.stylehub.global.exception.BusinessException;
 import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,7 +62,7 @@ public class AuthService {
 
         user.onLoginSuccess(clientIp);
 
-        String accessToken = jwtProvider.generateAccessToken(user.getUserId());
+        String accessToken = jwtProvider.generateAccessToken(user.getUserId(), user.getCompany().getCompanyId(), user.getRole().name(), user.getBusinessRole().name());
         String refreshToken = jwtProvider.generateRefreshToken(user.getUserId());
 
         redisRepository.save(
@@ -80,12 +78,12 @@ public class AuthService {
     // JWT 필터 전용 - userId로 직접 조회 (Spring 표준 메서드 아님)
     // JwtFilter에서 토큰의 userId로 조회할 때 호출됨
     // ───────────────────────────────────────────
-    @Transactional(readOnly = true)
-    public UserDetails loadUserByUserId(Integer userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-        return new CustomUserDetails(user);
-    }
+//    @Transactional(readOnly = true)
+//    public UserDetails loadUserByUserId(Integer userId) {
+//        User user = userRepository.findById(userId)
+//                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+//        return new CustomUserDetails(user);
+//    }
 
     // ───────────────────────────────────────────
     // 액세스 토큰 재발급 (Refresh)
@@ -108,7 +106,10 @@ public class AuthService {
             validateUserStatus(user);
 
             String newAccessToken = jwtProvider.generateAccessToken(
-                    user.getUserId()
+                    user.getUserId(),
+                    user.getCompany().getCompanyId(),
+                    user.getRole().name(),
+                    user.getBusinessRole().name()
             );
 
             return TokenResponse.of(newAccessToken, refreshToken);

@@ -1,8 +1,9 @@
-package kr.remerge.stylehub.domain.inquiry.entity;
+package kr.remerge.stylehub.domain.support.inquiry.entity;
 
 import jakarta.persistence.*;
 import kr.remerge.stylehub.domain.user.entity.User;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -33,11 +34,8 @@ public class InquiryMessage {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
-    public InquiryMessage(
-            Inquiry inquiry,
-            User sender,
-            String message
-    ) {
+    @Builder
+    public InquiryMessage(Inquiry inquiry, User sender, String message) {
         this.inquiry = inquiry;
         this.sender = sender;
         this.message = message;

@@ -1,12 +1,11 @@
-package kr.remerge.stylehub.domain.inquiry.entity;
+package kr.remerge.stylehub.domain.support.inquiry.entity;
 
 import jakarta.persistence.*;
 import kr.remerge.stylehub.domain.company.entity.Company;
-import kr.remerge.stylehub.domain.inquiry.enumtype.InquiryStatus;
+import kr.remerge.stylehub.domain.support.enumtype.FaqCategory;
+import kr.remerge.stylehub.domain.support.inquiry.enumtype.InquiryStatus;
 import kr.remerge.stylehub.domain.user.entity.User;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
@@ -14,6 +13,8 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "inquiries")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
+@Builder
 public class Inquiry {
 
     @Id
@@ -33,8 +34,9 @@ public class Inquiry {
     @JoinColumn(name = "created_by_user_id", nullable = false)
     private User createdByUser;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
-    private String category;
+    private FaqCategory category;
 
     @Column(nullable = false, length = 100)
     private String title;
@@ -50,18 +52,17 @@ public class Inquiry {
     @Column(name = "last_message_at")
     private LocalDateTime lastMessageAt;
 
+    @Column(name = "last_message_preview", length = 255)
+    private String lastMessagePreview;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
 
-    public Inquiry(
-            Company company,
-            User createdByUser,
-            String category,
-            String title
-    ) {
+    @Builder
+    public Inquiry(Company company, User createdByUser, FaqCategory category, String title) {
         this.company = company;
         this.createdByUser = createdByUser;
         this.category = category;
@@ -74,15 +75,28 @@ public class Inquiry {
         this.createdAt = LocalDateTime.now();
     }
 
+    // ───────────────────────────────────────────
+    // 도메인 비즈니스 메서드 (Domain Methods)
+    // ───────────────────────────────────────────
+
     public void assignAdmin(User admin) {
         this.assignedAdmin = admin;
     }
 
-    public void updateLastMessage(User sender) {
+    /**
+     * 최신 메시지 업데이트 및 방 상태 변경
+     */
+    public void updateLastMessage(User sender, String messageText) {
         this.lastSender = sender;
         this.lastMessageAt = LocalDateTime.now();
 
-        if (sender.equals(this.assignedAdmin)) {
+        // 프리뷰 글자수 제한(예: 80자) 처리 후 저장
+        this.lastMessagePreview = (messageText != null && messageText.length() > 80)
+                ? messageText.substring(0, 80) + "..."
+                : messageText;
+
+        // 권한 체크 로직 (보낸 사람이 담당 어드민인지 여부로 분기)
+        if (this.assignedAdmin != null && sender.getUserId().equals(this.assignedAdmin.getUserId())) {
             this.status = InquiryStatus.ANSWERED;
         } else {
             this.status = InquiryStatus.WAITING;

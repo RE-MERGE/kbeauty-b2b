@@ -16,6 +16,8 @@ import kr.remerge.stylehub.domain.sourcing.enumtype.SourcingStatus;
 import kr.remerge.stylehub.domain.sourcing.enumtype.SourcingSupplierStatus;
 import kr.remerge.stylehub.domain.sourcing.repository.SourcingRequestRepository;
 import kr.remerge.stylehub.domain.sourcing.repository.SourcingSupplierRepository;
+import kr.remerge.stylehub.global.exception.BusinessException;
+import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -125,9 +127,22 @@ public class BuyerSourcingService {
     }
 
     @Transactional
-    public void withdraw(Integer sourcingRequestId) {
+    public void withdraw(Integer sourcingRequestId, Integer userId, Integer buyerCompanyId, String role) {
         SourcingRequest request = sourcingRequestRepository.findById(sourcingRequestId)
                 .orElseThrow(() -> new IllegalArgumentException("소싱 요청 없음: " + sourcingRequestId));
+
+        // 회사 자체가 다르면 애초에 대상이 아님
+        if (!request.getBuyerCompanyId().equals(buyerCompanyId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        // 액션(취소)이므로 작성자 본인 또는 회사 대표만 허용
+        boolean isWriter = Objects.equals(request.getBuyer().getUserId(), userId);
+        boolean isCompanyPresident = "PRESIDENT".equals(role);
+
+        if (!isWriter && !isCompanyPresident) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
 
         if (request.getStatus() != SourcingStatus.PENDING
                 && request.getStatus() != SourcingStatus.QUOTED) {

@@ -42,6 +42,7 @@ type QuoteData = {
   companyName: string;
   submittedAt: string;
   perspective: Perspective; // 백엔드가 authUser.companyId 기준으로 판단해서 내려줌
+  canManage: boolean; // 승인/거절/협의/샘플요청 액션 가능 여부 (작성자 본인 or 대표 + 액션 가능 상태)
   items: QuoteItemData[];
 };
 
@@ -439,8 +440,9 @@ export function QuoteDetail() {
               </div>
           )}
 
-          {/* ── BUYER 액션 버튼 — SUBMITTED/NEGOTIATING 상태일 때 */}
+          {/* ── BUYER 액션 버튼 — canManage(작성자 본인 or 대표 + 액션 가능 상태)일 때만 */}
           {quote.perspective === "BUYER"
+              && quote.canManage
               && (quote.status === "SUBMITTED" || quote.status === "NEGOTIATING")
               && !action && (
                   <div className="flex items-center gap-3 justify-end pb-4">
@@ -469,6 +471,16 @@ export function QuoteDetail() {
                     <button className="flex items-center gap-2 border border-slate-200 text-slate-500 hover:border-primary hover:text-primary px-4 py-2.5 rounded-lg text-sm transition-colors">
                       <Download size={15} /> PDF
                     </button>
+                  </div>
+              )}
+
+          {/* BUYER인데 열람 권한은 있지만(직원) 관리 권한(canManage)이 없는 경우 안내 */}
+          {quote.perspective === "BUYER"
+              && !quote.canManage
+              && (quote.status === "SUBMITTED" || quote.status === "NEGOTIATING") && (
+                  <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                    <AlertCircle size={13} className="shrink-0" />
+                    이 견적의 승인/거절/협의 처리는 작성자 본인 또는 대표만 가능합니다.
                   </div>
               )}
 

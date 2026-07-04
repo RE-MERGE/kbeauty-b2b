@@ -31,6 +31,8 @@ public class SseEmitterManager {
     public SseEmitter add(Integer userId, Integer companyId, String role) {
         SseEmitter emitter = new SseEmitter(30 * 60 * 1000L); // 30분 타임아웃
 
+        log.info("[SSE add] userId={}, companyId={}, role={}", userId, companyId, role);
+
         // 각 맵에 등록
         addToMap(userEmitters, userId, emitter);
         if (companyId != null) addToMap(companyEmitters, companyId, emitter);
@@ -69,12 +71,18 @@ public class SseEmitterManager {
         try {
             NotificationMessage msg = objectMapper.readValue(payload, NotificationMessage.class);
 
+            log.info("[Broadcast] targetUserId={}, targetCompanyId={}, targetRole={} / roleEmitters keys={}",
+                    msg.getTargetUserId(), msg.getTargetCompanyId(), msg.getTargetRole(), roleEmitters.keySet());
+
             if (msg.getTargetUserId() != null) {
                 sendToEmitters(userEmitters.get(msg.getTargetUserId()), payload);
             } else if (msg.getTargetCompanyId() != null) {
                 sendToEmitters(companyEmitters.get(msg.getTargetCompanyId()), payload);
             } else if (msg.getTargetRole() != null) {
-                sendToEmitters(roleEmitters.get(msg.getTargetRole()), payload);
+                List<SseEmitter> matched = roleEmitters.get(msg.getTargetRole());
+                log.info("[Broadcast] matched emitters for role={}: {}", msg.getTargetRole(),
+                        matched == null ? "null" : matched.size());
+                sendToEmitters(matched, payload);
             }
         } catch (Exception e) {
             log.error("Failed to parse notification payload: {}", payload, e);

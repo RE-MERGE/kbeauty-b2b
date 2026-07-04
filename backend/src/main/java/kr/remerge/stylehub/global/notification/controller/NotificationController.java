@@ -23,12 +23,13 @@ public class NotificationController {
     private final NotificationService notificationService;
 
     // SSE 연결 — JWT에서 userId, companyId, role 추출
+    // role: ADMIN 브로드캐스트 용도 (ADMIN / PRESIDENT / EMPLOYEE). businessRole(BUYER/SELLER/BOTH)과 혼동 금지.
     @GetMapping(value = "/subscribe", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter subscribe(@LoginUser AuthUser authUser) {
         return emitterManager.add(
                 authUser.userId(),
                 authUser.companyId(),
-                authUser.role()  // "ADMIN", "SELLER", "BUYER" 등
+                authUser.role()
         );
     }
 

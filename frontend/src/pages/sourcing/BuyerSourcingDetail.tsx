@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router";
+import api from "@/api/axios";
 import {
   ArrowLeft, Package, FileText, FlaskConical, Clock,
   CheckCircle, XCircle, MessageSquare, CreditCard,
@@ -40,7 +41,9 @@ type QuoteStatus =
 const ACTIONABLE_QUOTE_STATUSES: QuoteStatus[] = ["SUBMITTED", "NEGOTIATING", "SAMPLE_REQUESTED"];
 
 function isActionable(bid: BidDetail): boolean {
-  return bid.quoteStatus != null && ACTIONABLE_QUOTE_STATUSES.includes(bid.quoteStatus);
+  return bid.canManage === true
+      && bid.quoteStatus != null
+      && ACTIONABLE_QUOTE_STATUSES.includes(bid.quoteStatus);
 }
 
 const QUOTE_STATUS_DONE_LABEL: Partial<Record<QuoteStatus, string>> = {
@@ -59,6 +62,7 @@ export interface BidDetail {
   quoteId?: number;
   quoteStatus?: QuoteStatus;
   totalAmount?: number;
+  canManage?: boolean;
 }
 
 export interface SourcingRequestDetail {
@@ -81,6 +85,7 @@ export interface SourcingRequestDetail {
   items: SourcingOptionDetail[];
   files: SourcingFileDetail[];
   bids: BidDetail[];
+  canWithdraw: boolean;
 }
 
 // ── 상태 스타일 ──────────────────────────────────────────────────────────────
@@ -132,31 +137,17 @@ const BID_STATUS_ICON: Partial<Record<BidStatus, React.ReactNode>> = {
 
 // ── API ──────────────────────────────────────────────────────────────────────
 async function fetchSourcingDetail(requestId: string): Promise<SourcingRequestDetail> {
-  const res = await fetch(`/api/sourcing/requests/${requestId}`, {
-    credentials: "include",
-  });
-  if (!res.ok) throw new Error(`소싱 요청 조회 실패: ${res.status}`);
-  return res.json();
+  return api.get<SourcingRequestDetail>(`/sourcing/requests/${requestId}`);
 }
 
 async function withdrawSourcingRequest(sourcingRequestId: number): Promise<void> {
-  const res = await fetch(`/api/sourcing/buyer/requests/${sourcingRequestId}/withdraw`, {
-    method: "PATCH",
-    credentials: "include",
-  });
-  if (!res.ok) throw new Error(`취소 처리 실패: ${res.status}`);
+  await api.patch(`/sourcing/buyer/requests/${sourcingRequestId}/withdraw`);
 }
 
 type QuoteActionStatus = "APPROVED" | "REJECTED" | "NEGOTIATING" | "SAMPLE_REQUESTED";
 
 async function updateQuoteStatus(quoteId: number, status: QuoteActionStatus): Promise<void> {
-  const res = await fetch(`/api/quotes/${quoteId}/status`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ status }),
-  });
-  if (!res.ok) throw new Error(`상태 변경 실패: ${res.status}`);
+  await api.patch(`/quotes/${quoteId}/status`, { status });
 }
 
 // ── 취소 확인 모달 ────────────────────────────────────────────────────────────
@@ -342,7 +333,7 @@ export function BuyerSourcingDetail() {
     setLoading(true);
     fetchSourcingDetail(requestId)
         .then(setRequest)
-        .catch((e) => setError(e.message))
+        .catch((e) => setError(e instanceof Error ? e.message : "소싱 요청 조회에 실패했습니다."))
         .finally(() => setLoading(false));
   }, [requestId]);
 
@@ -451,7 +442,7 @@ export function BuyerSourcingDetail() {
                 <h1 className="text-xl font-bold text-foreground mb-1">{request.productName}</h1>
                 <div className="text-xs text-muted-foreground">{request.createdAt.slice(0, 10)} 등록</div>
               </div>
-              {["PENDING", "QUOTED"].includes(request.status) && (
+              {request.canWithdraw && (
                   <button
                       onClick={() => setShowWithdraw(true)}
                       className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-500 hover:bg-red-50 rounded-lg text-xs font-medium transition-colors"

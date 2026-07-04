@@ -45,10 +45,6 @@ public class QuoteStatusService {
             rejectOtherQuotes(quote);
             quote.getSourcingRequest().trade();
         }
-        if (QuoteStatusCode.APPROVED.equals(newStatus)) {
-            rejectOtherQuotes(quote);
-        }
-
 
     }
 
@@ -58,14 +54,14 @@ public class QuoteStatusService {
                 .getSourcingRequestId();
 
         quoteRepository.findBySourcingRequest_SourcingRequestIdAndQuoteIdNot(
-                sourcingRequestId,
-                approvedQuote.getQuoteId()
-        )
+                        sourcingRequestId,
+                        approvedQuote.getQuoteId()
+                )
                 .stream()
                 .filter(quote ->
                         QuoteStatusCode.SUBMITTED.equals(quote.getStatus())
-                        || QuoteStatusCode.NEGOTIATING.equals(quote.getStatus())
-                        || QuoteStatusCode.SAMPLE_REQUESTED.equals(quote.getStatus())
+                                || QuoteStatusCode.NEGOTIATING.equals(quote.getStatus())
+                                || QuoteStatusCode.SAMPLE_REQUESTED.equals(quote.getStatus())
                 )
                 .forEach(quote ->
                         quote.changeStatus(QuoteStatusCode.NOT_SELECTED));
@@ -84,11 +80,11 @@ public class QuoteStatusService {
 
             case QuoteStatusCode.SUBMITTED ->
                     Set.of(
-                    QuoteStatusCode.APPROVED,
-                    QuoteStatusCode.REJECTED,
-                    QuoteStatusCode.NEGOTIATING,
-                    QuoteStatusCode.SAMPLE_REQUESTED
-            ).contains(newStatus);
+                            QuoteStatusCode.APPROVED,
+                            QuoteStatusCode.REJECTED,
+                            QuoteStatusCode.NEGOTIATING,
+                            QuoteStatusCode.SAMPLE_REQUESTED
+                    ).contains(newStatus);
 
             case QuoteStatusCode.SAMPLE_REQUESTED -> Set.of(
                     QuoteStatusCode.APPROVED,
@@ -112,6 +108,8 @@ public class QuoteStatusService {
 
     }
 
+    // 액션(상태 변경) 권한: 관리자 / 견적을 요청한 바이어 본인 / 바이어 회사 대표
+    // (조회 쪽 validateQuoteAccess와 셀러측 "본인+대표" 패턴을 바이어측에도 대칭 적용)
     private void validateStatusChangeAuthority(User actor, Quote quote) {
 
         if (actor.getRole() == UserRole.ADMIN) {
@@ -123,7 +121,15 @@ public class QuoteStatusService {
                 actor.getUserId()
         );
 
-        if (!isBuyer) {
+        boolean isBuyerCompanyPresident =
+                actor.getRole() == UserRole.PRESIDENT
+                        && actor.getCompany() != null
+                        && Objects.equals(
+                        quote.getBuyer().getCompany().getCompanyId(),
+                        actor.getCompany().getCompanyId()
+                );
+
+        if (!isBuyer && !isBuyerCompanyPresident) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }

@@ -14,84 +14,66 @@ import {
     Star,
     Truck,
     User,
-    X
+    X,
+    MessageCircle,
+    FlaskConical,
+    XCircle,
+    FileSignature,
+    FileText,
+    UserPlus,
+    Building2,
+    AlertTriangle,
 } from "lucide-react";
 import {useEffect, useRef, useState} from "react";
 import {useAuthStore} from "@/store/useAuthStore";
 import {logout as apiLogout} from "@/api/auth/auth.service";
 import logoSvg from "@/assets/style_hub_logo.svg";
-import {useNotification} from "@/api/useNotification";
+import {useNotification} from "@/api/notification/useNotification";
+import {
+    getNotifications,
+    getUnreadCount,
+    markAllAsRead as apiMarkAllAsRead,
+    type NotificationResponse,
+} from "@/api/notification/notification.service";
 
 const hotKeywords = ["여성 린넨 블라우스", "와이드 슬랙스", "플로럴 원피스", "오버핏 자켓", "스포츠 레깅스"];
 
-const notifications = [
-    {
-        id: 1,
-        icon: CheckCircle,
-        color: "text-green-500",
-        title: "주문 승인 완료",
-        desc: "'여성 갸라도스 블라우스' 300벌 주문이 승인되었습니다.",
-        time: "방금 전",
-        unread: true,
-    },
-    {
-        id: 2,
-        icon: Truck,
-        color: "text-blue-500",
-        title: "배송 출발",
-        desc: "'스이쿤 패턴 슬랙스' 200벌 주문이 동대문 창고를 출발했습니다.",
-        time: "1시간 전",
-        unread: true,
-    },
-    {
-        id: 3,
-        icon: Package,
-        color: "text-primary",
-        title: "신규 상품 등록",
-        desc: "'고급 극세사 메타퐁 담요 망토' 신규 시즌 상품이 등록되었습니다.",
-        time: "어제",
-        unread: false,
-    },
-    {
-        id: 4,
-        icon: Bell,
-        color: "text-primary",
-        title: "재입고 알림",
-        desc: "저장하신 '잉어킹 티셔츠'이(가) 재입고 되었습니다.[바이어]",
-        time: "방금 전",
-        unread: true,
-    },
+// 백엔드 NotificationType 기준 아이콘/라벨/색상 매핑
+const NOTIFICATION_TYPE_META: Record<string, { icon: React.ElementType; color: string; label: string }> = {
+    SOURCING_ASSIGNED:          { icon: Package,        color: "text-primary",     label: "소싱 요청 배정" },
+    QUOTE_RECEIVED:             { icon: FileText,       color: "text-blue-500",    label: "새 견적 도착" },
+    QUOTE_APPROVED:             { icon: CheckCircle,    color: "text-green-500",   label: "견적 채택" },
+    QUOTE_REJECTED:             { icon: XCircle,        color: "text-red-500",     label: "견적 거절" },
+    QUOTE_NEGOTIATING:          { icon: MessageCircle,  color: "text-purple-500",  label: "협의 요청" },
+    SAMPLE_REQUESTED:           { icon: FlaskConical,   color: "text-amber-500",   label: "샘플 결제 요청" },
+    ORDER_CONFIRMED:            { icon: ShoppingCart,   color: "text-blue-500",    label: "주문 확정" },
+    ORDER_SHIPPED:              { icon: Truck,          color: "text-blue-500",    label: "배송 출발" },
+    ORDER_DELIVERED:            { icon: Package,        color: "text-green-500",   label: "배송 완료" },
+    CONTRACT_CREATED:           { icon: FileSignature,  color: "text-primary",     label: "계약서 도착" },
+    CONTRACT_SIGNED:            { icon: FileSignature,  color: "text-green-500",   label: "계약서 서명 완료" },
+    USER_JOINED:                { icon: UserPlus,       color: "text-primary",     label: "신규 회원 가입" },
+    COMPANY_APPROVAL_REQUESTED: { icon: Building2,      color: "text-amber-500",   label: "업체 승인 요청" },
+    SOURCING_CREATED:           { icon: FileText,       color: "text-primary",     label: "새 소싱 요청" },
+    DISPUTE_RAISED:             { icon: ShieldAlert,    color: "text-red-500",     label: "이의제기 접수" },
+};
 
-    {
-        id: 5,
-        icon: Bell,
-        color: "text-primary",
-        title: "수량 알림",
-        desc: "'피카츄 후드집업'의 재고가 일정 수량 이하로 떨어졌습니다.[셀러]",
-        time: "방금 전",
-        unread: true,
-    },
+function getNotificationMeta(type: string) {
+    return NOTIFICATION_TYPE_META[type] ?? { icon: Bell, color: "text-primary", label: "알림" };
+}
 
-    {
-        id: 5,
-        icon: ShieldAlert,
-        color: "text-yellow-500",
-        title: " 인증서 갱신 필요 ",
-        desc: "'고라파덕 후드티' KC인증서 유효기간이 14일 남았습니다.",
-        time: "방금 전",
-        unread: true,
-    },
-    {
-        id: 6,
-        icon: ShieldAlert,
-        color: "text-red-500",
-        title: " 인증서 갱신 필요 ",
-        desc: "'치코리타 백팩' GOTS인증서 유효기간이 7일 남았습니다.",
-        time: "방금 전",
-        unread: true,
-    },
-
-];
+function formatRelativeTime(isoStr: string): string {
+    try {
+        const diffMs = Date.now() - new Date(isoStr).getTime();
+        const diffMin = Math.floor(diffMs / 60000);
+        if (diffMin < 1) return "방금 전";
+        if (diffMin < 60) return `${diffMin}분 전`;
+        const diffHour = Math.floor(diffMin / 60);
+        if (diffHour < 24) return `${diffHour}시간 전`;
+        return new Date(isoStr).toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" });
+    } catch {
+        return isoStr;
+    }
+}
 
 // [추가] 검색용 더미데이터
 const searchDummyProducts = [
@@ -259,8 +241,8 @@ const searchDummyBrands = [
 export function Root() {
     const [searchQuery, setSearchQuery] = useState("");
     const [notifOpen, setNotifOpen] = useState(false);
-    const [readIds, setReadIds] = useState<number[]>([]);
-    const [, setDismissedIds] = useState<number[]>([]);
+    const [notifications, setNotifications] = useState<NotificationResponse[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
     const notifRef = useRef<HTMLDivElement>(null);
     const [searchTab, setSearchTab] = useState<"product" | "category" | "brand">("product");
     const [tabDropOpen, setTabDropOpen] = useState(false);
@@ -273,6 +255,17 @@ export function Root() {
     const clearUser = useAuthStore((state) => state.clearUser);
 
     useNotification(!!user);  // 로그인 상태일 때만 SSE 연결
+
+    // 마운트 시 알림 목록 + 안읽음 개수 조회
+    useEffect(() => {
+        if (!user) return;
+        getUnreadCount()
+            .then(setUnreadCount)
+            .catch((e) => console.error("안읽음 개수 조회 실패:", e));
+        getNotifications()
+            .then(setNotifications)
+            .catch((e) => console.error("알림 목록 조회 실패:", e));
+    }, [user]);
 
     let dashboardPath = "/";
 
@@ -296,9 +289,21 @@ export function Root() {
         }
     };
 
-    const unreadCount = notifications.filter(
-        (n) => n.unread && !readIds.includes(n.id)
-    ).length;
+    // 알림 벨 클릭 → 열기 + 전체 읽음 처리(서버 반영)
+    const handleBellClick = async () => {
+        const opening = !notifOpen;
+        setNotifOpen(opening);
+
+        if (opening && unreadCount > 0) {
+            setUnreadCount(0);
+            setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+            try {
+                await apiMarkAllAsRead();
+            } catch (e) {
+                console.error("알림 읽음 처리 실패:", e);
+            }
+        }
+    };
 
     useEffect(() => {
         const handler = (e: MouseEvent) => {
@@ -501,7 +506,7 @@ export function Root() {
                     <div className="flex items-center gap-5.5 flex-shrink-0 text-sm">
                         <div className="relative" ref={notifRef}>
                             <button
-                                onClick={() => setNotifOpen((v) => !v)}
+                                onClick={handleBellClick}
                                 className="flex flex-col items-center gap-0.5 text-muted-foreground hover:text-primary transition-colors relative"
                             >
                                 <Bell size={25}/>
@@ -519,61 +524,46 @@ export function Root() {
                                     className="absolute right-0 top-full mt-2 w-80 bg-white border border-border rounded-lg shadow-xl z-50">
                                     <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                                         <span className="font-semibold text-foreground text-sm">알림</span>
-                                        <div className="flex items-center gap-3">
-                                            {unreadCount > 0 && (
-                                                <button
-                                                    onClick={() => setReadIds(notifications.map((n) => n.id))}
-                                                    className="text-xs text-primary hover:underline"
-                                                >
-                                                    모두 읽음
-                                                </button>
-                                            )}
-                                            <button onClick={() => setNotifOpen(false)}
-                                                    className="text-muted-foreground hover:text-foreground">
-                                                <X size={14}/>
-                                            </button>
-                                        </div>
+                                        <button onClick={() => setNotifOpen(false)}
+                                                className="text-muted-foreground hover:text-foreground">
+                                            <X size={14}/>
+                                        </button>
                                     </div>
-                                    <div className="divide-y divide-border">
-                                        {notifications.map((n) => {
-                                            const Icon = n.icon;
-                                            const isUnread = n.unread && !readIds.includes(n.id);
-                                            return (
-                                                <button
-                                                    key={n.id}
-                                                    onClick={() => setReadIds((prev) => [...new Set([...prev, n.id])])}
-                                                    className={`w-full text-left flex items-start gap-3 px-4 py-3 hover:bg-secondary/50 transition-colors ${isUnread ? "bg-primary/5" : ""}`}
-                                                >
-                                                    <div className={`mt-0.5 flex-shrink-0 ${n.color}`}>
-                                                        <Icon size={16}/>
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center justify-between gap-2">
-                              <span
-                                  className={`text-sm font-medium ${isUnread ? "text-foreground" : "text-muted-foreground"}`}>
-                                {n.title}
-                              </span>
-                                                            <div className="flex items-center gap-1.5 flex-shrink-0">
-                                                                {isUnread && <span
-                                                                    className="w-1.5 h-1.5 rounded-full bg-primary"/>}
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setDismissedIds((prev) => [...prev, n.id]);
-                                                                    }}
-                                                                    className="text-muted-foreground hover:text-foreground transition-colors"
-                                                                >
-                                                                    <X size={12}/>
-                                                                </button>
-                                                            </div>
+                                    <div className="divide-y divide-border max-h-96 overflow-y-auto">
+                                        {notifications.length === 0 ? (
+                                            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                                                알림이 없습니다.
+                                            </div>
+                                        ) : (
+                                            notifications.map((n) => {
+                                                const meta = getNotificationMeta(n.type);
+                                                const Icon = meta.icon;
+                                                const isUnread = !n.isRead;
+                                                return (
+                                                    <div
+                                                        key={n.notificationId}
+                                                        className={`w-full text-left flex items-start gap-3 px-4 py-3 ${isUnread ? "bg-primary/5" : ""}`}
+                                                    >
+                                                        <div className={`mt-0.5 flex-shrink-0 ${meta.color}`}>
+                                                            <Icon size={16}/>
                                                         </div>
-                                                        <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{n.desc}</p>
-                                                        <span
-                                                            className="text-[11px] text-muted-foreground mt-1 block">{n.time}</span>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span
+                                                                    className={`text-sm font-medium ${isUnread ? "text-foreground" : "text-muted-foreground"}`}>
+                                                                    {meta.label}
+                                                                </span>
+                                                                {isUnread && <span
+                                                                    className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0"/>}
+                                                            </div>
+                                                            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{n.message}</p>
+                                                            <span
+                                                                className="text-[11px] text-muted-foreground mt-1 block">{formatRelativeTime(n.createdAt)}</span>
+                                                        </div>
                                                     </div>
-                                                </button>
-                                            );
-                                        })}
+                                                );
+                                            })
+                                        )}
                                     </div>
                                     <div className="px-4 py-2.5 border-t border-border">
                                         <Link

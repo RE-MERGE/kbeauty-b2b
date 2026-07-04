@@ -8,6 +8,9 @@ import kr.remerge.stylehub.domain.sourcing.repository.SourcingRequestRepository;
 import kr.remerge.stylehub.domain.sourcing.repository.SourcingSupplierRepository;
 import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.repository.UserRepository;
+import kr.remerge.stylehub.global.notification.NotificationMessage;
+import kr.remerge.stylehub.global.notification.enumtype.NotificationType;
+import kr.remerge.stylehub.global.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +24,7 @@ public class SourcingAdminService {
     private final SourcingSupplierRepository sourcingSupplierRepository;
     private final SourcingRequestRepository sourcingRequestRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     // SUGGESTED 상태 공급사 목록 조회
     @Transactional(readOnly = true)
@@ -33,7 +37,7 @@ public class SourcingAdminService {
                 .toList();
     }
 
-    // 관리자 승인 → RECOMMENDED
+    // 관리자 승인 → RECOMMENDED (이 시점에 셀러 회사한테 실제로 배정 노출 + 알림)
     @Transactional
     public void approve(Integer sourcingSupplierId, Integer adminId) {
         SourcingSupplier supplier = sourcingSupplierRepository.findById(sourcingSupplierId)
@@ -43,6 +47,13 @@ public class SourcingAdminService {
                 .orElseThrow(() -> new IllegalArgumentException("해당 관리자 없음: " + adminId));
 
         supplier.approve(admin);
+
+        notificationService.send(NotificationMessage.toCompany(
+                NotificationType.SOURCING_ASSIGNED,
+                supplier.getSellerCompanyId(),
+                supplier.getSourcingRequest().getSourcingRequestId(),
+                "SOURCING"
+        ));
     }
 
     // 배정 안 된 소싱 요청 목록 조회

@@ -23,10 +23,15 @@ public class SourcingController {
      * GET /api/sourcing/requests/{sourcingRequestId}
      */
     @GetMapping("/requests/{sourcingRequestId}")
-    public ResponseEntity<SourcingRequestDto.DetailResponse> getDetail(
+    public ResponseEntity<ApiResponse<SourcingRequestDto.DetailResponse>> getDetail(
+            @LoginUser AuthUser authUser,
             @PathVariable Integer sourcingRequestId
     ) {
-        return ResponseEntity.ok(sourcingRequestService.getDetail(sourcingRequestId));
+        SourcingRequestDto.DetailResponse response =
+                sourcingRequestService.getDetail(
+                        sourcingRequestId, authUser.companyId(), authUser.userId(), authUser.role()
+                );
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     /**
@@ -50,12 +55,13 @@ public class SourcingController {
      * @param files     multipart 파일 목록
      */
     @PostMapping("/requests/{sourcingRequestId}/files")
-    public ResponseEntity<Void> uploadFiles(
+    public ResponseEntity<ApiResponse<Void>> uploadFiles(
+            @LoginUser AuthUser authUser,
             @PathVariable Integer sourcingRequestId,
             @RequestParam String fileType,
             @RequestPart List<MultipartFile> files
     ) {
-        sourcingRequestService.uploadFiles(sourcingRequestId, fileType, files);
-        return ResponseEntity.ok().build();
+        sourcingRequestService.uploadFiles(sourcingRequestId, authUser.companyId(), fileType, files);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

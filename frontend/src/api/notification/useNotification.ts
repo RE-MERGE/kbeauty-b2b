@@ -55,7 +55,7 @@ export function useNotification(b: boolean) {
         const data: NotificationMessage = JSON.parse(e.data);
         toast(data.message, {
           icon: NOTIFICATION_ICONS[data.type] ?? "🔔",
-          duration: 4000,
+          duration: 30000,
         });
       } catch {
         console.error("Failed to parse notification", e.data);

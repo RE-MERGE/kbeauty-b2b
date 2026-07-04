@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import api from "@/api/axios";
 import {
   Package, ChevronRight, Loader2, Clock3, Handshake,
   CheckCircle2, Ban, LayoutGrid,
@@ -80,17 +81,12 @@ const FILTERS: Array<{ value: StatusFilter; label: string; icon: React.ReactNode
 ];
 
 // ── API ───────────────────────────────────────────────────────────────────
-const BASE_URL = "/api/sourcing/buyer";
-
 async function fetchBuyerSourcingBoard(type: SourcingType, statusFilter: StatusFilter): Promise<BuyerSourcingBoard> {
-  const params = new URLSearchParams({ type });
-  if (statusFilter !== "ALL") params.set("status", statusFilter);
+  const params: Record<string, string> = { type };
+  if (statusFilter !== "ALL") params.status = statusFilter;
 
-  const res = await fetch(`${BASE_URL}/requests?${params.toString()}`, {
-    credentials: "include", // JWT 쿠키 포함 → 백엔드 @LoginUser가 companyId 추출해서 buyerCompanyId로 필터링
-  });
-  if (!res.ok) throw new Error("소싱 요청 목록 조회 실패");
-  return res.json();
+  // interceptor가 response.data.data 언래핑 처리 (withCredentials 포함 axios 인스턴스)
+  return api.get<BuyerSourcingBoard>("/sourcing/buyer/requests", { params });
 }
 
 // ── 요청 행 ───────────────────────────────────────────────────────────────
@@ -177,7 +173,7 @@ export function BuyerSourcingList() {
           setRequests(board.requests);
           setCounts(board.counts);
         })
-        .catch((e) => setError(e.message))
+        .catch((e) => setError(e instanceof Error ? e.message : "소싱 요청 목록 조회 실패"))
         .finally(() => setIsLoading(false));
   }, [activeTab, activeFilter]);
 

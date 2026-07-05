@@ -46,7 +46,7 @@ import {SellerProductRegister} from "@/pages/product/SellerProductRegister";
 import {SellerQuoteWrite} from "@/pages/quote/SellerQuoteWrite";
 import {SellerQuoteList} from "@/pages/quote/SellerQuoteList";
 import BuyerQuoteList from "@/pages/quote/BuyerQuoteList";
-import { QuoteDetail } from "@/pages/quote/QuoteDetail";
+import {QuoteDetail} from "@/pages/quote/QuoteDetail";
 
 import {SellerDashboard} from "@/pages/seller/SellerDashboard";
 import {SellerProductManage} from "@/pages/seller/SellerProductManage";
@@ -95,10 +95,12 @@ export const router = createBrowserRouter([
                 Component: Root,
                 children: [
                     {index: true, Component: Home},
+
                     {path: "support", Component: Support},
+                    {path: "support/inquiry", Component: Inquiry},
+
                     {path: "restricted-businesses", Component: RestrictedBusinessTypes},
                     {path: "supplier-register", Component: SupplierRegister},
-                    {path: "inquiry", Component: Inquiry},
                     {path: "mypage", Component: MyPage},
                     {path: "settings", Component: CompanySettings},
                     {path: "partner", Component: PartnerPlan},

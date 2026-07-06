@@ -59,7 +59,7 @@ export const MEMBER_STATUS_META: Record<MemberStatus, {
   label: string; icon: JSX.Element; color: string; dot: string;
 }> = {
   active:   { label: "활성",     icon: <CheckCircle size={12} />, color: "text-emerald-600", dot: "bg-emerald-400" },
-  pending:  { label: "초대 대기", icon: <Clock size={12} />,       color: "text-amber-500",  dot: "bg-amber-400"  },
+  pending: {label: "대기", icon: <Clock size={12}/>, color: "text-amber-500", dot: "bg-amber-400"},
   inactive: { label: "비활성",   icon: <XCircle size={12} />,     color: "text-slate-400",  dot: "bg-slate-300"  },
 };
 

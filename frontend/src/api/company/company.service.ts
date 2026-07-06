@@ -1,18 +1,39 @@
 import api from "@/api/axios";
 import {
+    CompanyDetail,
     CompanyMemberResponse,
     InviteMemberRequest,
+    UpdateCompanyPayload,
     UpdateMemberRoleRequest,
     UpdateMemberStatusRequest,
 } from "./company.types";
+
+// ── 회사 프로필 및 심사 관리 API ──────────────────────────────────────────────
+
+/**
+ * 소속 회사 상세 정보 조회
+ */
+export const getCompanyDetail = (companyId: number): Promise<CompanyDetail> => {
+    return api.get<CompanyDetail>(`/company/${companyId}`);
+};
+
+/**
+ * 회사 정보 변경 및 셀러 권한 심사 신청
+ */
+export const updateCompanyDetail = (
+    companyId: number,
+    request: UpdateCompanyPayload
+): Promise<void> => {
+    return api.patch<void>(`/company/${companyId}`, request);
+};
 
 // ── 직원 관리 API ─────────────────────────────────────────────────────────────
 
 /**
  * 소속 회사 직원 목록 조회
  */
-export const getCompanyMembers = async (): Promise<CompanyMemberResponse[]> => {
-    return await api.get<CompanyMemberResponse[]>("/company");
+export const getCompanyMembers = (companyId: number): Promise<CompanyMemberResponse[]> => {
+    return api.get<CompanyMemberResponse[]>(`/company/${companyId}/employees`);
 };
 
 /**

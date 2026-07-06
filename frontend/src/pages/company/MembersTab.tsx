@@ -1,26 +1,40 @@
 import {useEffect, useState} from "react";
-import {Ban, CheckCircle, Clock, Search, ShieldCheck, UserPlus, Users, X,} from "lucide-react";
+import {ChevronDown, Clock, Search, ShieldCheck, UserPlus, Users, X,} from "lucide-react";
 import {getCompanyMembers, inviteMember, updateMemberRole, updateMemberStatus,} from "@/api/company/company.service";
-import type {BusinessRole, CompanyMemberResponse, MemberRole} from "@/api/company/company.types";
-import {Avatar, inputCls, PanelCard, RoleBadge, StatusDot, Toast,} from "./shared";
+import type {BusinessRole, CompanyMemberResponse, MemberUserStatus} from "@/api/company/company.types";
+import {Avatar, inputCls, PanelCard, StatusDot, Toast} from "./shared";
+import {useAuthStore} from "@/store/useAuthStore";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function formatLastLogin(iso: string | null) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
+  if (diff < 60) return "방금 전";
+  if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
+  if (diff < 86400 * 3) return `${Math.floor(diff / 86400)}일 전`;
+  return d.toLocaleDateString("ko-KR");
+}
 
 // ── InvitePanel ───────────────────────────────────────────────────────────────
+
 function InvitePanel({ onClose, onInvite }: {
   onClose: () => void;
   onInvite: (email: string) => Promise<void>;
 }) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-
   const invalid = !email.trim() || !email.includes("@") || loading;
 
   const submit = async () => {
-    if (!invalid) {
-      setLoading(true);
-      await onInvite(email.trim());
-      setLoading(false);
-      setEmail("");
-    }
+    if (invalid) return;
+    setLoading(true);
+    await onInvite(email.trim());
+    setLoading(false);
+    setEmail("");
   };
 
   return (
@@ -61,43 +75,57 @@ function InvitePanel({ onClose, onInvite }: {
   );
 }
 
-// ── ActionButton ──────────────────────────────────────────────────────────────
-function ActionButton({member, onStatusChange}: {
-  member: CompanyMemberResponse;
-  onStatusChange: (id: number, s: "APPROVED" | "SUSPENDED") => void;
+// ── RoleDropdown ──────────────────────────────────────────────────────────────
+
+function RoleDropdown<T extends string>({
+                                          value, options, onChange, disabled,
+                                        }: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+  disabled?: boolean;
 }) {
-  if (member.role === "PRESIDENT")
-    return <span className="text-xs text-muted-foreground/30">–</span>;
-
-  if (member.status === "PENDING")
-    return (
-        <span className="text-xs text-amber-500 font-medium">초대 대기중</span>
-    );
-
-  if (member.status === "APPROVED")
-    return (
-        <button onClick={() => onStatusChange(member.userId, "SUSPENDED")}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-red-200 text-[11px] font-medium text-red-600 hover:bg-red-50 transition-colors w-full justify-center">
-          <Ban size={10}/> 비활성화
-        </button>
-    );
-
   return (
-      <button onClick={() => onStatusChange(member.userId, "APPROVED")}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-emerald-200 text-[11px] font-medium text-emerald-600 hover:bg-emerald-50 transition-colors w-full justify-center">
-        <CheckCircle size={10}/> 활성화
-      </button>
+      <div className="relative inline-block">
+        <select
+            value={value}
+            onChange={(e) => onChange(e.target.value as T)}
+            disabled={disabled}
+            className="appearance-none pl-2.5 pr-6 py-1 text-[11px] font-semibold border border-border rounded-md bg-white text-foreground outline-none focus:border-primary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {options.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <ChevronDown size={10}
+                     className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"/>
+      </div>
   );
 }
 
 // ── MembersTab ────────────────────────────────────────────────────────────────
+
 type FilterTab = "all" | "APPROVED" | "PENDING" | "SUSPENDED";
 
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
   {key: "all", label: "전체"},
   {key: "APPROVED", label: "활성"},
-  {key: "PENDING", label: "초대 대기"},
+  {key: "PENDING", label: "대기"},
   {key: "SUSPENDED", label: "비활성"},
+];
+
+const BUSINESS_ROLE_OPTIONS: { value: BusinessRole; label: string }[] = [
+  {value: "BUYER", label: "바이어"},
+  {value: "SELLER", label: "셀러"},
+  {value: "BOTH", label: "바이어 + 셀러"},
+];
+
+// 💡 백엔드 Enum 값에 맞춘 계정 상태 드롭다운 옵션
+const STATUS_OPTIONS: { value: MemberUserStatus; label: string }[] = [
+  {value: "PENDING", label: "가입 대기"},
+  {value: "APPROVED", label: "정상 이용"},
+  {value: "SUSPENDED", label: "이용 정지"},
+  {value: "DELETED", label: "탈퇴 처리"},
 ];
 
 export function MembersTab() {
@@ -108,18 +136,20 @@ export function MembersTab() {
   const [toast, setToast]           = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const user = useAuthStore((state) => state.user);
+
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   };
 
-  // 데이터 로드
   const loadMembers = async () => {
+    if (!user?.companyId) return;
     try {
       setLoading(true);
-      const data = await getCompanyMembers();
+      const data = await getCompanyMembers(user.companyId);
       setMembers(data);
-    } catch (err) {
+    } catch {
       showToast("직원 목록을 불러오는 데 실패했습니다.");
     } finally {
       setLoading(false);
@@ -130,41 +160,40 @@ export function MembersTab() {
     loadMembers();
   }, []);
 
-  // 직원 초대 API 연동
   const handleInvite = async (email: string) => {
     try {
       await inviteMember({email});
       showToast(`${email}로 초대 메일을 발송했습니다.`);
       setShowInvite(false);
-      loadMembers(); // 초대 후 목록 리프레시
-    } catch (err) {
+      loadMembers();
+    } catch {
       showToast("초대 메일 발송에 실패했습니다.");
     }
   };
 
-  // 계정 상태 변경 API 연동
-  const handleStatus = async (userId: number, status: "APPROVED" | "SUSPENDED") => {
+  // 💡 상태 변경용 핸들러 (드롭다운 바뀔 때 실행)
+  const handleStatusChange = async (userId: number, status: MemberUserStatus) => {
     try {
       await updateMemberStatus(userId, {status});
-      setMembers((prev) =>
-          prev.map((m) => (m.userId === userId ? {...m, status} : m))
-      );
-      showToast(status === "APPROVED" ? "계정을 활성화했습니다." : "계정을 비활성화했습니다.");
-    } catch (err) {
+      setMembers((prev) => prev.map((m) => m.userId === userId ? {...m, status} : m));
+
+      const matched = STATUS_OPTIONS.find(o => o.value === status);
+      showToast(`계정 상태를 [${matched?.label || status}]로 변경했습니다.`);
+    } catch {
       showToast("상태 변경에 실패했습니다.");
     }
   };
 
-  // 역할(UserRole, BusinessRole) 변경 API 연동
-  const handleRoleChange = async (userId: number, fields: { role?: MemberRole; businessRole?: BusinessRole }) => {
+  const handleRoleChange = async (
+      userId: number,
+      fields: { businessRole?: BusinessRole }
+  ) => {
     try {
       await updateMemberRole(userId, fields);
-      setMembers((prev) =>
-          prev.map((m) => (m.userId === userId ? {...m, ...fields} : m))
-      );
-      showToast("권한을 성공적으로 수정했습니다.");
-    } catch (err) {
-      showToast("권한 수정에 실패했습니다.");
+      setMembers((prev) => prev.map((m) => m.userId === userId ? {...m, ...fields} : m));
+      showToast("거래 유형을 수정했습니다.");
+    } catch {
+      showToast("거래 유형 수정에 실패했습니다.");
     }
   };
 
@@ -178,19 +207,21 @@ export function MembersTab() {
   const filtered = members.filter((m) => {
     const matchTab    = filterTab === "all" || m.status === filterTab;
     const q           = search.trim().toLowerCase();
-    const matchSearch = !q || (m.name && m.name.toLowerCase().includes(q)) || m.email.toLowerCase().includes(q);
+    const matchSearch = !q || (m.name ?? "").toLowerCase().includes(q) || m.email.toLowerCase().includes(q);
     return matchTab && matchSearch;
   });
 
-  if (loading) {
-    return <div className="py-20 text-center text-sm text-muted-foreground">데이터를 불러오는 중입니다...</div>;
-  }
+  if (loading) return (
+      <div className="py-20 text-center text-sm text-muted-foreground">
+        데이터를 불러오는 중입니다...
+      </div>
+  );
 
   return (
       <div className="space-y-4">
         {/* Topbar */}
         <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">직원을 초대하고 계정 상태 및 권한을 관리하세요.</p>
+          <p className="text-sm text-muted-foreground">직원을 초대하고 계정 상태를 관리하세요.</p>
           <button
               onClick={() => setShowInvite((v) => !v)}
               className="flex items-center gap-1.5 bg-primary hover:bg-primary/90 text-white px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors"
@@ -204,7 +235,7 @@ export function MembersTab() {
           {[
             {label: "전체 인원", value: stats.total, cls: "text-foreground"},
             {label: "활성", value: stats.APPROVED, cls: "text-emerald-600"},
-            {label: "초대 대기", value: stats.PENDING, cls: "text-amber-500"},
+            {label: "대기", value: stats.PENDING, cls: "text-amber-500"},
             {label: "비활성", value: stats.SUSPENDED, cls: "text-slate-400"},
           ].map((s) => (
               <div key={s.label} className="bg-white border border-border rounded-xl px-4 py-3.5">
@@ -264,14 +295,14 @@ export function MembersTab() {
 
         {/* Table */}
         <PanelCard title={`직원 ${filtered.length}명`} icon={<Users size={13}/>} noPad>
-          {/* thead 컬럼 비율 조정: 이름(2fr) / 내부역할(1.2fr) / 거래역할(1.2fr) / 상태(1fr) / 관리(1fr) */}
+          {/* 💡 기존 레이아웃을 그대로 살린 컬럼명 변경 (상태 및 계정 제어를 직관적으로 정렬) */}
           <div
-              className="grid grid-cols-[3fr_3fr_3fr_2fr_1fr] gap-4 px-5 py-2.5 bg-muted/30 border-b border-border text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+              className="grid grid-cols-[minmax(0,3fr)_135px_120px_145px_105px] gap-3 px-5 py-2.5 bg-muted/30 border-b border-border text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
             <span>이름 / 이메일</span>
-            <span>서비스 권한</span>
             <span>거래 유형</span>
-            <span>상태</span>
-            <span className="text-center">계정 제어</span>
+            <span>상태 표시</span>
+            <span>최근 로그인</span>
+            <span>계정 제어</span>
           </div>
 
           {filtered.length === 0 ? (
@@ -280,72 +311,76 @@ export function MembersTab() {
               </div>
           ) : (
               <div className="divide-y divide-border">
-                {filtered.map((m) => (
-                    <div
-                        key={m.userId}
-                        className={`grid grid-cols-[2fr_1.2fr_1.2fr_1fr_1fr] gap-4 px-5 py-3.5 items-center hover:bg-muted/[0.03] transition-colors ${
-                            m.status === "SUSPENDED" ? "opacity-50" : ""
-                        }`}
-                    >
-                      {/* Name / email */}
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <Avatar name={m.name || ""} email={m.email}/>
-                        <div className="min-w-0">
-                          {m.name ? (
-                              <>
-                                <p className="text-sm font-semibold truncate leading-tight">{m.name}</p>
-                                <p className="text-[11px] text-muted-foreground truncate mt-0.5">{m.email}</p>
-                              </>
+                {filtered.map((m) => {
+                  const isPresident = m.role === "PRESIDENT";
+                  return (
+                      <div
+                          key={m.userId}
+                          className={`grid grid-cols-[minmax(0,3fr)_140px_120px_140px_110px] gap-3 px-5 py-3.5 items-center hover:bg-muted/[0.03] transition-colors ${
+                              m.status === "SUSPENDED" ? "opacity-50" : m.status === "DELETED" ? "opacity-40" : ""
+                          }`}
+                      >
+                        {/* 이름 / 이메일 */}
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Avatar name={m.name ?? ""} email={m.email}/>
+                          <div className="min-w-0">
+                            {m.name ? (
+                                <>
+                                  <p className="text-sm font-semibold truncate leading-tight">{m.name}</p>
+                                  <p className="text-[11px] text-muted-foreground truncate mt-0.5">{m.email}</p>
+                                </>
+                            ) : (
+                                <>
+                                  <p className="text-sm text-muted-foreground truncate leading-tight">{m.email}</p>
+                                  <p className="text-[11px] text-amber-500 mt-0.5">가입 전</p>
+                                </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 거래 유형 (BusinessRole) */}
+                        <div>
+                          <RoleDropdown
+                              value={m.businessRole}
+                              options={BUSINESS_ROLE_OPTIONS}
+                              onChange={(v) => handleRoleChange(m.userId, {businessRole: v})}
+                              disabled={isPresident || m.status === "SUSPENDED" || m.status === "DELETED"}
+                          />
+                        </div>
+
+                        {/* 상태 표시 (StatusDot 시각적 요소 그대로 유지) */}
+                        <div>
+                          <StatusDot
+                              status={
+                                m.status === "APPROVED" ? "active" :
+                                    m.status === "PENDING" ? "pending" : "inactive"
+                              }
+                          />
+                        </div>
+
+                        {/* 최근 로그인 */}
+                        <div className="text-xs text-muted-foreground">
+                          {m.lastLoginAt
+                              ? formatLastLogin(m.lastLoginAt)
+                              : <span className="text-amber-500 font-medium">미접속</span>
+                          }
+                        </div>
+
+                        <div>
+                          {isPresident ? (
+                              <span className="text-xs text-muted-foreground/30">–</span>
                           ) : (
-                              <>
-                                <p className="text-sm text-muted-foreground truncate leading-tight">{m.email}</p>
-                                <p className="text-[11px] text-amber-500 mt-0.5">가입 대기 (초대됨)</p>
-                              </>
+                              <RoleDropdown
+                                  value={m.status}
+                                  options={STATUS_OPTIONS}
+                                  onChange={(v) => handleStatusChange(m.userId, v)}
+                                  disabled={m.status === "DELETED"} // 이미 탈퇴한 계정은 수정 불가 처리
+                              />
                           )}
                         </div>
                       </div>
-
-                      {/* User Role Select */}
-                      <div>
-                        {m.role === "PRESIDENT" ? (
-                            <RoleBadge role="president"/>
-                        ) : (
-                            <select
-                                value={m.role}
-                                onChange={(e) => handleRoleChange(m.userId, {role: e.target.value as MemberRole})}
-                                className="text-xs bg-white border border-border rounded px-2 py-1 outline-none focus:border-primary"
-                            >
-                              <option value="EMPLOYEE">EMPLOYEE (직원)</option>
-                              <option value="ADMIN">ADMIN (관리자)</option>
-                            </select>
-                        )}
-                      </div>
-
-                      {/* Business Role Select */}
-                      <div>
-                        <select
-                            value={m.businessRole}
-                            onChange={(e) => handleRoleChange(m.userId, {businessRole: e.target.value as BusinessRole})}
-                            className="text-xs bg-white border border-border rounded px-2 py-1 outline-none focus:border-primary"
-                        >
-                          <option value="BUYER">BUYER (구매자)</option>
-                          <option value="SELLER">SELLER (판매자)</option>
-                          <option value="BOTH">BOTH (동시 이용)</option>
-                        </select>
-                      </div>
-
-                      {/* Status */}
-                      <div>
-                        <StatusDot
-                            status={m.status === "APPROVED" ? "active" : m.status === "PENDING" ? "pending" : "inactive"}/>
-                      </div>
-
-                      {/* Account Management Action */}
-                      <div className="text-center">
-                        <ActionButton member={m} onStatusChange={handleStatus}/>
-                      </div>
-                    </div>
-                ))}
+                  );
+                })}
               </div>
           )}
         </PanelCard>

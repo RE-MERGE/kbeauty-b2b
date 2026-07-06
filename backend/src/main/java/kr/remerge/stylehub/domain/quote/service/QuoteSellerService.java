@@ -16,8 +16,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,6 +50,18 @@ public class QuoteSellerService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
+        // 재견적 체인에서 다른 견적의 parentQuote로 참조되는(=대체된) 버전은 별도 행으로
+        // 노출하지 않고 체인의 최신 버전만 목록에 보여준다. (바이어 쪽과 동일한 이유)
+        Set<Integer> supersededQuoteIds = quotes.stream()
+                .map(Quote::getParentQuote)
+                .filter(Objects::nonNull)
+                .map(Quote::getQuoteId)
+                .collect(Collectors.toCollection(HashSet::new));
+
+        List<Quote> latestQuotes = quotes.stream()
+                .filter(quote -> !supersededQuoteIds.contains(quote.getQuoteId()))
+                .toList();
+
        List<Integer> quoteIds =  quotes.stream()
                 .map(Quote::getQuoteId)
                 .toList();
@@ -74,15 +89,35 @@ public class QuoteSellerService {
             );
         }
 
-        return quotes.stream()
+        return latestQuotes.stream()
                 .map(quote ->
                         QuoteSellerListResponse.from(
                                 quote,
-                                contractStatusByQuoteId.get(quote.getQuoteId())
+                                findContractStatusInChain(quote, contractStatusByQuoteId)
                         )
                 )
                 .toList();
 
+    }
+
+    // 계약도 재견적 이전 버전 quoteId에 걸려있을 수 있으므로 체인을 거슬러 올라가며 찾는다.
+    private ContractStatus findContractStatusInChain(
+            Quote quote,
+            Map<Integer, ContractStatus> contractStatusByQuoteId
+    ) {
+        Quote current = quote;
+
+        while (current != null) {
+            ContractStatus found = contractStatusByQuoteId.get(current.getQuoteId());
+
+            if (found != null) {
+                return found;
+            }
+
+            current = current.getParentQuote();
+        }
+
+        return null;
     }
 
 }

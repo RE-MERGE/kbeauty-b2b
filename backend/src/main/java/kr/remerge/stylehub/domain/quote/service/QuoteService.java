@@ -164,6 +164,11 @@ public class QuoteService {
 
         quoteItemRepository.saveAll(revisedItems);
 
+        // 원본은 새 버전으로 대체되어 더 이상 별도 행으로 노출되거나 채택/거절 등의 액션
+        // 대상이 되면 안 되므로 SUPERSEDED로 전환한다. (목록 조회 시 체인의 최신 버전만 보여주는
+        // 필터링과 짝을 이루는 처리 — QuoteBuyerService/QuoteSellerService의 getQuoteList 참고)
+        original.changeStatus(QuoteStatusCode.SUPERSEDED);
+
         return revisedQuote;
     }
 

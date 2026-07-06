@@ -121,4 +121,11 @@ public class Negotiation {
         this.status = "CLOSED";
         this.closedAt = LocalDateTime.now();
     }
+
+    // 같은 상대와의 협의를 한 행으로 계속 관리하기 위해, 이미 AGREED/CLOSED로 끝났던
+    // 협의에 새로운 라운드(NegotiationRequest)가 추가될 때 다시 OPEN 상태로 되돌린다.
+    // agreedAt/closedAt은 지난 라운드가 실제로 언제 합의/종료됐는지 이력이므로 그대로 남겨둔다.
+    public void reopen() {
+        this.status = "OPEN";
+    }
 }

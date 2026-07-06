@@ -127,28 +127,40 @@ public class NegotiationService {
                                 () -> new BusinessException(ErrorCode.QUOTE_NOT_FOUND)
                         );
 
+        // 바이어가 목록/상세 어느 화면에서 "협의 요청"을 눌렀는지에 따라 넘어오는 quoteId가
+        // v1일 수도, 이미 재견적된 v2/v3일 수도 있다. 버전과 무관하게 항상 같은 대화(Negotiation)로
+        // 묶이도록 체인의 최상위(root, v1) 견적을 기준으로 기존 협의를 찾는다. 이걸 안 하면 재견적
+        // 이후 다시 협의를 요청할 때마다 같은 셀러와의 대화가 매번 새 행으로 갈라진다.
+        Quote rootQuote = resolveRootQuote(quote);
+
         User buyer = userReader.getUser(userId);
         User seller = userReader.getUser(quote.getSeller().getUserId());
 
+        // 상태(OPEN/AGREED/CLOSED)와 무관하게 같은 견적·같은 바이어면 항상 같은 행을 재사용한다.
+        // 한 번 합의(AGREED)되거나 거절로 종료(CLOSED)된 뒤에도 같은 셀러와 다시 협의할 수 있는데,
+        // 이때도 셀러 협의관리 화면에서 별개의 행이 아니라 하나의 행에서 대화가 이어지도록 하기 위함.
         Negotiation negotiation = negotiationRepository
-                .findFirstByQuote_QuoteIdAndBuyer_UserIdAndStatusOrderByOpenedAtDesc(
-                        request.quoteId(),
-                        userId,
-                        "OPEN"
+                .findFirstByQuote_QuoteIdAndBuyer_UserIdOrderByOpenedAtDesc(
+                        rootQuote.getQuoteId(),
+                        userId
                 )
                 .orElseGet(() ->
                         negotiationRepository.save(
                                 new Negotiation(
                                         "QUOTE",
-                                        quote,
+                                        rootQuote,
                                         null,
                                         buyer,
                                         seller,
-                                        quote.getProductName()
+                                        rootQuote.getProductName()
                                                 + " 견적 조건 협의"
                                 )
                         )
                 );
+
+        if (!"OPEN".equals(negotiation.getStatus())) {
+            negotiation.reopen();
+        }
 
         // 이전 라운드에서 셀러가 이미 새 버전 견적으로 응답했다면, 이번 라운드는 그 최신 버전을
         // 기준으로 잡아야 parentQuote/version 체인이 v1→v2→v3로 이어진다. 그렇지 않으면 매 라운드가
@@ -191,6 +203,28 @@ public class NegotiationService {
         );
     }
 
+    // parentQuote를 타고 올라가 이 견적 체인의 최초(v1) 견적을 찾는다.
+    private Quote resolveRootQuote(Quote quote) {
+        Quote current = quote;
+
+        while (current.getParentQuote() != null) {
+            current = current.getParentQuote();
+        }
+
+        return current;
+    }
+
+    // parentContract를 타고 올라가 이 계약 체인의 최초(v1) 계약을 찾는다.
+    private Contract resolveRootContract(Contract contract) {
+        Contract current = contract;
+
+        while (current.getParentContract() != null) {
+            current = current.getParentContract();
+        }
+
+        return current;
+    }
+
     // 계약서(셀러 서명 후 바이어 검토 단계)에 대해 조건 변경을 요청하는 협의.
     // 바이어가 서명하기 전, SELLER_SIGNED 상태의 계약서에 대해서만 요청할 수 있다.
     private void createContractNegotiation(Integer userId, NegotiationCreateRequest request) {
@@ -203,31 +237,38 @@ public class NegotiationService {
                 .findByContractIdAndQuote_Buyer_UserId(request.contractId(), userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CONTRACT_NOT_FOUND));
 
-        Quote quote = contract.getQuote();
+        // Quote와 동일한 이유로, 넘어온 계약이 이미 재계약된 버전일 수 있으므로 항상 체인의
+        // 최상위(root, v1) 계약을 기준으로 기존 협의를 찾아야 같은 대화로 묶인다.
+        Contract rootContract = resolveRootContract(contract);
+        Quote quote = rootContract.getQuote();
         User buyer = userReader.getUser(userId);
         User seller = userReader.getUser(quote.getSeller().getUserId());
 
+        // Quote와 동일하게, 상태와 무관하게 같은 계약·같은 바이어면 항상 같은 행을 재사용한다.
         Negotiation negotiation = negotiationRepository
-                .findFirstByContract_ContractIdAndBuyer_UserIdAndStatusOrderByOpenedAtDesc(
-                        request.contractId(),
-                        userId,
-                        "OPEN"
+                .findFirstByContract_ContractIdAndBuyer_UserIdOrderByOpenedAtDesc(
+                        rootContract.getContractId(),
+                        userId
                 )
                 .orElseGet(() ->
                         negotiationRepository.save(
                                 new Negotiation(
                                         "CONTRACT",
                                         quote,
-                                        contract,
+                                        rootContract,
                                         buyer,
                                         seller,
-                                        (contract.getContractName() != null
-                                                ? contract.getContractName()
+                                        (rootContract.getContractName() != null
+                                                ? rootContract.getContractName()
                                                 : quote.getProductName())
                                                 + " 계약 조건 협의"
                                 )
                         )
                 );
+
+        if (!"OPEN".equals(negotiation.getStatus())) {
+            negotiation.reopen();
+        }
 
         // Quote와 동일한 이유: 이전 라운드에서 이미 재계약(revisedContract)이 나왔다면
         // 그 최신 버전을 기준으로 검증/연결해야 한다. (원본 계약은 createRevisedDraft에서 이미 CANCELED 처리됨)

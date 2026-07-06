@@ -12,8 +12,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -32,10 +36,25 @@ public class QuoteBuyerService {
             return List.of();
         }
 
+        // 재견적(v1→v2→...) 체인에서 다른 견적의 parentQuote로 참조되는(=대체된) 버전은
+        // 별도 행으로 노출하지 않고, 체인의 최신 버전 하나만 목록에 보여준다.
+        // (셀러가 재견적하면 이전 버전은 SUPERSEDED로 바뀌지만, 방어적으로 체인 관계로도 한 번 더 걸러낸다)
+        Set<Integer> supersededQuoteIds = quotes.stream()
+                .map(Quote::getParentQuote)
+                .filter(Objects::nonNull)
+                .map(Quote::getQuoteId)
+                .collect(Collectors.toCollection(HashSet::new));
+
+        List<Quote> latestQuotes = quotes.stream()
+                .filter(quote -> !supersededQuoteIds.contains(quote.getQuoteId()))
+                .toList();
+
         List<Integer> quoteIds = quotes.stream()
                 .map(Quote::getQuoteId)
                 .toList();
 
+        // 샘플 주문/계약은 재견적 이전 버전(구 quoteId)에 걸려 있을 수 있으므로
+        // 체인 전체 quoteId로 조회해두고, 각 최신 견적에서 체인을 거슬러 올라가며 찾는다.
         List<Order> sampleOrders =
                 orderRepository
                         .findByQuote_QuoteIdInAndBuyer_UserIdAndIsSampleTrueOrderByCreatedAtDesc(
@@ -62,13 +81,32 @@ public class QuoteBuyerService {
                         )
                 );
 
-        return quotes
+        return latestQuotes
                 .stream()
                 .map(quote -> QuoteBuyerListResponse.from(
                         quote,
-                        latestSampleOrderByQuoteId.get(quote.getQuoteId()),
-                        contractByQuoteId.get(quote.getQuoteId())
+                        findInChain(quote, latestSampleOrderByQuoteId),
+                        findInChain(quote, contractByQuoteId)
                 ))
                 .toList();
+    }
+
+    // 체인의 최신 견적부터 시작해 parentQuote를 거슬러 올라가며 해당 quoteId에 연결된
+    // 값(샘플 주문/계약 등)을 찾는다. 재견적으로 quoteId가 바뀌어도 이전 버전에 달려있던
+    // 값을 최신 버전 행에서 그대로 보여주기 위함.
+    private <T> T findInChain(Quote quote, Map<Integer, T> byQuoteId) {
+        Quote current = quote;
+
+        while (current != null) {
+            T found = byQuoteId.get(current.getQuoteId());
+
+            if (found != null) {
+                return found;
+            }
+
+            current = current.getParentQuote();
+        }
+
+        return null;
     }
 }

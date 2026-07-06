@@ -26,7 +26,13 @@ public record QuoteBuyerListResponse(
         OrderStatus sampleOrderStatus,
         Integer contractId,
         String contractName,
-        ContractStatus contractStatus
+        ContractStatus contractStatus,
+
+        // 협의(재견적)로 생성된 버전인지, 이전 조건 대비 얼마나 바뀌었는지 목록에서도 바로 보여주기 위함.
+        Integer version,
+        Integer parentQuoteId,
+        Long previousTotalAmount,
+        Integer previousLeadTimeDays
 ) {
 
     public static QuoteBuyerListResponse from(
@@ -34,6 +40,8 @@ public record QuoteBuyerListResponse(
             Order sampleOrder,
             Contract contract
     ) {
+        Quote parentQuote = quote.getParentQuote();
+
         return new QuoteBuyerListResponse(
                 quote.getQuoteId(),
                 quote.getQuoteNo(),
@@ -52,7 +60,11 @@ public record QuoteBuyerListResponse(
                 sampleOrder == null ? null : sampleOrder.getStatus(),
                 contract == null ? null : contract.getContractId(),
                 contract == null ? null : contract.getContractName(),
-                contract == null ? null : contract.getStatus()
+                contract == null ? null : contract.getStatus(),
+                quote.getVersion(),
+                parentQuote == null ? null : parentQuote.getQuoteId(),
+                parentQuote == null ? null : parentQuote.getTotalAmount(),
+                parentQuote == null ? null : parentQuote.getLeadTimeDays()
         );
     }
 }

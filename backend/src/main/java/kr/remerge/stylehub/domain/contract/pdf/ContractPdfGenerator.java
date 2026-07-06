@@ -80,6 +80,37 @@ public class ContractPdfGenerator {
         );
     }
 
+    public byte[] generateBuyerPreview(
+            Contract contract,
+            List<ContractItem> items,
+            ContractSignature sellerSignature,
+            String buyerSignatureText,
+            String buyerSignatureImageUrl
+    ) {
+        return pdfDocumentGenerator.generate(document -> {
+            addPreviewNotice(document);
+            addContractContent(document, contract, items);
+            addSectionTitle(document, "4. 전자서명");
+
+            Table table = new Table(
+                    UnitValue.createPercentArray(new float[]{1, 1})
+            ).useAllAvailableWidth();
+
+            table.addCell(
+                    createPreviewSignatureCell(
+                            "구매자",
+                            buyerSignatureText,
+                            buyerSignatureImageUrl
+                    )
+            );
+            table.addCell(
+                    createSignatureCell("판매자", sellerSignature)
+            );
+
+            document.add(table);
+        });
+    }
+
     private void addPreviewSignatures(
             Document document,
             String signatureText,

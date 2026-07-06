@@ -84,6 +84,7 @@ public enum ErrorCode {
     ORDER_ITEMS_NOT_READY(HttpStatus.CONFLICT, "ORDER_004", "모든 주문 상품의 출고 준비가 완료되지 않았습니다."),
     INVALID_RECEIVER_INFO(HttpStatus.BAD_REQUEST, "ORDER_005","수령인 이름과 연락처를 확인해 주세요."),
     SAMPLE_ORDER_ALREADY_EXISTS(HttpStatus.CONFLICT,"ORDER_006","이미 진행 중인 샘플 주문이 있습니다."),
+    CONTRACT_ORDER_ALREADY_EXISTS(HttpStatus.CONFLICT,"ORDER_007","이미 진행 중인 계약 주문이 있습니다."),
 
     // ───────────────────────────────────────────
     // 견적 (QUOTE)
@@ -102,7 +103,9 @@ public enum ErrorCode {
     CONTRACT_ALREADY_SIGNED(HttpStatus.BAD_REQUEST, "CONTRACT_002", "이미 서명된 계약서입니다."),
     CONTRACT_ALREADY_EXISTS(HttpStatus.CONFLICT, "CONTRACT_003", "이미 생성된 계약서가 있습니다."),
     INVALID_CONTRACT_STATUS(HttpStatus.BAD_REQUEST, "CONTRACT_004", "현재 상태에서는 계약서를 처리할 수 없습니다."),
+    CONTRACT_SIGNATURE_NOT_FOUND(HttpStatus.NOT_FOUND, "CONTRACT_005", "계약서 서명 정보를 찾을 수 없습니다."),
     CONTRACT_CONTENT_CHANGED(HttpStatus.CONFLICT,"CONTRACT_006","서명 이후 계약 내용이 변경되어 진행할 수 없습니다."),
+    CONTRACT_ITEM_NOT_FOUND(HttpStatus.BAD_REQUEST,"CONTRACT_007","계약할 일반 상품이 없습니다."),
 
     // ───────────────────────────────────────────
     // 소싱 (SOURCING)
@@ -117,6 +120,12 @@ public enum ErrorCode {
     PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST,"PAYMENT_002","결제 요청 금액과 실제 주문 금액이 일치하지 않습니다."),
     PAYMENT_CONFIRM_RESULT_MISMATCH(HttpStatus.INTERNAL_SERVER_ERROR,"PAYMENT_003","결제 승인 결과가 주문 정보와 일치하지 않습니다."),
     PAYMENT_ORDER_STATE_MISMATCH(HttpStatus.CONFLICT,"PAYMENT_004","함께 결제한 주문들의 상태가 일치하지 않습니다."),
+
+    // ───────────────────────────────────────────
+    // 배송 (DELIVERY)
+    // ───────────────────────────────────────────
+    UNSUPPORTED_DELIVERY_CARRIER(HttpStatus.BAD_REQUEST,"DELIVERY_001","지원하지 않는 택배사입니다."),
+    DELIVERY_INFO_NOT_REGISTERED(HttpStatus.CONFLICT,"DELIVERY_002","출고 정보가 등록되지 않았습니다."),
 
     // ───────────────────────────────────────────
     // 카테고리 (CATEGORY)

@@ -4,6 +4,7 @@ import {
   Check,
   CheckCircle2,
   Clock3,
+  CreditCard,
   FileText,
   FlaskConical,
   MessageSquareText,
@@ -33,6 +34,14 @@ type SampleOrderStatus =
   | "CANCELED"
   | "REFUNDED";
 
+type ContractStatus =
+  | "DRAFT"
+  | "SELLER_SIGNED"
+  | "BUYER_SIGNED"
+  | "COMPLETED"
+  | "CANCELED"
+  | "EXPIRED";
+
 type BuyerQuote = {
   quoteId: number;
   quoteNo: string;
@@ -47,6 +56,9 @@ type BuyerQuote = {
   viewedAt?: string | null;
   sampleOrderId: number | null;
   sampleOrderStatus: SampleOrderStatus | null;
+  contractId: number | null;
+  contractName: string | null;
+  contractStatus: ContractStatus | null;
 };
 
 type QuoteFilter = "ALL" | "REVIEW" | "APPROVED" | "CLOSED";
@@ -62,6 +74,7 @@ const filters: Array<{ value: QuoteFilter; label: string }> = [
   { value: "APPROVED", label: "채택 완료" },
   { value: "CLOSED", label: "종료" },
 ];
+
 
 function formatPrice(value: number) {
   return `${value.toLocaleString()}원`;
@@ -121,9 +134,34 @@ function getSampleOrderDisplay(status: SampleOrderStatus | null) {
   }
 }
 
-function getQuoteResultDisplay(status: QuoteStatus) {
+function getQuoteResultDisplay(
+  status: QuoteStatus,
+  contractStatus: ContractStatus | null,
+) {
   switch (status) {
     case "APPROVED":
+      if (
+        contractStatus === "BUYER_SIGNED"
+        || contractStatus === "COMPLETED"
+      ) {
+        return {
+          label: "계약 체결 완료",
+          className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+          icon: <CheckCircle2 size={13} />,
+        };
+      }
+
+      if (
+        contractStatus === "CANCELED"
+        || contractStatus === "EXPIRED"
+      ) {
+        return {
+          label: "계약 종료",
+          className: "border-slate-200 bg-slate-100 text-slate-600",
+          icon: <X size={13} />,
+        };
+      }
+
       return {
         label: "계약서 수신 대기",
         className: "border-blue-200 bg-blue-50 text-blue-700",
@@ -180,6 +218,9 @@ export default function BuyerQuoteList() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
+  const [negotiationContent, setNegotiationContent] = useState("");
+  const [negotiationType, setNegotiationType] = useState("");
+
 
   const requestedFilter = searchParams.get("status") as QuoteFilter | null;
   const activeFilter = filters.some(
@@ -279,9 +320,23 @@ export default function BuyerQuoteList() {
       setIsUpdating(true);
       setActionError("");
 
-      await api.patch(`/quotes/${quote.quoteId}/status`, {
-        status,
-      });
+      if (status === "NEGOTIATING" && negotiationContent.trim().length === 0) {
+        setActionError("협의 요청 내용을 입력해 주세요.");
+        return;
+      }
+
+      if (status === "NEGOTIATING") {
+        await api.post("/negotiations", {
+          quoteId: quote.quoteId,
+          sourcingRequestId: quote.sourcingRequestId,
+          content: negotiationContent.trim(),
+          negotiationType: "QUOTE"
+        });
+      } else {
+              await api.patch(`/quotes/${quote.quoteId}/status`, {
+                  status,
+                });
+            }
 
       setQuotes((currentQuotes) =>
         currentQuotes.map((currentQuote) => {
@@ -308,19 +363,12 @@ export default function BuyerQuoteList() {
         status === "APPROVED"
           ? "견적을 확정했습니다. 셀러가 계약서를 작성한 후 전달할 예정입니다."
           : status === "NEGOTIATING"
-            ? "견적 협의를 요청했습니다."
+            ? "협의 요청 내용을 전달했습니다."
             : "견적을 거절했습니다."
       );
-      setPendingAction(null);
 
-      if (status === "NEGOTIATING") {
-        navigate("/negotiations", {
-          state: {
-            quoteId: quote.quoteId,
-            requestId: quote.sourcingRequestId,
-          },
-        });
-      }
+      setPendingAction(null);
+      setNegotiationContent("");
     } catch (error) {
       console.error("견적 상태 변경 실패", error);
       setActionError(
@@ -376,13 +424,23 @@ export default function BuyerQuoteList() {
               비교합니다.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => navigate("/buyer/my-sourcing")}
-            className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-primary hover:text-primary"
-          >
-            소싱 요청 목록
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => navigate("/buyer/contracts")}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-blue-500 hover:text-blue-700"
+            >
+              <FileText size={15} />
+              계약 관리
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/buyer/my-sourcing")}
+              className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:border-primary hover:text-primary"
+            >
+              소싱 요청 목록
+            </button>
+          </div>
         </header>
 
         <section className="mb-7 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5">
@@ -611,7 +669,16 @@ export default function BuyerQuoteList() {
                           const sampleOrderDisplay =
                             getSampleOrderDisplay(quote.sampleOrderStatus);
                           const quoteResultDisplay =
-                            getQuoteResultDisplay(quote.status);
+                            getQuoteResultDisplay(
+                              quote.status,
+                              quote.contractStatus,
+                            );
+                          const canReviewContract =
+                            quote.contractId !== null
+                            && quote.contractStatus === "SELLER_SIGNED";
+                          const isContractCompleted =
+                            quote.contractId !== null
+                            && quote.contractStatus === "COMPLETED";
                           const canCreateSampleOrder =
                             quote.sampleOrderStatus === null ||
                             quote.sampleOrderStatus === "CANCELED" ||
@@ -773,21 +840,11 @@ export default function BuyerQuoteList() {
                                       type="button"
                                       onClick={(event) => {
                                         event.stopPropagation();
-                                        if (quote.status === "SUBMITTED") {
+
                                           setPendingAction({
                                             quote,
                                             status: "NEGOTIATING",
                                           });
-                                          return;
-                                        }
-
-                                        navigate("/negotiations", {
-                                          state: {
-                                            quoteId: quote.quoteId,
-                                            requestId:
-                                              quote.sourcingRequestId,
-                                          },
-                                        });
                                       }}
                                       className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950 active:translate-y-0"
                                     >
@@ -846,6 +903,57 @@ export default function BuyerQuoteList() {
                                   )}
                                   {!canRespond &&
                                     !canOpenNegotiation &&
+                                    isContractCompleted && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          navigate(
+                                            `/buyer/contracts/${quote.contractId}/sign`,
+                                          );
+                                        }}
+                                        className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                                      >
+                                        <FileText size={14} />
+                                        계약서 보기
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          navigate(
+                                            `/checkout?contractId=${quote.contractId}`,
+                                          );
+                                        }}
+                                        className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700"
+                                      >
+                                        <CreditCard size={14} />
+                                        결제하러 가기
+                                      </button>
+                                    </>
+                                  )}
+                                  {!canRespond &&
+                                    !canOpenNegotiation &&
+                                    canReviewContract && (
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        navigate(
+                                          `/buyer/contracts/${quote.contractId}/sign`,
+                                        );
+                                      }}
+                                      className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-blue-600 bg-blue-600 px-3 text-xs font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-700 active:translate-y-0"
+                                    >
+                                      <FileText size={14} />
+                                      계약서 확인 및 서명
+                                    </button>
+                                  )}
+                                  {!canRespond &&
+                                    !canOpenNegotiation &&
+                                    !canReviewContract &&
+                                    !isContractCompleted &&
                                     quoteResultDisplay && (
                                     <span
                                       className={`inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-3 text-xs font-bold ${quoteResultDisplay.className}`}
@@ -924,6 +1032,15 @@ export default function BuyerQuoteList() {
                   {formatPrice(pendingAction.quote.totalAmount)}
                 </p>
               </div>
+
+              {pendingAction.status === "NEGOTIATING" && (
+                <textarea
+                  value={negotiationContent}
+                  onChange={(event) => setNegotiationContent(event.target.value)}
+                  placeholder={"협의 요청 내용을 입력하세요.\n예) 단가 조정 가능 여부, 납기 단축 가능 여부 등"}
+                  className="mt-4 h-32 w-full resize-none rounded-md border border-slate-300 p-3 text-sm outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-100"
+                />
+              )}
 
               <div className="mt-5 flex gap-2">
                 <button

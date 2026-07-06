@@ -3,12 +3,15 @@ package kr.remerge.stylehub.domain.order.controller;
 import jakarta.validation.Valid;
 import kr.remerge.stylehub.domain.order.dto.OrderCreateRequest;
 import kr.remerge.stylehub.domain.order.dto.OrderCreateResponse;
+import kr.remerge.stylehub.domain.order.dto.ContractOrderCreateRequest;
+import kr.remerge.stylehub.domain.order.dto.ContractOrderCreateResponse;
 import kr.remerge.stylehub.domain.order.dto.SampleOrderCreateRequest;
 import kr.remerge.stylehub.domain.order.dto.SampleOrderCreateResponse;
 import kr.remerge.stylehub.domain.order.dto.buyer.BuyerOrderDetailResponse;
 import kr.remerge.stylehub.domain.order.dto.buyer.BuyerOrderListResponse;
 import kr.remerge.stylehub.domain.order.dto.buyer.BuyerOrderOverviewResponse;
 import kr.remerge.stylehub.domain.order.service.BuyerOrderService;
+import kr.remerge.stylehub.domain.order.service.ContractOrderService;
 import kr.remerge.stylehub.domain.order.service.SampleOrderService;
 import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
 import kr.remerge.stylehub.global.auth.security.LoginUser;
@@ -26,6 +29,7 @@ public class BuyerOrderController {
 
     private final BuyerOrderService buyerOrderService;
     private final SampleOrderService sampleOrderService;
+    private final ContractOrderService contractOrderService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<BuyerOrderListResponse>>> getOrderList(
@@ -60,6 +64,21 @@ public class BuyerOrderController {
                 buyerOrderService.createOrder(authUser.userId(), request);
 
         return ResponseEntity.ok(ApiResponse.success(orderCreateResponse));
+    }
+
+    @PostMapping("/contract")
+    public ResponseEntity<ApiResponse<ContractOrderCreateResponse>>
+    createContractOrder(
+            @LoginUser AuthUser authUser,
+            @Valid @RequestBody ContractOrderCreateRequest request
+    ) {
+        ContractOrderCreateResponse response =
+                contractOrderService.createOrder(
+                        authUser.userId(),
+                        request
+                );
+
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/{orderId}/detail")

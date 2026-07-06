@@ -22,8 +22,10 @@ public record BuyerContractDetailResponse(
 
         String buyerCompanyName,
         String buyerBusinessNumber,
+        String buyerManagerName,
         String sellerCompanyName,
         String sellerBusinessNumber,
+        String sellerManagerName,
 
         String productName,
         String material,
@@ -42,6 +44,7 @@ public record BuyerContractDetailResponse(
         LocalDateTime sellerSignedAt,
         LocalDateTime buyerSignedAt,
         LocalDateTime completedAt,
+        String pdfUrl,
 
         List<BuyerContractItemResponse> items
 ) {
@@ -66,10 +69,12 @@ public record BuyerContractDetailResponse(
                 quote.getBuyer()
                         .getCompany()
                         .getBusinessNumber(),
+                quote.getBuyer().getName(),
 
                 contract.getSellerCompanyName(),
                 contract.getCompany()
                         .getBusinessNumber(),
+                quote.getSeller().getName(),
 
                 quote.getProductName(),
                 quote.getMaterial(),
@@ -88,6 +93,7 @@ public record BuyerContractDetailResponse(
                 contract.getSellerSignedAt(),
                 contract.getBuyerSignedAt(),
                 contract.getCompletedAt(),
+                contract.getPdfUrl(),
 
                 contractItems.stream()
                         .map(BuyerContractItemResponse::from)

@@ -34,6 +34,11 @@ public class ContractService {
     @Transactional
     public Contract createDraft(Quote quote, SellerContractCreateRequest request) {
 
+        List<QuoteItem> normalItems = findNormalQuoteItems(quote);
+        long contractAmount = normalItems.stream()
+                .mapToLong(QuoteItem::getTotalPrice)
+                .sum() + quote.getShippingFee();
+
         Optional<Contract> existingContract
                 = contractRepository.findByQuote_QuoteId(quote.getQuoteId());
 
@@ -51,6 +56,8 @@ public class ContractService {
                     request.returnPolicy(),
                     request.specialTerms()
             );
+            contract.updateContractAmount(contractAmount);
+            replaceContractItems(contract, quote, normalItems);
 
             return contract;
         }
@@ -67,6 +74,7 @@ public class ContractService {
                 Contract.createDraftFromQuote(quote,
                         createContractNo(),
                         request.contractName(),
+                        contractAmount,
                         request.deliveryDate(),
                         request.paymentTerms(),
                         request.returnPolicy(),
@@ -75,17 +83,16 @@ public class ContractService {
 
         Contract savedContract = contractRepository.save(contract);
 
-        saveContractItems(savedContract, quote);
+        saveContractItems(savedContract, quote, normalItems);
 
         return savedContract;
     }
 
-    private void saveContractItems(Contract contract, Quote quote) {
-
-        List<QuoteItem> quoteItems =
-                quoteItemRepository.findByQuote_QuoteId(quote.getQuoteId());
-
-        //민재 여기서 왜 이렇게 하지
+    private void saveContractItems(
+            Contract contract,
+            Quote quote,
+            List<QuoteItem> quoteItems
+    ) {
         List<ContractItem> contractItems = quoteItems.stream()
                 .map(quoteItem -> new ContractItem(
                         contract,
@@ -100,6 +107,36 @@ public class ContractService {
                 .toList();
 
         contractItemRepository.saveAll(contractItems);
+    }
+
+    private List<QuoteItem> findNormalQuoteItems(Quote quote) {
+        List<QuoteItem> normalItems = quoteItemRepository
+                .findByQuote_QuoteId(quote.getQuoteId())
+                .stream()
+                .filter(item -> !Boolean.TRUE.equals(item.getIsSample()))
+                .toList();
+
+        if (normalItems.isEmpty()) {
+            throw new BusinessException(
+                    ErrorCode.CONTRACT_ITEM_NOT_FOUND
+            );
+        }
+
+        return normalItems;
+    }
+
+    private void replaceContractItems(
+            Contract contract,
+            Quote quote,
+            List<QuoteItem> normalItems
+    ) {
+        List<ContractItem> existingItems = contractItemRepository
+                .findByContract_ContractIdOrderByContractItemIdAsc(
+                        contract.getContractId()
+                );
+
+        contractItemRepository.deleteAll(existingItems);
+        saveContractItems(contract, quote, normalItems);
     }
 
     private String createContractNo() {

@@ -16,4 +16,8 @@ public interface ContractRepository extends JpaRepository<Contract, Integer> {
     Optional<Contract> findByContractIdAndQuote_Buyer_UserId(Integer contractId, Integer buyerId);
 
     List<Contract> findByQuote_QuoteIdIn(List<Integer> quoteIds);
+
+    List<Contract> findByQuote_Buyer_UserIdOrderByCreatedAtDesc(
+            Integer buyerId
+    );
 }

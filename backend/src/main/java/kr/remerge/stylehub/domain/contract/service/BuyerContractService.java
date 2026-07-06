@@ -1,6 +1,8 @@
 package kr.remerge.stylehub.domain.contract.service;
 
 import kr.remerge.stylehub.domain.contract.dto.BuyerContractDetailResponse;
+import kr.remerge.stylehub.domain.contract.dto.BuyerContractListResponse;
+import kr.remerge.stylehub.domain.contract.dto.BuyerContractPreviewRequest;
 import kr.remerge.stylehub.domain.contract.dto.BuyerContractSignRequest;
 import kr.remerge.stylehub.domain.contract.entity.Contract;
 import kr.remerge.stylehub.domain.contract.entity.ContractItem;
@@ -38,6 +40,14 @@ public class BuyerContractService {
     private final Sha256HashGenerator sha256HashGenerator;
     private final ImageUploadService imageUploadService;
 
+    public List<BuyerContractListResponse> getContracts(Integer userId) {
+        return contractRepository
+                .findByQuote_Buyer_UserIdOrderByCreatedAtDesc(userId)
+                .stream()
+                .map(BuyerContractListResponse::from)
+                .toList();
+    }
+
     public BuyerContractDetailResponse getContract(Integer userId, Integer contractId) {
         Contract contract = findBuyerContract(contractId, userId);
 
@@ -49,6 +59,44 @@ public class BuyerContractService {
 
         return BuyerContractDetailResponse.from(contract, items);
 
+    }
+
+    public byte[] previewContract(
+            Integer userId,
+            Integer contractId,
+            BuyerContractPreviewRequest request
+    ) {
+        Contract contract = findBuyerContract(contractId, userId);
+
+        if (contract.getStatus() != ContractStatus.SELLER_SIGNED) {
+            throw new BusinessException(ErrorCode.INVALID_CONTRACT_STATUS);
+        }
+
+        List<ContractItem> contractItems =
+                contractItemRepository
+                        .findByContract_ContractIdOrderByContractItemIdAsc(
+                                contractId
+                        );
+
+        ContractSignature sellerSignature =
+                contractSignatureRepository
+                        .findByContract_ContractIdAndSignerRole(
+                                contractId,
+                                SignerRole.SELLER
+                        )
+                        .orElseThrow(() ->
+                                new BusinessException(
+                                        ErrorCode.CONTRACT_SIGNATURE_NOT_FOUND
+                                )
+                        );
+
+        return contractPdfGenerator.generateBuyerPreview(
+                contract,
+                contractItems,
+                sellerSignature,
+                request.signatureText(),
+                request.signatureImageUrl()
+        );
     }
 
     @Transactional
@@ -119,11 +167,6 @@ public class BuyerContractService {
                 signedIp,
                 userAgent
         );
-
-        contractSignatureRepository.save(signature);
-
-        contract.buyerSign();
-        contract.complete();
 
         ContractSignature buyerSignature
                 = contractSignatureRepository.save(signature);

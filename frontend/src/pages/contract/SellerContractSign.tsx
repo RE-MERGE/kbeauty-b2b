@@ -209,7 +209,7 @@ function SignatureCanvas({
       </div>
       <div
         className={`relative mt-1.5 overflow-hidden border-2 bg-white ${
-          value ? "border-primary" : "border-dashed border-slate-200"
+          value ? "border-blue-500" : "border-dashed border-slate-200"
         }`}
       >
         <canvas
@@ -388,7 +388,7 @@ export function SellerContractSign() {
         </p>
         <Link
           to="/seller/quotes"
-          className="mt-6 inline-flex h-10 items-center bg-primary px-5 text-sm font-bold text-white"
+          className="mt-6 inline-flex h-10 items-center rounded-md bg-blue-600 px-5 text-sm font-bold text-white hover:bg-blue-700"
         >
           견적 목록으로
         </Link>
@@ -404,7 +404,7 @@ export function SellerContractSign() {
       <main className="mx-auto w-full max-w-[1120px] px-4 py-7 sm:px-6">
         <Link
           to="/seller/quotes"
-          className="mb-5 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition hover:text-primary"
+          className="mb-5 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition hover:text-blue-700"
         >
           <ChevronLeft size={15} />
           견적 목록으로
@@ -414,7 +414,7 @@ export function SellerContractSign() {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-bold text-primary">
+                <p className="text-sm font-bold text-blue-700">
                   공급 계약서
                 </p>
                 <span
@@ -438,7 +438,7 @@ export function SellerContractSign() {
               <p className="text-xs font-semibold text-slate-400">
                 계약 금액
               </p>
-              <p className="mt-1 text-2xl font-black text-primary">
+              <p className="mt-1 text-2xl font-black text-blue-700">
                 {formatPrice(contract.contractAmount)}
               </p>
               <p className="mt-1 font-mono text-xs text-slate-400">
@@ -467,7 +467,7 @@ export function SellerContractSign() {
           <div className="space-y-5">
             <section className="overflow-hidden border border-slate-200 bg-white shadow-sm">
               <div className="flex items-center gap-2 border-b border-slate-200 px-5 py-4">
-                <Building2 size={16} className="text-primary" />
+                <Building2 size={16} className="text-blue-700" />
                 <h2 className="text-sm font-black text-slate-900">
                   계약 당사자
                 </h2>
@@ -500,7 +500,7 @@ export function SellerContractSign() {
 
             <section className="overflow-hidden border border-slate-200 bg-white shadow-sm">
               <div className="flex items-center gap-2 border-b border-slate-200 px-5 py-4">
-                <Package size={16} className="text-primary" />
+                <Package size={16} className="text-blue-700" />
                 <h2 className="text-sm font-black text-slate-900">
                   계약 품목
                 </h2>
@@ -544,7 +544,7 @@ export function SellerContractSign() {
 
             <section className="overflow-hidden border border-slate-200 bg-white shadow-sm">
               <div className="flex items-center gap-2 border-b border-slate-200 px-5 py-4">
-                <Truck size={16} className="text-primary" />
+                <Truck size={16} className="text-blue-700" />
                 <h2 className="text-sm font-black text-slate-900">
                   납기 및 배송 조건
                 </h2>
@@ -581,7 +581,7 @@ export function SellerContractSign() {
           <aside className="lg:sticky lg:top-6 lg:self-start">
             <section className="border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-center gap-2">
-                <FileSignature size={17} className="text-primary" />
+                <FileSignature size={17} className="text-blue-700" />
                 <h2 className="text-sm font-black text-slate-900">
                   계약 요약
                 </h2>
@@ -612,7 +612,7 @@ export function SellerContractSign() {
                 <span className="text-sm font-bold text-slate-600">
                   계약 총액
                 </span>
-                <span className="text-xl font-black text-primary">
+                <span className="text-xl font-black text-blue-700">
                   {formatPrice(contract.contractAmount)}
                 </span>
               </div>
@@ -647,7 +647,7 @@ export function SellerContractSign() {
                               [agreement.key]: event.target.checked,
                             })
                           }
-                          className="mt-0.5 h-4 w-4 accent-primary"
+                          className="mt-0.5 h-4 w-4 accent-blue-600"
                         />
                         {agreement.label}
                       </label>
@@ -670,7 +670,7 @@ export function SellerContractSign() {
                         }
                         maxLength={100}
                         placeholder="대표자 또는 담당자명"
-                        className="h-10 w-full border border-slate-200 pl-9 pr-3 text-sm outline-none transition focus:border-primary"
+                        className="h-10 w-full rounded-md border border-slate-200 pl-9 pr-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                       />
                     </div>
                   </div>
@@ -691,7 +691,7 @@ export function SellerContractSign() {
                     type="button"
                     disabled={!canSubmit}
                     onClick={handleSignAndSend}
-                    className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 bg-primary text-sm font-black text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-blue-600 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Send size={16} />
                     {isSubmitting

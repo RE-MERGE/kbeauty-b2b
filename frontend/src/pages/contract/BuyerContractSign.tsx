@@ -6,12 +6,15 @@ import {
   CheckCircle,
   ChevronLeft,
   Clock,
+  CreditCard,
+  FileSearch,
   LoaderCircle,
   Package,
   PenLine,
   RotateCcw,
   ShieldCheck,
   Truck,
+  X,
 } from "lucide-react";
 import api from "@/api/axios";
 
@@ -42,8 +45,10 @@ type BuyerContractDetail = {
   status: ContractStatus;
   buyerCompanyName: string;
   buyerBusinessNumber: string;
+  buyerManagerName: string;
   sellerCompanyName: string;
   sellerBusinessNumber: string;
+  sellerManagerName: string;
   productName: string;
   material: string | null;
   deliveryCompany: string | null;
@@ -59,6 +64,7 @@ type BuyerContractDetail = {
   sellerSignedAt: string | null;
   buyerSignedAt: string | null;
   completedAt: string | null;
+  pdfUrl: string | null;
   items: ContractItem[];
 };
 
@@ -99,14 +105,24 @@ function SignatureCanvas({
   const isDrawing = useRef(false);
 
   useEffect(() => {
-    const context = canvasRef.current?.getContext("2d");
-    if (!context) return;
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) return;
 
+    context.clearRect(0, 0, canvas.width, canvas.height);
     context.strokeStyle = "#172019";
     context.lineWidth = 2;
     context.lineCap = "round";
     context.lineJoin = "round";
-  }, []);
+
+    if (value) {
+      const image = new Image();
+      image.onload = () => {
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      };
+      image.src = value;
+    }
+  }, [value]);
 
   const getPosition = (event: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current!;
@@ -187,7 +203,7 @@ function SignatureCanvas({
           onTouchStart={startDrawing}
           onTouchMove={draw}
           onTouchEnd={finishDrawing}
-          className="h-32 w-full touch-none cursor-crosshair"
+          className="h-44 w-full touch-none cursor-crosshair"
         />
         {!value && (
           <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-slate-400">
@@ -206,6 +222,10 @@ export function BuyerContractSign() {
   const [loadError, setLoadError] = useState("");
   const [signatureText, setSignatureText] = useState("");
   const [signatureImage, setSignatureImage] = useState("");
+  const [signatureDraft, setSignatureDraft] = useState("");
+  const [uploadedSignatureUrl, setUploadedSignatureUrl] = useState("");
+  const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
   const [agreements, setAgreements] = useState({
     specification: false,
     returnPolicy: false,
@@ -245,6 +265,10 @@ export function BuyerContractSign() {
   }, [contractId]);
 
   const uploadSignature = async () => {
+    if (uploadedSignatureUrl) {
+      return uploadedSignatureUrl;
+    }
+
     const imageResponse = await fetch(signatureImage);
     const blob = await imageResponse.blob();
     const file = new File(
@@ -257,9 +281,85 @@ export function BuyerContractSign() {
     formData.append("file", file);
     formData.append("folder", "contract-signatures");
 
-    return api.post<string>("/common/image/upload", formData, {
+    const imageUrl = await api.post<string>("/common/image/upload", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
+
+    setUploadedSignatureUrl(imageUrl);
+    return imageUrl;
+  };
+
+  const openSignatureModal = () => {
+    setSignatureDraft(signatureImage);
+    setIsSignatureModalOpen(true);
+  };
+
+  const applySignature = () => {
+    if (!signatureDraft) return;
+
+    setSignatureImage(signatureDraft);
+    setUploadedSignatureUrl("");
+    setIsSignatureModalOpen(false);
+  };
+
+  const handlePreview = async () => {
+    if (
+      !contract
+      || !signatureText.trim()
+      || !signatureImage
+      || isPreviewing
+    ) {
+      return;
+    }
+
+    const previewWindow = window.open("about:blank", "_blank");
+
+    if (!previewWindow) {
+      setSubmitError("팝업이 차단되어 PDF 미리보기를 열 수 없습니다.");
+      return;
+    }
+
+    previewWindow.opener = null;
+
+    try {
+      setIsPreviewing(true);
+      setSubmitError("");
+
+      const signatureImageUrl = await uploadSignature();
+      const response = await fetch(
+        `/api/buyer/contracts/${contract.contractId}/preview`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            signatureText: signatureText.trim(),
+            signatureImageUrl,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(
+          errorBody?.message || "계약서 PDF 미리보기를 생성하지 못했습니다.",
+        );
+      }
+
+      const previewBlob = await response.blob();
+      const previewUrl = URL.createObjectURL(previewBlob);
+      previewWindow.location.href = previewUrl;
+      window.setTimeout(() => URL.revokeObjectURL(previewUrl), 60_000);
+    } catch (error) {
+      previewWindow.close();
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "계약서 PDF 미리보기를 생성하지 못했습니다.",
+      );
+    } finally {
+      setIsPreviewing(false);
+    }
   };
 
   const canSign =
@@ -285,13 +385,10 @@ export function BuyerContractSign() {
         signatureImageUrl,
       });
 
-      const completedAt = new Date().toISOString();
-      setContract({
-        ...contract,
-        status: "COMPLETED",
-        buyerSignedAt: completedAt,
-        completedAt,
-      });
+      const completedContract = await api.get<BuyerContractDetail>(
+        `/buyer/contracts/${contract.contractId}`,
+      );
+      setContract(completedContract);
     } catch (error) {
       setSubmitError(
         error instanceof Error
@@ -358,17 +455,6 @@ export function BuyerContractSign() {
               </p>
             </div>
           </div>
-
-          <div
-            className={`inline-flex h-9 w-fit items-center gap-2 rounded-full border px-3 text-xs font-black ${
-              isCompleted
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                : "border-blue-200 bg-blue-50 text-blue-700"
-            }`}
-          >
-            {isCompleted ? <CheckCircle size={15} /> : <ShieldCheck size={15} />}
-            {isCompleted ? "계약 체결 완료" : "바이어 서명 대기"}
-          </div>
         </div>
       </header>
 
@@ -379,11 +465,13 @@ export function BuyerContractSign() {
               label="발주자 (Buyer)"
               companyName={contract.buyerCompanyName}
               businessNumber={contract.buyerBusinessNumber}
+              managerName={contract.buyerManagerName}
             />
             <PartyInfo
               label="공급자 (Seller)"
               companyName={contract.sellerCompanyName}
               businessNumber={contract.sellerBusinessNumber}
+              managerName={contract.sellerManagerName}
             />
           </section>
 
@@ -588,12 +676,24 @@ export function BuyerContractSign() {
                   />
                 </label>
 
-                <div className="mt-5">
-                  <SignatureCanvas
-                    value={signatureImage}
-                    onChange={setSignatureImage}
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={openSignatureModal}
+                  className="mt-5 flex min-h-28 w-full items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 transition hover:border-blue-400 hover:bg-blue-50"
+                >
+                  {signatureImage ? (
+                    <img
+                      src={signatureImage}
+                      alt="작성한 바이어 서명"
+                      className="max-h-24 max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="flex flex-col items-center gap-2 text-xs font-bold text-slate-500">
+                      <PenLine size={22} className="text-blue-600" />
+                      클릭하여 서명해 주세요
+                    </span>
+                  )}
+                </button>
 
                 {submitError && (
                   <p className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-semibold text-rose-700">
@@ -601,19 +701,38 @@ export function BuyerContractSign() {
                   </p>
                 )}
 
-                <button
-                  type="button"
-                  disabled={!canSign}
-                  onClick={handleSign}
-                  className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-md bg-blue-600 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
-                >
-                  {isSubmitting ? (
-                    <LoaderCircle size={16} className="animate-spin" />
-                  ) : (
-                    <ShieldCheck size={16} />
-                  )}
-                  {isSubmitting ? "서명 처리 중..." : "계약서 서명 완료"}
-                </button>
+                <div className="mt-5 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={
+                      !signatureText.trim()
+                      || !signatureImage
+                      || isPreviewing
+                    }
+                    onClick={handlePreview}
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-md border border-slate-200 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                  >
+                    {isPreviewing ? (
+                      <LoaderCircle size={16} className="animate-spin" />
+                    ) : (
+                      <FileSearch size={16} />
+                    )}
+                    {isPreviewing ? "생성 중..." : "PDF 미리보기"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canSign}
+                    onClick={handleSign}
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-md bg-blue-600 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                  >
+                    {isSubmitting ? (
+                      <LoaderCircle size={16} className="animate-spin" />
+                    ) : (
+                      <ShieldCheck size={16} />
+                    )}
+                    {isSubmitting ? "처리 중..." : "서명 완료"}
+                  </button>
+                </div>
 
                 <p className="mt-3 text-center text-[11px] leading-5 text-slate-400">
                   서명 완료 후 계약 내용과 서명 정보가 최종 PDF로
@@ -631,6 +750,32 @@ export function BuyerContractSign() {
                 <p className="mt-2 text-xs leading-5 text-slate-500">
                   바이어 서명 {formatDateTime(contract.buyerSignedAt)}
                 </p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  계약 내용을 확인하거나 결제를 진행해 주세요.
+                </p>
+                <div className="mt-5 grid grid-cols-2 gap-2">
+                  <a
+                    href={contract.pdfUrl ?? undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-disabled={!contract.pdfUrl}
+                    className={`inline-flex h-11 items-center justify-center gap-2 rounded-md border text-sm font-bold ${
+                      contract.pdfUrl
+                        ? "border-slate-200 text-slate-700 hover:bg-slate-50"
+                        : "pointer-events-none border-slate-100 bg-slate-50 text-slate-300"
+                    }`}
+                  >
+                    <FileSearch size={15} />
+                    계약서 PDF
+                  </a>
+                  <Link
+                    to={`/checkout?contractId=${contract.contractId}`}
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-blue-600 text-sm font-black text-white hover:bg-blue-700"
+                  >
+                    <CreditCard size={15} />
+                    결제하러 가기
+                  </Link>
+                </div>
               </div>
             ) : (
               <div className="py-2 text-center">
@@ -653,6 +798,61 @@ export function BuyerContractSign() {
           </p>
         </aside>
       </main>
+
+      {isSignatureModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="바이어 전자서명"
+        >
+          <div className="w-full max-w-3xl rounded-lg bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <div>
+                <h2 className="text-base font-black text-slate-950">
+                  바이어 전자서명
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  마우스나 터치로 서명한 뒤 적용해 주세요.
+                </p>
+              </div>
+              <button
+                type="button"
+                title="닫기"
+                onClick={() => setIsSignatureModalOpen(false)}
+                className="inline-flex size-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <SignatureCanvas
+                value={signatureDraft}
+                onChange={setSignatureDraft}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setIsSignatureModalOpen(false)}
+                className="h-10 rounded-md border border-slate-200 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={!signatureDraft}
+                onClick={applySignature}
+                className="h-10 rounded-md bg-blue-600 px-5 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                서명 적용
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -661,10 +861,12 @@ function PartyInfo({
   label,
   companyName,
   businessNumber,
+  managerName,
 }: {
   label: string;
   companyName: string;
   businessNumber: string;
+  managerName: string;
 }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
@@ -675,6 +877,9 @@ function PartyInfo({
       <p className="mt-4 text-lg font-black text-slate-950">{companyName}</p>
       <p className="mt-1 text-xs text-slate-500">
         사업자등록번호 {businessNumber || "-"}
+      </p>
+      <p className="mt-1 text-xs text-slate-500">
+        담당자 {managerName || "-"}
       </p>
     </div>
   );

@@ -91,7 +91,7 @@ public class ImageUploadService {
 
         String uploadUrl =
                 supabaseUrl
-                        + "/storage/v1/object"
+                        + "/storage/v1/object/"
                         + pdfBucket
                         + "/"
                         + fileName;

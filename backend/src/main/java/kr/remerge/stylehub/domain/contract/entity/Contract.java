@@ -231,10 +231,21 @@ public class Contract {
         this.specialTerms = specialTerms;
     }
 
+    public void updateContractAmount(Long contractAmount) {
+        if (this.status != ContractStatus.DRAFT) {
+            throw new IllegalStateException(
+                    "초안 상태의 계약 금액만 수정할 수 있습니다."
+            );
+        }
+
+        this.contractAmount = contractAmount;
+    }
+
     public static Contract createDraftFromQuote(
             Quote quote,
             String contractNo,
             String contractName,
+            Long contractAmount,
             LocalDate deliveryDate,
             String paymentTerms,
             String returnPolicy,
@@ -268,7 +279,7 @@ public class Contract {
                 quote.getCompany().getName(),
                 contractNo,
                 contractName.trim(),
-                quote.getTotalAmount(),
+                contractAmount,
                 deliveryDate,
                 paymentTerms,
                 returnPolicy,

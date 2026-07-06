@@ -5,7 +5,6 @@ import kr.remerge.stylehub.domain.user.dto.request.*;
 import kr.remerge.stylehub.domain.user.dto.response.ProfileUpdateResponse;
 import kr.remerge.stylehub.domain.user.dto.response.UserResponse;
 import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
-import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
 import kr.remerge.stylehub.global.auth.security.LoginUser;
 import kr.remerge.stylehub.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;

@@ -1,5 +1,6 @@
 package kr.remerge.stylehub.global.auth;
 
+import kr.remerge.stylehub.global.auth.jwt.JwtAuthenticationEntryPoint;
 import kr.remerge.stylehub.global.auth.jwt.JwtFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -23,10 +24,11 @@ public class SecurityConfig {
 
     // 💡 인증 없이 접근 가능한 URL 목록 정돈
     private static final String[] PUBLIC_URLS = {
-            "/api/**"
+            "/api/auth/**"
     };
 
     private final JwtFilter jwtFilter;
+    private final JwtAuthenticationEntryPoint entryPoint;
     private final CorsConfigurationSource corsConfigurationSource;
 
     // ───────────────────────────────────────────
@@ -37,7 +39,6 @@ public class SecurityConfig {
         http
                 // 1. CSRF 비활성화 (REST API 환경)
                 .csrf(AbstractHttpConfigurer::disable)
-
                 // 2. CORS 설정 적용
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
 
@@ -49,10 +50,16 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 무인증 통과 주소 적용
                         .requestMatchers(PUBLIC_URLS).permitAll()
+                        // 웹소켓 핸드셰이크 경로는 시큐리티 검사 제외
+                        .requestMatchers("/ws/**").permitAll()
                         // 관리자 전용 기능 제어
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         // 그 외 모든 요청은 기본 인증 필요
                         .anyRequest().authenticated()
+                )
+
+                .exceptionHandling(ex ->
+                        ex.authenticationEntryPoint(entryPoint)
                 )
 
                 // 5. JwtFilter를 UsernamePasswordAuthenticationFilter 앞에 등록

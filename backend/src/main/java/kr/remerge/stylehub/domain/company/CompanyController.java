@@ -2,11 +2,12 @@ package kr.remerge.stylehub.domain.company;
 
 import kr.remerge.stylehub.domain.company.dto.request.CompanyVerifyRequest;
 import kr.remerge.stylehub.domain.company.dto.response.CompanyLookupResponse;
+import kr.remerge.stylehub.domain.company.dto.response.CompanyResponse;
+import kr.remerge.stylehub.domain.company.dto.response.EmployeeResponse;
 import kr.remerge.stylehub.domain.company.dto.response.OcrParseResponse;
-import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.company.repository.BrandRepository;
-import kr.remerge.stylehub.global.exception.BusinessException;
-import kr.remerge.stylehub.global.exception.ErrorCode;
+import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
+import kr.remerge.stylehub.global.auth.security.LoginUser;
 import kr.remerge.stylehub.global.response.ApiResponse; // 💡 공통 응답 임포트
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -85,6 +86,29 @@ public class CompanyController {
 
         CompanyLookupResponse response = companyService.lookupAndValidateCompany(businessNumber, businessRole);
 
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /**
+     * ADMIN 화면의 회사 필터용 — 전체 회사 목록 조회
+     */
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<CompanyResponse>>> getCompanies(
+            @LoginUser AuthUser authUser
+    ) {
+        List<CompanyResponse> response = companyService.getAllCompanies(authUser);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    /**
+     * PRESIDENT 화면의 직원 필터용 — 본인 회사 소속 직원 목록 조회
+     */
+    @GetMapping("/{companyId}/employees")
+    public ResponseEntity<ApiResponse<List<EmployeeResponse>>> getCompanyEmployees(
+            @PathVariable Integer companyId,
+            @LoginUser AuthUser authUser
+    ) {
+        List<EmployeeResponse> response = companyService.getEmployeesByCompanyId(companyId, authUser);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

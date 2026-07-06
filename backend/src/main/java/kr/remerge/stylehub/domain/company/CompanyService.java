@@ -2,13 +2,14 @@ package kr.remerge.stylehub.domain.company;
 
 import kr.remerge.stylehub.domain.company.client.NtsApiClient;
 import kr.remerge.stylehub.domain.company.client.OcrApiClient;
-import kr.remerge.stylehub.domain.company.dto.response.CompanyLookupResponse;
-import kr.remerge.stylehub.domain.company.dto.response.NtsResponse;
-import kr.remerge.stylehub.domain.company.dto.response.OcrParseResponse;
-import kr.remerge.stylehub.domain.company.dto.response.OcrResponse;
+import kr.remerge.stylehub.domain.company.dto.response.*;
 import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.company.repository.CompanyRepository;
+import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.enumtype.BusinessRole;
+import kr.remerge.stylehub.domain.user.enumtype.UserRole;
+import kr.remerge.stylehub.domain.user.repository.UserRepository;
+import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
 import kr.remerge.stylehub.global.exception.BusinessException;
 import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +31,7 @@ public class CompanyService {
     private final OcrApiClient ocrApiClient;
     private final NtsApiClient ntsApiClient;
     private final CompanyRepository companyRepository;
+    private final UserRepository userRepository;
 
     /**
      * 1. 프론트엔드에서 이미지를 받아서 OCR 분석 결과를 가공하여 반환
@@ -42,7 +46,7 @@ public class CompanyService {
                 throw new BusinessException(ErrorCode.OCR_PARSING_FAILED);
             }
 
-            // 💡 4종 세트 자동 파싱 메서드 작동
+            // 4종 세트 자동 파싱 메서드 작동
             String businessNumber = ocrResponse.extractBusinessNumber();
             String companyName = ocrResponse.extractCompanyName();
             String representativeName = ocrResponse.extractRepresentativeName();
@@ -123,5 +127,38 @@ public class CompanyService {
                 company.getRepresentativeName(),
                 company.getSellerStatus()
         );
+    }
+
+    /**
+     * 1. ADMIN용 — 전체 회사 목록 조회
+     */
+    public List<CompanyResponse> getAllCompanies(AuthUser authUser) {
+        // 보안 검증: 요청한 유저가 ADMIN이 맞는지 한 번 더 체크
+        if (!"ADMIN".equals(authUser.role())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN); // 권한 없음 에러 처리
+        }
+
+        return companyRepository.findAll().stream()
+                .map(CompanyResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 2. PRESIDENT용 — 본인 회사 소속 직원 목록 조회
+     */
+    public List<EmployeeResponse> getEmployeesByCompanyId(Integer companyId, AuthUser authUser) {
+        // 보안 검증: 대표자(PRESIDENT)가 요청했을 때, 본인의 회사 ID와 주소창의 companyId가 일치하는지 확인
+        // 만약 다르면 다른 회사 정보를 훔쳐보려는 시도이므로 차단합니다.
+        if ("PRESIDENT".equals(authUser.role()) && !authUser.companyId().equals(companyId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        // 특정 회사 ID(`companyId`)에 속해 있으면서 권한이 일반 직원(EMPLOYEE)인 사람들을 조회
+        // (프로젝트 엔티티 설계에 따라 쿼리 메서드명은 조금씩 다를 수 있습니다)
+        List<User> employees = userRepository.findByCompany_CompanyIdAndRole(companyId, UserRole.EMPLOYEE);
+
+        return employees.stream()
+                .map(EmployeeResponse::from)
+                .collect(Collectors.toList());
     }
 }

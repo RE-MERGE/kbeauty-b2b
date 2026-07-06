@@ -25,7 +25,9 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")                     // 웹소켓 연결 엔드포인트
-                .setAllowedOriginPatterns("*")              // CORS (CorsConfig와 별도로 설정 필요)
-                .withSockJS();                              // SockJS 폴백 지원 (웹소켓 미지원 브라우저 대비)
+                .setAllowedOriginPatterns(
+                        "http://localhost:8080",
+                        "http://localhost:5173");             // CORS (CorsConfig와 별도로 설정 필요)
+//                .withSockJS();                              // SockJS 폴백 지원 (웹소켓 미지원 브라우저 대비)
     }
 }

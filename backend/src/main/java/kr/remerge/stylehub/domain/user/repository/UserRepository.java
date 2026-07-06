@@ -1,10 +1,12 @@
 package kr.remerge.stylehub.domain.user.repository;
 
 import kr.remerge.stylehub.domain.user.entity.User;
+import kr.remerge.stylehub.domain.user.enumtype.UserRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Integer> {
@@ -51,4 +53,7 @@ public interface UserRepository extends JpaRepository<User, Integer> {
             "left join fetch u.defaultReceivingAddress " +
             "where u.userId = :userId")
     Optional<User> findByIdWithAddresses(@Param("userId") Integer userId);
+
+    // 특정 회사 소속이면서 특정 권한을 가진 유저 목록 조회
+    List<User> findByCompany_CompanyIdAndRole(Integer companyId, UserRole role);
 }

@@ -4,6 +4,7 @@ import { DollarSign, Users, ShoppingBag, TrendingUp, Calendar, ArrowUp, ArrowDow
 import AdminHeader from "./AdminHeader";
 import { Outlet } from "react-router";
 import { settlementApi} from "@/pages/admin/Settlement";
+import { useNotification } from "@/api/notification/useNotification";
 
 // ==========================================================
 // 💡 [타입 정의] 백엔드 SettlementDashboard DTO 사양과 일치화
@@ -38,6 +39,9 @@ interface SettlementRow {
 }
 
 export function AdminLayout() {
+  // ProtectedLayout이 이미 role === "ADMIN"인 유저만 통과시키므로 true 고정
+  useNotification(true);
+
   return (
       <div className="min-h-screen bg-slate-50/50">
         <AdminHeader
@@ -48,7 +52,6 @@ export function AdminLayout() {
               </div>
             }
             user={{ name: "Admin", initials: "AM", role: "관리자" }}
-            notificationCount={3}
             onSearch={(query) => console.log("검색:", query)}
             onNotificationClick={() => console.log("알림 열기")}
             onSettingsClick={() => console.log("설정 열기")}
@@ -112,8 +115,8 @@ export function Admin() {
   const avgOrderValue = totalOrders > 0 ? summary.totalGMV / totalOrders : 0;
   const lastMonthBuyers = userStats.buyers.total - userStats.buyers.thisMonth;
   const buyerGrowth = lastMonthBuyers > 0
-    ? Math.floor((userStats.buyers.thisMonth / lastMonthBuyers) * 100 * 10) / 10
-    : (userStats.buyers.thisMonth > 0 ? 100 : 0);
+      ? Math.floor((userStats.buyers.thisMonth / lastMonthBuyers) * 100 * 10) / 10
+      : (userStats.buyers.thisMonth > 0 ? 100 : 0);
 
   const quickLinks = [
     { to: "/admin/sourcing-requests", title: "소싱 요청서 관리", desc: "바이어 소싱 요청 처리", icon: FileText, color: "text-emerald-600", bg: "bg-emerald-50 group-hover:bg-emerald-100" },

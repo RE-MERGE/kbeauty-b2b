@@ -95,7 +95,8 @@ public class QuoteService {
 
     public QuoteDetailResponse getQuoteDetail(
             Integer userId,
-            Integer quoteId
+            Integer quoteId,
+            Integer companyId
     ) {
         User user = userReader.getUserWithCompany(userId);
 
@@ -107,7 +108,8 @@ public class QuoteService {
         List<QuoteItem> items
                 = quoteItemRepository.findByQuote_QuoteId(quoteId);
 
-        return QuoteDetailResponse.from(quote, items);
+        // canManage 계산을 위해 userId, role 추가 전달
+        return QuoteDetailResponse.from(quote, items, companyId, userId, user.getRole().name());
     }
 
     private void validateQuoteAccess(User user, Quote quote) {
@@ -118,6 +120,14 @@ public class QuoteService {
                 quote.getBuyer().getUserId(),
                 user.getUserId()
         );
+
+        boolean isBuyerCompanyPresident =
+                user.getRole() == UserRole.PRESIDENT
+                        && user.getCompany() != null
+                        && Objects.equals(
+                        quote.getBuyer().getCompany().getCompanyId(),
+                        user.getCompany().getCompanyId()
+                );
 
         boolean isSeller = Objects.equals(
                 quote.getSeller().getUserId(),

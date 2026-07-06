@@ -83,8 +83,7 @@ public class QuoteController {
         QuoteDetailResponse quoteDetail
                 = quoteService.getQuoteDetail(
                 authUser.userId(),
-                quoteId,
-                authUser.companyId()  // 추가
+                quoteId
         );
         return ResponseEntity.ok(ApiResponse.success(quoteDetail));
     }

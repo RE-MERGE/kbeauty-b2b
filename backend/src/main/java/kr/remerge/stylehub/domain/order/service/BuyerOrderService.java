@@ -19,6 +19,7 @@ import kr.remerge.stylehub.domain.order.enumtype.PaymentMethod;
 import kr.remerge.stylehub.domain.order.repository.OrderItemRepository;
 import kr.remerge.stylehub.domain.order.repository.OrderLogRepository;
 import kr.remerge.stylehub.domain.order.repository.OrderRepository;
+import kr.remerge.stylehub.domain.order.validation.CartOrderValidator;
 import kr.remerge.stylehub.domain.product.entity.Product;
 import kr.remerge.stylehub.domain.product.entity.ProductOption;
 import kr.remerge.stylehub.domain.user.entity.User;
@@ -49,6 +50,7 @@ public class BuyerOrderService {
     private final CartRepository cartRepository;
     private final AddressRepository addressRepository;
     private final OrderLogRepository orderLogRepository;
+    private final CartOrderValidator cartOrderValidator;
 
     @Transactional
     public OrderCreateResponse createOrder(Integer userId, OrderCreateRequest request) {
@@ -57,10 +59,17 @@ public class BuyerOrderService {
 
         List<CartItem> cartItems = getCartItems(userId, request);
 
+        cartOrderValidator.validate(cartItems);
+
         Map<Integer, List<CartItem>> itemsByCompany = getItemsByCompany(cartItems);
 
-        Address address = addressRepository.findById(request.addressId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.ADDRESS_NOT_FOUND));
+        Address address = addressRepository.findActiveCompanyAddress(
+                        request.addressId(),
+                        buyer.getCompany().getCompanyId()
+                )
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.ADDRESS_NOT_FOUND)
+                );
 
         ArrayList<String> orderNos = new ArrayList<>();
         List<OrderLog> orderLogs = new ArrayList<>();
@@ -216,7 +225,7 @@ public class BuyerOrderService {
         );
 
         if (cartItems.size() != request.cartItemIds().size()) {
-             throw new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND);
+            throw new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND);
         }
 
         return cartItems;

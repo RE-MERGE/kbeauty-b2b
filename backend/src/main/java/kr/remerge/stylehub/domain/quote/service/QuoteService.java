@@ -114,8 +114,7 @@ public class QuoteService {
     @Transactional
     public QuoteDetailResponse getQuoteDetail(
             Integer userId,
-            Integer quoteId,
-            Integer companyId
+            Integer quoteId
     ) {
         User user = userReader.getUserWithCompany(userId);
 
@@ -134,8 +133,17 @@ public class QuoteService {
         List<QuoteItem> items
                 = quoteItemRepository.findByQuote_QuoteId(quoteId);
 
-        // canManage 계산을 위해 userId, role 추가 전달
-        return QuoteDetailResponse.from(quote, items, companyId, userId, user.getRole().name());
+        Integer companyId = user.getCompany() == null
+                ? null
+                : user.getCompany().getCompanyId();
+
+        return QuoteDetailResponse.from(
+                quote,
+                items,
+                companyId,
+                userId,
+                user.getRole().name()
+        );
     }
 
     @Transactional

@@ -16,6 +16,13 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
 
     Optional<Order> findByOrderIdAndBuyer_UserId(Integer orderId, Integer userId);
 
+    Optional<Order>
+    findFirstByContract_ContractIdAndBuyer_UserIdAndStatusOrderByCreatedAtDesc(
+            Integer contractId,
+            Integer buyerId,
+            OrderStatus status
+    );
+
     List<Order> findByOrderIdInAndBuyer_UserId(List<Integer> orderIds, Integer userId);
 
     List<Order> findBySellerCompany_CompanyIdOrderByCreatedAtDesc(Integer companyId);
@@ -34,6 +41,20 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
             @Param("statuses") List<OrderStatus> statuses
     );
 
+    @Query("""
+    select count(o) > 0
+    from Order o
+    where o.contract.contractId = :contractId
+      and o.buyer.userId = :buyerId
+      and o.isSample = false
+      and o.status in :statuses
+    """)
+    boolean existsActiveContractOrder(
+            @Param("contractId") Integer contractId,
+            @Param("buyerId") Integer buyerId,
+            @Param("statuses") List<OrderStatus> statuses
+    );
+
     List<Order> findByOrderNoInAndBuyer_UserId(List<String> orderNos, Integer userId);
 
     @EntityGraph(attributePaths = "quote")
@@ -41,4 +62,10 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
             List<Integer> quoteIds,
             Integer buyerId
     );
+
+    @EntityGraph(attributePaths = {
+            "buyer",
+            "sellerCompany"
+    })
+    Optional<Order> findOneByOrderId(Integer orderId);
 }

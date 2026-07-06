@@ -7,7 +7,6 @@ import {
   CheckCircle,
   Clock,
   Download,
-  ExternalLink,
   FileText,
   FlaskConical,
   MapPin,
@@ -133,6 +132,21 @@ type BuyerOrderDetailResponse = {
     changedBy: string;
     createdAt: string;
   }>;
+};
+
+type DeliveryTrackingEvent = {
+  time: string;
+  status: {
+    code: string;
+    name: string;
+  };
+  description: string | null;
+  location: string | { name?: string } | null;
+};
+
+type DeliveryTrackingResponse = {
+  lastEvent: DeliveryTrackingEvent | null;
+  events: DeliveryTrackingEvent[];
 };
 
 const statusConfig: Record<OrderStatus, { label: string; tone: string; icon: ReactNode }> = {
@@ -444,12 +458,6 @@ const orders: Record<string, Order> = {
   },
 };
 
-const CARRIER_TRACKING: Record<string, (no: string) => string> = {
-  CJ대한통운: (no) => `https://www.cjlogistics.com/ko/tool/parcel/tracking?gnbInvcNo=${no}`,
-  한진택배: (no) => `https://www.hanjin.com/kor/CMS/DeliveryMgr/WaybillResult.do?mCode=MN038&schLang=KR&wblnumText2=${no}`,
-  롯데택배: (no) => `https://www.lotteglogis.com/home/reservation/tracking/linkView?InvNo=${no}`,
-};
-
 function formatPrice(value: number) {
   return `${value.toLocaleString()}원`;
 }
@@ -553,9 +561,25 @@ function buildTimeline(order: Order): TimelineStep[] {
   return steps;
 }
 
-function getTrackingUrl(carrier: string | undefined, trackingNo: string) {
-  if (!carrier || !CARRIER_TRACKING[carrier]) return CARRIER_TRACKING.CJ대한통운(trackingNo);
-  return CARRIER_TRACKING[carrier](trackingNo);
+const TRACKING_STATUS_LABELS: Record<string, string> = {
+  INFORMATION_RECEIVED: "배송 정보 접수",
+  AT_PICKUP: "상품 인수",
+  IN_TRANSIT: "배송 중",
+  OUT_FOR_DELIVERY: "배송 출발",
+  DELIVERED: "배송 완료",
+  AVAILABLE_FOR_PICKUP: "수령 가능",
+  ATTEMPT_FAIL: "배송 시도",
+  EXCEPTION: "배송 예외",
+};
+
+function getTrackingStatusLabel(event: DeliveryTrackingEvent) {
+  return TRACKING_STATUS_LABELS[event.status.code] ?? event.status.name;
+}
+
+function getTrackingLocation(location: DeliveryTrackingEvent["location"]) {
+  if (!location) return "";
+  if (typeof location === "string") return location;
+  return location.name ?? "";
 }
 
 function getNextAction(order: Order) {
@@ -584,6 +608,9 @@ export function OrderDetail() {
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [tracking, setTracking] = useState<DeliveryTrackingResponse | null>(null);
+  const [isTrackingLoading, setIsTrackingLoading] = useState(false);
+  const [trackingError, setTrackingError] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
   const [showDispute, setShowDispute] = useState(false);
 
@@ -600,12 +627,30 @@ export function OrderDetail() {
       try {
         setIsLoading(true);
         setError("");
+        setTracking(null);
+        setTrackingError("");
 
         const response = await api.get<BuyerOrderDetailResponse>(
           `/buyer/orders/${orderId}/detail`
         );
 
         setOrder(mapOrderDetailResponse(response));
+
+        if (response.carrier && response.trackingNumber) {
+          setIsTrackingLoading(true);
+
+          try {
+            const trackingResponse = await api.get<DeliveryTrackingResponse>(
+              `/delivery/orders/${response.orderId}`
+            );
+            setTracking(trackingResponse);
+          } catch (trackingLoadError) {
+            console.error("배송 추적 조회 실패", trackingLoadError);
+            setTrackingError("배송 이동 정보를 불러오지 못했습니다.");
+          } finally {
+            setIsTrackingLoading(false);
+          }
+        }
       } catch (loadError) {
         console.error("주문 상세 조회 실패", loadError);
         setError("주문 상세 정보를 불러오지 못했습니다.");
@@ -831,15 +876,75 @@ export function OrderDetail() {
                   <>
                     <SummaryRow label="택배사" value={order.carrier ?? "-"} />
                     <SummaryRow label="송장번호" value={order.trackingNo} />
-                    <a
-                      href={getTrackingUrl(order.carrier, order.trackingNo)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-primary/30 bg-white px-4 py-2.5 text-sm font-bold text-primary transition hover:bg-secondary"
-                    >
-                      <ExternalLink size={14} />
-                      배송 추적
-                    </a>
+                    <div className="mt-4 border-t border-slate-100 pt-4">
+                      <p className="mb-3 text-xs font-black text-slate-500">
+                        배송 이동 현황
+                      </p>
+
+                      {isTrackingLoading && (
+                        <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-3 text-xs font-semibold text-slate-500">
+                          <Loader2 size={14} className="animate-spin text-primary" />
+                          배송 정보를 확인하고 있습니다.
+                        </div>
+                      )}
+
+                      {!isTrackingLoading && trackingError && (
+                        <div className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-3 text-xs font-semibold text-rose-600">
+                          {trackingError}
+                        </div>
+                      )}
+
+                      {!isTrackingLoading && tracking?.lastEvent && (
+                        <>
+                          <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="font-black text-sky-800">
+                                {getTrackingStatusLabel(tracking.lastEvent)}
+                              </span>
+                              <span className="text-[11px] font-semibold text-sky-600">
+                                {formatOrderDate(tracking.lastEvent.time)}
+                              </span>
+                            </div>
+                            {tracking.lastEvent.description && (
+                              <p className="mt-1 text-xs leading-5 text-sky-700">
+                                {tracking.lastEvent.description}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="mt-3 space-y-0">
+                            {[...tracking.events].reverse().map((event, index) => (
+                              <div
+                                key={`${event.time}-${event.status.code}-${index}`}
+                                className="relative flex gap-3 pb-4 last:pb-0"
+                              >
+                                {index < tracking.events.length - 1 && (
+                                  <span className="absolute left-[5px] top-3 h-full w-px bg-slate-200" />
+                                )}
+                                <span className="relative mt-1.5 h-3 w-3 shrink-0 rounded-full border-2 border-sky-400 bg-white" />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center justify-between gap-1">
+                                    <p className="text-xs font-black text-slate-700">
+                                      {getTrackingStatusLabel(event)}
+                                    </p>
+                                    <p className="text-[11px] text-slate-400">
+                                      {formatOrderDate(event.time)}
+                                    </p>
+                                  </div>
+                                  {(event.description || getTrackingLocation(event.location)) && (
+                                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                                      {[event.description, getTrackingLocation(event.location)]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </>
                 )}
               </div>

@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   CheckCircle,
   CreditCard,
-  FileText,
   LockKeyhole,
   MapPin,
   Package,
@@ -106,6 +105,12 @@ type SampleOrderCreateResponse = {
   totalAmount: number;
 };
 
+type ContractOrderCreateResponse = {
+  orderId: number;
+  orderNo: string;
+  totalAmount: number;
+};
+
 type DeliveryAddress = {
   receiverName: any;
   addressId: number;
@@ -130,6 +135,23 @@ type SampleCheckoutResponse = {
     quoteItemId: number;
     productName: string;
     optionSummary: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+  }[];
+  productAmount: number;
+  shippingFee: number;
+  totalAmount: number;
+};
+
+type ContractCheckoutResponse = {
+  contractId: number;
+  contractNo: string;
+  items: {
+    contractItemId: number;
+    imageUrl: string | null;
+    productName: string;
+    optionSummary: string | null;
     quantity: number;
     unitPrice: number;
     totalPrice: number;
@@ -171,6 +193,8 @@ export function Checkout() {
   );
   const quoteIdParam = searchParams.get("quoteId") ?? "";
   const quoteId = Number(quoteIdParam);
+  const contractIdParam = searchParams.get("contractId") ?? "";
+  const contractId = Number(contractIdParam);
 
   const isSampleQuoteCheckout =
     orderType === "sample" &&
@@ -179,9 +203,12 @@ export function Checkout() {
 
 
   const isOrderCheckout = orderIds.length > 0;
+  const isContractCheckout =
+    Number.isInteger(contractId) && contractId > 0;
   const isSample = orderType === "sample";
 
   const [checkoutPreview, setCheckoutPreview] = useState<CheckoutPreviewResponse | null>(null);
+  const [existingOrderNumbers, setExistingOrderNumbers] = useState<string[]>([]);
   const [isPreviewLoading, setIsPreviewLoading] = useState(true);
   const [previewError, setPreviewError] = useState("");
   const [checkoutInvalidItems, setCheckoutInvalidItems] = useState<CheckoutInvalidItem[]>([]);
@@ -200,6 +227,7 @@ export function Checkout() {
     if (
       !isSampleQuoteCheckout &&
       !isOrderCheckout &&
+      !isContractCheckout &&
       !checkoutState?.cartItemIds.length
     ) {
       setPreviewError("선택한 장바구니 상품이 없습니다.");
@@ -235,12 +263,38 @@ export function Checkout() {
           return;
         }
 
+        if (isContractCheckout) {
+          const response = await api.get<ContractCheckoutResponse>(
+            `/checkout/contracts/${contractId}`,
+          );
+
+          setCheckoutPreview({
+            cartType: "NORMAL",
+            items: response.items.map((item) => ({
+              cartItemId: item.contractItemId,
+              imageUrl: item.imageUrl,
+              productName: item.productName,
+              optionLabel: item.optionSummary ?? "옵션 정보 없음",
+              unitPrice: item.unitPrice,
+              quantity: item.quantity,
+              totalPrice: item.totalPrice,
+            })),
+            productAmount: response.productAmount,
+            shippingFee: response.shippingFee,
+            totalAmount: response.totalAmount,
+          });
+          return;
+        }
+
         if (isOrderCheckout) {
           const response = await api.post<MultiOrderCheckoutResponse>(
             "/checkout/orders/preview",
             { orderIds }
           );
 
+          setExistingOrderNumbers(
+            response.orders.map((order) => order.orderNo),
+          );
           setCheckoutPreview({
             cartType: "NORMAL",
             items: response.orders.flatMap((order) =>
@@ -316,7 +370,15 @@ export function Checkout() {
     };
 
     void loadCheckoutPreview();
-  }, [checkoutState, isOrderCheckout, isSampleQuoteCheckout, orderIds, quoteId]);
+  }, [
+    checkoutState,
+    contractId,
+    isContractCheckout,
+    isOrderCheckout,
+    isSampleQuoteCheckout,
+    orderIds,
+    quoteId,
+  ]);
 
   useEffect(() => {
     const loadAddresses = async () => {
@@ -346,7 +408,12 @@ export function Checkout() {
       }))
     : [];
   const [paymentMethod, setPaymentMethod] = useState<"wire" | "card">("wire");
-  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreements, setAgreements] = useState({
+    order: false,
+    policy: false,
+    privacy: false,
+  });
+  const agreeTerms = Object.values(agreements).every(Boolean);
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [isPaymentLoading, setIsPaymentLoading] = useState(false);
 
@@ -412,8 +479,16 @@ export function Checkout() {
             <p className="mb-5 mt-2 text-center text-sm font-semibold text-slate-700">{previewError}</p>
           )}
           <Link
-            to={isSampleQuoteCheckout ? "/buyer/quotes" : "/cart"}
-            className="mx-auto inline-flex items-center justify-center rounded-lg bg-primary px-5 py-2.5 text-sm font-bold text-white"
+            to={
+              isSampleQuoteCheckout
+                ? "/buyer/quotes"
+                : isContractCheckout
+                  ? "/buyer/contracts"
+                  : isOrderCheckout
+                    ? "/buyer/orders"
+                    : "/cart"
+            }
+            className="mx-auto inline-flex items-center justify-center rounded-md bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
           >
             {isSampleQuoteCheckout
               ? "견적 목록으로 돌아가기"
@@ -423,7 +498,11 @@ export function Checkout() {
       </div>
     );
   }
-  const orderTypeLabel = isSample ? "샘플 주문" : "일반 주문";
+  const orderTypeLabel = isSample
+    ? "샘플 주문"
+    : isContractCheckout
+      ? "계약 주문"
+      : "일반 주문";
 
   const handleAddressFormChange = (field: keyof AddressCreateRequest, value: string) => {
     setAddressForm((previous) => ({ ...previous, [field]: value }));
@@ -457,10 +536,20 @@ export function Checkout() {
   const TOSS_CLIENT_KEY = "test_ck_GePWvyJnrKme6gpAnkz63gLzN97E";
   const handlePayment = async () => {
     if (!agreeTerms || !selectedAddress || isPaymentLoading) return;
-    if (!isSampleQuoteCheckout && !checkoutState?.cartItemIds.length) return;
+    if (
+      !isSampleQuoteCheckout
+      && !isContractCheckout
+      && !isOrderCheckout
+      && !checkoutState?.cartItemIds.length
+    ) {
+      return;
+    }
 
-    if (isSampleQuoteCheckout && (!user?.name || !user.phone)) {
-      alert("샘플 배송을 위한 이름과 연락처를 회원정보에서 확인해 주세요.");
+    if (
+      (isSampleQuoteCheckout || isContractCheckout)
+      && (!user?.name || !user.phone)
+    ) {
+      alert("배송을 위한 이름과 연락처를 회원정보에서 확인해 주세요.");
       return;
     }
 
@@ -483,6 +572,25 @@ export function Checkout() {
           });
 
         orderNumbers = [sampleOrderResponse.orderNo];
+      } else if (isContractCheckout) {
+        const contractOrderResponse =
+          await api.post<ContractOrderCreateResponse>(
+            "/buyer/orders/contract",
+            {
+              contractId,
+              addressId: selectedAddress.addressId,
+              receiverName: user?.name,
+              receiverPhone: user?.phone,
+              receiverMemo: "",
+              paymentMethod: paymentMethod === "card"
+                ? "CORP_CARD"
+                : "TRANSFER",
+            },
+          );
+
+        orderNumbers = [contractOrderResponse.orderNo];
+      } else if (isOrderCheckout) {
+        orderNumbers = existingOrderNumbers;
       } else {
         const orderResponse = await api.post<OrderCreateResponse>("/buyer/orders", {
           cartItemIds: checkoutState!.cartItemIds,
@@ -542,52 +650,57 @@ export function Checkout() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 px-4 py-8">
-      <div className="mx-auto max-w-[1180px]">
+    <div className="min-h-screen bg-[#f7f9fb] px-4 py-8 sm:px-6 lg:px-10">
+      <div className="mx-auto max-w-[1280px]">
         <Link
-          to="/cart"
-          className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-primary"
+          to={
+            isContractCheckout
+              ? "/buyer/contracts"
+              : isOrderCheckout
+                ? "/buyer/orders"
+                : "/cart"
+          }
+          className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-blue-700"
         >
           <ArrowLeft size={16} />
-          장바구니로 돌아가기
+          {isContractCheckout
+            ? "계약 목록으로 돌아가기"
+            : isOrderCheckout
+              ? "주문 목록으로 돌아가기"
+              : "장바구니로 돌아가기"}
         </Link>
 
-        <header className="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
+        <header className="mb-8 border-b border-slate-200 pb-6">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-primary">
-                <ReceiptText size={13} />
-                주문/결제
+              <div className="mb-3 inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-blue-700">
               </div>
-              <h1 className="text-2xl font-bold text-slate-950">주문 정보를 확인하고 결제를 진행하세요</h1>
+              <h1 className="text-2xl font-black text-slate-950 md:text-3xl">주문 및 결제</h1>
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                결제 완료 후 판매자에게 주문이 전달되고 배송 준비가 시작됩니다.
+                주문 상품과 배송 조건을 확인한 뒤 안전하게 결제를 완료하세요.
               </p>
-            </div>
-            <div className="rounded-lg border border-primary/20 bg-secondary px-4 py-3 text-sm">
-              <p className="text-xs font-bold text-primary">주문 타입</p>
-              <p className="mt-1 font-black text-slate-950">{orderTypeLabel}</p>
             </div>
           </div>
         </header>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-          <main className="space-y-5">
-            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="grid gap-8 lg:grid-cols-12">
+          <main className="space-y-6 lg:col-span-8">
+            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <SectionTitle icon={<MapPin size={16} />} title="배송지 정보" />
-              <div className="rounded-xl border border-primary/15 bg-secondary/50 p-4">
+              <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-4">
                 {isAddressLoading ? (
                   <p className="text-sm font-semibold text-slate-500">배송지 목록을 불러오고 있습니다.</p>
                 ) : selectedAddress ? (
                   <>
                     <div className="mb-3 flex items-center justify-between gap-3">
-                      <div className="inline-flex items-center gap-2 rounded-lg border border-primary/20 bg-white px-3 py-1.5 shadow-sm">
-                        <span className="text-xs font-bold text-primary">{selectedAddress.addressName}</span>
+                      <div className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-white shadow-sm">
+                        <span className="text-xs font-bold">{selectedAddress.addressName}</span>
+                        {selectedAddress.isDefault && <span className="text-[10px] font-semibold text-blue-100">기본 배송지</span>}
                       </div>
                       <button
                         type="button"
                         onClick={() => setShowAddressModal(true)}
-                        className="rounded-lg border border-primary/30 bg-white px-3 py-1.5 text-xs font-bold text-primary transition hover:bg-secondary"
+                        className="rounded-md border border-blue-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 transition hover:bg-blue-50"
                       >
                         변경
                       </button>
@@ -611,7 +724,7 @@ export function Checkout() {
                     <button
                       type="button"
                       onClick={() => setShowAddressModal(true)}
-                      className="shrink-0 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white"
+                      className="shrink-0 rounded-md bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700"
                     >
                       {addresses.length > 0 ? "배송지 선택" : "배송지 등록"}
                     </button>
@@ -624,12 +737,12 @@ export function Checkout() {
                 <textarea
                   placeholder="배송 시 요청사항을 입력하세요."
                   rows={3}
-                  className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10"
+                  className="w-full resize-none rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-3 focus:ring-blue-100"
                 />
               </div>
             </section>
 
-            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <SectionTitle icon={<CreditCard size={16} />} title="결제 방법" />
               <div className="grid gap-3 md:grid-cols-2">
                 <PaymentMethodCard
@@ -647,9 +760,14 @@ export function Checkout() {
               </div>
             </section>
 
-            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <SectionTitle icon={<Truck size={16} />} title="결제 후 진행 흐름" />
-              <div className="grid gap-3 md:grid-cols-4">
+            <section className="rounded-lg border border-sky-200 bg-sky-50 p-5 shadow-sm sm:p-6">
+              <div className="mb-5 flex items-center gap-2">
+                <Truck size={17} className="text-sky-700" />
+                <h2 className="text-sm font-black uppercase tracking-[0.08em] text-sky-900">
+                  결제 후 진행 흐름
+                </h2>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
                 <StepCard label="1" title="결제 완료" desc="주문 확정" />
                 <StepCard label="2" title="출고 준비" desc="셀러 확인" />
                 <StepCard label="3" title="배송 시작" desc="송장 등록" />
@@ -657,47 +775,80 @@ export function Checkout() {
               </div>
             </section>
 
-            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <SectionTitle icon={<FileText size={16} />} title="주문 동의" />
-              <label className="flex cursor-pointer items-start gap-3">
+            <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+              <label className="flex cursor-pointer items-start gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
                 <input
                   type="checkbox"
                   checked={agreeTerms}
-                  onChange={(event) => setAgreeTerms(event.target.checked)}
-                  className="mt-1 h-4 w-4"
+                  onChange={(event) => {
+                    const checked = event.target.checked;
+                    setAgreements({
+                      order: checked,
+                      policy: checked,
+                      privacy: checked,
+                    });
+                  }}
+                  className="mt-1 size-5 rounded border-slate-300 accent-blue-600"
                 />
                 <span className="text-sm leading-6 text-slate-700">
-                  <span className="font-bold text-slate-950">
-                    주문 상품, 배송지, 결제 금액을 확인했으며 구매에 동의합니다.
+                  <span className="font-black text-slate-950">
+                    결제 필수 항목 전체 동의
                   </span>
                   <span className="mt-1 block text-xs text-slate-500">
-                    상품 금액, 배송비, 플랫폼 이용 수수료를 확인했습니다.
+                    주문과 결제에 필요한 내용을 확인하고 모두 동의합니다.
                   </span>
                 </span>
               </label>
+
+              <div className="divide-y divide-slate-100 px-5">
+                <AgreementRow
+                  checked={agreements.order}
+                  title="주문 상품·배송지·결제 금액 확인"
+                  description="상품 금액, 배송비와 최종 결제 금액을 확인했습니다."
+                  onChange={(checked) =>
+                    setAgreements((previous) => ({ ...previous, order: checked }))
+                  }
+                />
+                <AgreementRow
+                  checked={agreements.policy}
+                  title="구매 조건 및 취소·환불 정책 동의"
+                  description="주문 확정 이후 적용되는 취소 및 환불 기준에 동의합니다."
+                  onChange={(checked) =>
+                    setAgreements((previous) => ({ ...previous, policy: checked }))
+                  }
+                />
+                <AgreementRow
+                  checked={agreements.privacy}
+                  title="개인정보 제3자 제공 동의"
+                  description="상품 배송을 위해 수령 정보를 판매자와 배송사에 제공하는 데 동의합니다."
+                  onChange={(checked) =>
+                    setAgreements((previous) => ({ ...previous, privacy: checked }))
+                  }
+                />
+              </div>
             </section>
           </main>
 
-          <aside className="lg:sticky lg:top-6 lg:self-start">
-            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-sm font-bold text-slate-950">주문 상품</h2>
-                <span className="rounded-full bg-secondary px-2.5 py-1 text-[11px] font-bold text-primary">
+          <aside className="lg:col-span-4 lg:sticky lg:top-6 lg:self-start">
+            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg">
+              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-4">
+                <h2 className="text-base font-black text-slate-950">주문 요약</h2>
+                <span className="rounded-md bg-blue-100 px-2.5 py-1 text-[11px] font-bold text-blue-700">
                   {orderItems.length}개
                 </span>
               </div>
 
-              <div className="mb-5 max-h-[300px] space-y-3 overflow-y-auto">
+              <div className="max-h-[320px] space-y-4 overflow-y-auto p-5">
                 {orderItems.map((item) => (
-                  <div key={item.id} className="flex gap-3 border-b border-slate-100 pb-3 last:border-0">
+                  <div key={item.id} className="flex gap-3 border-b border-slate-100 pb-4 last:border-0 last:pb-0">
                     {item.image ? (
                       <img
                         src={item.image}
                         alt={item.name}
-                        className="h-14 w-14 shrink-0 rounded-lg border border-slate-100 object-cover"
+                        className="h-16 w-14 shrink-0 rounded-md border border-slate-100 object-cover"
                       />
                     ) : (
-                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
+                      <div className="flex h-16 w-14 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-400">
                         <Package size={20} aria-hidden="true" />
                       </div>
                     )}
@@ -715,38 +866,38 @@ export function Checkout() {
                 ))}
               </div>
 
-              <div className="space-y-3 border-t border-slate-100 pt-4 text-sm">
+              <div className="space-y-3 border-t border-slate-200 bg-slate-50/70 p-5 text-sm">
                 <SummaryRow label="상품 금액" value={formatPrice(subtotal)} />
                 <SummaryRow label="국내 배송비" value={shippingText} />
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2.5">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-xs font-bold text-amber-800">
+                    <div className="flex items-center gap-2 text-xs font-bold text-blue-700">
                       <Truck size={14} />
                       배송비
                     </div>
                     {shipping > 0 && (
-                      <span className="text-sm font-black text-amber-900">{shippingText}</span>
+                      <span className="text-sm font-black text-blue-900">{shippingText}</span>
                     )}
                   </div>
-                  <p className="mt-1 text-xs leading-5 text-amber-700">{shippingDescription}</p>
+                  <p className="mt-1 text-xs leading-5 text-blue-700">{shippingDescription}</p>
                 </div>
               </div>
 
-              <div className="flex items-end justify-between border-t border-slate-100 pt-4">
+              <div className="flex items-end justify-between border-t border-slate-200 px-5 pt-5">
                 <div>
                   <p className="text-xs text-slate-500">최종 결제 금액</p>
                   <p className="mt-1 text-xs text-slate-400">배송지와 결제 조건 확인 후 결제</p>
                 </div>
-                <p className="whitespace-nowrap text-2xl font-black text-primary">{formatPrice(total)}</p>
+                <p className="whitespace-nowrap text-2xl font-black text-blue-700">{formatPrice(total)}</p>
               </div>
 
               <button
                 type="button"
                 disabled={!agreeTerms || !selectedAddress || isPaymentLoading}
                 onClick={handlePayment}
-                className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3.5 text-sm font-bold transition ${
+                className={`ml-5 mt-5 inline-flex w-[calc(100%_-_2.5rem)] items-center justify-center gap-2 rounded-md px-4 py-3.5 text-sm font-black transition ${
                   agreeTerms && selectedAddress && !isPaymentLoading
-                    ? "bg-primary text-white hover:bg-primary/90"
+                    ? "bg-blue-600 text-white shadow-sm hover:bg-blue-700"
                     : "cursor-not-allowed bg-slate-100 text-slate-400"
                 }`}
               >
@@ -760,9 +911,9 @@ export function Checkout() {
                     : `${formatPrice(total)} 결제하기`}
               </button>
 
-              <div className="mt-4 rounded-lg border border-primary/15 bg-white px-3 py-3 text-xs leading-5 text-slate-500">
+              <div className="mx-5 mb-5 mt-4 rounded-md bg-blue-50 px-3 py-3 text-xs leading-5 text-slate-600">
                 <div className="mb-1 flex items-center gap-1.5 font-bold text-slate-700">
-                  <ShieldCheck size={13} className="text-primary" />
+                  <ShieldCheck size={13} className="text-blue-700" />
                   안전결제 보장
                 </div>
                 결제 대금은 안전하게 보호되며, 거래 완료 확인 후 셀러에게 정산됩니다.
@@ -787,7 +938,7 @@ export function Checkout() {
               </button>
 
               <div className="mb-5 pr-8">
-                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-xs font-bold text-primary">
+                <div className="mb-3 inline-flex items-center gap-2 rounded-md bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
                   <MapPin size={13} />
                   배송지 변경
                 </div>
@@ -812,7 +963,7 @@ export function Checkout() {
                         setShowAddressForm(false);
                         setAddressSaveError("");
                       }}
-                      className="text-sm font-bold text-primary transition hover:text-primary/80"
+                      className="text-sm font-bold text-blue-700 transition hover:text-blue-800"
                     >
                       배송지 목록으로 돌아가기
                     </button>
@@ -854,7 +1005,7 @@ export function Checkout() {
                   <button
                     type="submit"
                     disabled={isAddressSaving}
-                    className="w-full rounded-lg bg-primary px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isAddressSaving ? "등록 중..." : "배송지 등록하기"}
                   </button>
@@ -868,7 +1019,7 @@ export function Checkout() {
                       setAddressSaveError("");
                       setShowAddressForm(true);
                     }}
-                    className="w-full rounded-lg border border-dashed border-primary/40 bg-secondary/40 px-4 py-3 text-sm font-bold text-primary transition hover:border-primary hover:bg-secondary"
+                    className="w-full rounded-md border border-dashed border-blue-300 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700 transition hover:border-blue-500 hover:bg-blue-100"
                   >
                     새 배송지 등록
                   </button>
@@ -884,10 +1035,10 @@ export function Checkout() {
                           setShowAddressForm(false);
                           setShowAddressModal(false);
                         }}
-                        className={`w-full rounded-xl border p-4 text-left transition ${
+                        className={`w-full rounded-lg border p-4 text-left transition ${
                           isSelected
-                            ? "border-primary bg-secondary/70"
-                            : "border-slate-200 bg-white hover:border-primary/40 hover:bg-slate-50"
+                            ? "border-2 border-blue-600 bg-blue-50"
+                            : "border-slate-200 bg-white hover:border-blue-300 hover:bg-slate-50"
                         }`}
                       >
                         <div className="flex items-start justify-between gap-4">
@@ -895,7 +1046,7 @@ export function Checkout() {
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="font-bold text-slate-950">{address.addressName}</p>
                               {address.isDefault && (
-                                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+                                <span className="rounded-md bg-blue-100 px-2 py-0.5 text-[11px] font-bold text-blue-700">
                                   기본
                                 </span>
                               )}
@@ -906,7 +1057,7 @@ export function Checkout() {
                           </div>
                           <span
                             className={`mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
-                              isSelected ? "border-primary bg-primary text-white" : "border-slate-200 text-transparent"
+                              isSelected ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 text-transparent"
                             }`}
                           >
                             <CheckCircle size={15} />
@@ -932,10 +1083,10 @@ export function Checkout() {
 function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
     <div className="mb-4 flex items-center gap-2">
-      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-secondary text-primary">
+      <span className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-50 text-blue-700">
         {icon}
       </span>
-      <h2 className="text-sm font-bold text-slate-950">{title}</h2>
+      <h2 className="text-base font-black text-slate-950">{title}</h2>
     </div>
   );
 }
@@ -977,7 +1128,7 @@ function AddressInput({
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-primary focus:ring-3 focus:ring-primary/10"
+        className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-3 focus:ring-blue-100"
       />
     </label>
   );
@@ -998,14 +1149,14 @@ function PaymentMethodCard({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl border p-4 text-left transition ${
-        active ? "border-primary bg-secondary/70" : "border-slate-200 bg-white hover:border-primary/40"
+      className={`rounded-lg border p-4 text-left transition ${
+        active ? "border-2 border-blue-600 bg-blue-50" : "border-slate-200 bg-white hover:border-blue-300"
       }`}
     >
       <div className="flex items-start gap-3">
         <span
           className={`mt-0.5 flex h-4 w-4 items-center justify-center rounded-full border ${
-            active ? "border-primary bg-primary" : "border-slate-300"
+            active ? "border-blue-600 bg-blue-600" : "border-slate-300"
           }`}
         >
           {active && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
@@ -1021,13 +1172,47 @@ function PaymentMethodCard({
 
 function StepCard({ label, title, desc }: { label: string; title: string; desc: string }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-      <div className="mb-2 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
+    <div className="rounded-md border border-sky-200 bg-white p-3 shadow-sm">
+      <div className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-sky-600 text-xs font-bold text-white">
         {label}
       </div>
-      <p className="text-sm font-bold text-slate-950">{title}</p>
+      <p className="text-sm font-bold text-slate-900">{title}</p>
       <p className="mt-0.5 text-xs text-slate-500">{desc}</p>
     </div>
+  );
+}
+
+function AgreementRow({
+  checked,
+  title,
+  description,
+  onChange,
+}: {
+  checked: boolean;
+  title: string;
+  description: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-3 py-4">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="mt-0.5 size-4 rounded border-slate-300 accent-blue-600"
+      />
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-bold text-slate-900">{title}</span>
+          <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
+            필수
+          </span>
+        </span>
+        <span className="mt-1 block text-xs leading-5 text-slate-500">
+          {description}
+        </span>
+      </span>
+    </label>
   );
 }
 

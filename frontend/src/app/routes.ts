@@ -29,6 +29,7 @@ import {CompanySettings} from "@/pages/company/CompanySettings";
 import {SellerContractSign} from "@/pages/contract/SellerContractSign";
 import {SellerContractCreate} from "@/pages/contract/SellerContractCreate";
 import {BuyerContractSign} from "@/pages/contract/BuyerContractSign";
+import {BuyerContractList} from "@/pages/contract/BuyerContractList";
 
 import {Inquiry} from "@/pages/inquiry/Inquiry";
 import {Support} from "@/pages/inquiry/Support";
@@ -144,6 +145,7 @@ export const router = createBrowserRouter([
                     {path: "quotes/:quoteId", Component: QuoteDetailBuyer},
                     {path: "sourcing-request", Component: SourcingRequest},
                     {path: "contracts/:contractId/sign", Component: BuyerContractSign},
+                    {path: "contracts", Component: BuyerContractList},
                     {path: "shipping-quotes", Component: BuyerShippingQuotes},
                     {path: "my-sourcing", Component: BuyerSourcingList},
                     {path: "sourcing-detail/:requestId", Component: BuyerSourcingDetail},

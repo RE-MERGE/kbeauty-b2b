@@ -5,6 +5,7 @@ import kr.remerge.stylehub.domain.quote.constant.QuoteStatusCode;
 import kr.remerge.stylehub.domain.quote.dto.QuoteCreateRequest;
 import kr.remerge.stylehub.domain.quote.dto.QuoteCreateResponse;
 import kr.remerge.stylehub.domain.quote.dto.QuoteDetailResponse;
+import kr.remerge.stylehub.domain.quote.dto.QuoteReviseItem;
 import kr.remerge.stylehub.domain.quote.entity.Quote;
 import kr.remerge.stylehub.domain.quote.entity.QuoteItem;
 import kr.remerge.stylehub.domain.quote.repository.QuoteItemRepository;
@@ -95,6 +96,75 @@ public class QuoteService {
         }
         return QuoteCreateResponse.from(quote);
 
+    }
+
+    // 협의(재견적 요청)에 대한 셀러 응답으로 새 버전의 견적을 만든다.
+    // sourcingRequest/buyer/seller/company 등 바뀌지 않는 식별 정보는 원본에서 그대로 물려받고,
+    // 조건(리드타임/배송비/유효기간/셀러메모/품목)만 새로 반영해 parentQuote/version을 연결한다.
+    @Transactional
+    public Quote createRevisedQuote(
+            Quote original,
+            Integer leadTimeDays,
+            Long shippingFee,
+            LocalDateTime validUntil,
+            String sellerMemo,
+            List<QuoteReviseItem> items
+    ) {
+
+        LocalDateTime now = LocalDateTime.now();
+
+        long subtotalAmount = items.stream()
+                .mapToLong(item -> item.unitPrice() * item.quantity())
+                .sum();
+
+        long totalAmount = subtotalAmount + shippingFee;
+
+        Quote revisedQuote = quoteRepository.save(
+                Quote.builder()
+                        .quoteNo(createQuoteNo(now))
+                        .sourcingRequest(original.getSourcingRequest())
+                        .buyer(original.getBuyer())
+                        .seller(original.getSeller())
+                        .company(original.getCompany())
+                        .companyName(original.getCompanyName())
+                        .buyerName(original.getBuyerName())
+                        .sellerName(original.getSellerName())
+                        .parentQuote(original)
+                        .version(original.getVersion() + 1)
+                        .brandName(original.getBrandName())
+                        .productName(original.getProductName())
+                        .categoryName(original.getCategoryName())
+                        .material(original.getMaterial())
+                        .leadTimeDays(leadTimeDays)
+                        .deliveryCompany(original.getDeliveryCompany())
+                        .shippingFee(shippingFee)
+                        .validUntil(validUntil)
+                        .sampleAvailable(original.getSampleAvailable())
+                        .sellerMemo(sellerMemo)
+                        .subtotalAmount(subtotalAmount)
+                        .totalAmount(totalAmount)
+                        .status(QuoteStatusCode.SUBMITTED)
+                        .createdAt(now)
+                        .submittedAt(now)
+                        .build()
+        );
+
+        List<QuoteItem> revisedItems = items.stream()
+                .map(item -> QuoteItem.builder()
+                        .quote(revisedQuote)
+                        .optionSummary(item.optionSummary())
+                        .quantity(item.quantity())
+                        .unitPrice(item.unitPrice())
+                        .totalPrice(item.unitPrice() * item.quantity())
+                        .isSample(item.sample())
+                        .createdAt(now)
+                        .build()
+                )
+                .toList();
+
+        quoteItemRepository.saveAll(revisedItems);
+
+        return revisedQuote;
     }
 
     private void validateQuoteSubmission(SourcingSupplier supplier) {

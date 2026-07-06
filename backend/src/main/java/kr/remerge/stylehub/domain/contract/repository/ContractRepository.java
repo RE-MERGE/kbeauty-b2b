@@ -11,7 +11,9 @@ public interface ContractRepository extends JpaRepository<Contract, Integer> {
 
     boolean existsByQuote_QuoteId(Integer quoteId);
 
-    Optional<Contract> findByQuote_QuoteId(Integer quoteId);
+    // 재계약(버전 발행)으로 같은 quote_id에 계약서가 여러 건 존재할 수 있어
+    // "현재 계약서"는 항상 버전이 가장 높은 것으로 조회한다.
+    Optional<Contract> findFirstByQuote_QuoteIdOrderByVersionDesc(Integer quoteId);
 
     Optional<Contract> findByContractIdAndQuote_Buyer_UserId(Integer contractId, Integer buyerId);
 

@@ -123,4 +123,18 @@ public class BuyerOrderController {
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
+    @PostMapping("/{orderId}/complete")
+    public ResponseEntity<ApiResponse<Void>> completeOrder(
+            @LoginUser AuthUser authUser,
+            @PathVariable Integer orderId
+    ) {
+
+        buyerOrderService.confirmOrder(
+                authUser.userId(),
+                orderId
+        );
+
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
 }

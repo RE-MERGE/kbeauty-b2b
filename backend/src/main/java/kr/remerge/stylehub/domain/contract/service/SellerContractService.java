@@ -11,6 +11,10 @@ import kr.remerge.stylehub.domain.contract.repository.ContractItemRepository;
 import kr.remerge.stylehub.domain.contract.repository.ContractRepository;
 import kr.remerge.stylehub.domain.contract.repository.ContractSignatureRepository;
 import kr.remerge.stylehub.domain.contract.support.ContractHashGenerator;
+import kr.remerge.stylehub.domain.order.entity.OrderLog;
+import kr.remerge.stylehub.domain.order.enumtype.OrderProcessStep;
+import kr.remerge.stylehub.domain.order.repository.OrderLogRepository;
+import kr.remerge.stylehub.domain.order.repository.OrderRepository;
 import kr.remerge.stylehub.domain.quote.constant.QuoteStatusCode;
 import kr.remerge.stylehub.domain.quote.entity.Quote;
 import kr.remerge.stylehub.domain.quote.repository.QuoteRepository;
@@ -38,6 +42,9 @@ public class SellerContractService {
     private final ContractService contractService;
     private final ContractHashGenerator contractHashGenerator;
     private final ContractPdfGenerator contractPdfGenerator;
+    private final OrderRepository orderRepository;
+    private final OrderLogRepository orderLogRepository;
+
 
     public SellerContractDetailResponse getContractByQuote(
             Integer userId,
@@ -182,6 +189,22 @@ public class SellerContractService {
 
         contractSignatureRepository.save(signature);
         contract.sellerSign();
+
+        orderRepository.findByQuote_QuoteIdInAndBuyer_UserIdAndIsSampleTrueOrderByCreatedAtDesc(
+                List.of(contract.getQuote().getQuoteId()),
+                contract.getQuote().getBuyer().getUserId()
+        ).stream().findFirst().ifPresent(sampleOrder ->
+                orderLogRepository.save(
+                        OrderLog.createProcessLog(
+                                sampleOrder,
+                                OrderProcessStep.CONTRACT_SIGNING,
+                                seller,
+                                "계약서 서명이 진행 중입니다."
+                        )
+                )
+        );
+
+
     }
 
     @Transactional
@@ -211,7 +234,7 @@ public class SellerContractService {
     }
 
     private Contract findContractByQuote(Integer quoteId) {
-        return contractRepository.findByQuote_QuoteId(quoteId)
+        return contractRepository.findFirstByQuote_QuoteIdOrderByVersionDesc(quoteId)
                 .orElseThrow(() ->
                         new BusinessException(ErrorCode.CONTRACT_NOT_FOUND)
                 );

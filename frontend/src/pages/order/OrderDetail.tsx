@@ -960,8 +960,16 @@ export function OrderDetail() {
             confirmLabel="거래 확정"
             onClose={() => setShowConfirm(false)}
             onConfirm={() => {
-              setShowConfirm(false);
-              alert("거래가 확정되었습니다.");
+              void (async () => {
+                try {
+                  await api.post(`/buyer/orders/${order.id}/complete`);
+                  setShowConfirm(false);
+                  setOrder((current) => (current ? { ...current, status: "COMPLETED" } : current));
+                } catch (confirmError) {
+                  console.error("거래 확정 실패", confirmError);
+                  alert("거래 확정에 실패했습니다.");
+                }
+              })();
             }}
           />
         )}

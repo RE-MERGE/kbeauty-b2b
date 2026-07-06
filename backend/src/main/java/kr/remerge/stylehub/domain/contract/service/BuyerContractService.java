@@ -14,6 +14,10 @@ import kr.remerge.stylehub.domain.contract.repository.ContractItemRepository;
 import kr.remerge.stylehub.domain.contract.repository.ContractRepository;
 import kr.remerge.stylehub.domain.contract.repository.ContractSignatureRepository;
 import kr.remerge.stylehub.domain.contract.support.ContractHashGenerator;
+import kr.remerge.stylehub.domain.order.entity.OrderLog;
+import kr.remerge.stylehub.domain.order.enumtype.OrderProcessStep;
+import kr.remerge.stylehub.domain.order.repository.OrderLogRepository;
+import kr.remerge.stylehub.domain.order.repository.OrderRepository;
 import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.support.UserReader;
 import kr.remerge.stylehub.global.common.ImageUploadService;
@@ -39,6 +43,8 @@ public class BuyerContractService {
     private final ContractPdfGenerator contractPdfGenerator;
     private final Sha256HashGenerator sha256HashGenerator;
     private final ImageUploadService imageUploadService;
+    private final OrderRepository orderRepository;
+    private final OrderLogRepository orderLogRepository;
 
     public List<BuyerContractListResponse> getContracts(Integer userId) {
         return contractRepository
@@ -173,6 +179,20 @@ public class BuyerContractService {
 
         contract.buyerSign();
         contract.complete();
+
+        orderRepository.findByQuote_QuoteIdInAndBuyer_UserIdAndIsSampleTrueOrderByCreatedAtDesc(
+                List.of(contract.getQuote().getQuoteId()),
+                buyer.getUserId()
+        ).stream().findFirst().ifPresent(sampleOrder ->
+                orderLogRepository.save(
+                        OrderLog.createProcessLog(
+                                sampleOrder,
+                                OrderProcessStep.CONTRACT_CONFIRMED,
+                                buyer,
+                                "계약이 확정되었습니다."
+                        )
+                )
+        );
 
         byte[] pdfBytes =
                 contractPdfGenerator.generate(

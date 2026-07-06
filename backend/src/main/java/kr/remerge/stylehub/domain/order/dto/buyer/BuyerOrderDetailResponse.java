@@ -19,6 +19,7 @@ public record BuyerOrderDetailResponse(
         LocalDateTime createdAt,
 
         String buyerName,
+        String sellerCompanyName,
         PaymentMethod paymentMethod,
 
         String receiverName,
@@ -42,6 +43,7 @@ public record BuyerOrderDetailResponse(
 
     public static BuyerOrderDetailResponse from(
             Order order,
+            String sellerCompanyName,
             List<BuyerOrderDetailItemResponse> orderDetailItemResponse,
             List<BuyerOrderLogResponse> orderLogResponse
     ) {
@@ -56,6 +58,7 @@ public record BuyerOrderDetailResponse(
                 order.getCreatedAt(),
 
                 order.getBuyer().getName(),
+                sellerCompanyName,
                 order.getPaymentMethod(),
 
                 order.getReceiverName(),

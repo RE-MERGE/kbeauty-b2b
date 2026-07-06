@@ -3,8 +3,11 @@ package kr.remerge.stylehub.domain.order.service;
 import kr.remerge.stylehub.domain.order.dto.seller.*;
 import kr.remerge.stylehub.domain.order.entity.Order;
 import kr.remerge.stylehub.domain.order.entity.OrderItem;
+import kr.remerge.stylehub.domain.order.entity.OrderLog;
 import kr.remerge.stylehub.domain.order.enumtype.OrderItemStatus;
+import kr.remerge.stylehub.domain.order.enumtype.OrderProcessStep;
 import kr.remerge.stylehub.domain.order.enumtype.OrderStatus;
+import kr.remerge.stylehub.domain.order.enumtype.OrderType;
 import kr.remerge.stylehub.domain.order.repository.OrderItemRepository;
 import kr.remerge.stylehub.domain.order.repository.OrderLogRepository;
 import kr.remerge.stylehub.domain.order.repository.OrderRepository;
@@ -214,6 +217,21 @@ public class SellerOrderService {
                     actor,
                     OrderStatus.PREPARING
             );
+
+            if (order.getOrderType() == OrderType.CUSTOM) {
+                orderLogRepository.save(
+                        OrderLog.createProcessLog(
+                                order,
+                                order.getIsSample()
+                                        ? OrderProcessStep.SAMPLE_PREPARING
+                                        : OrderProcessStep.PRODUCTION_STARTED,
+                                actor,
+                                order.getIsSample()
+                                        ? "샘플 준비가 시작되었습니다."
+                                        : "본 생산이 시작되었습니다."
+                        )
+                );
+            }
         }
     }
 
@@ -256,6 +274,22 @@ public class SellerOrderService {
                     user,
                     OrderStatus.PREPARING
             );
+
+            if (order.getOrderType() == OrderType.CUSTOM) {
+                orderLogRepository.save(
+                        OrderLog.createProcessLog(
+                                order,
+                                order.getIsSample()
+                                        ? OrderProcessStep.SAMPLE_PREPARING
+                                        : OrderProcessStep.PRODUCTION_STARTED,
+                                user,
+                                order.getIsSample()
+                                        ? "샘플 준비가 시작되었습니다."
+                                        : "본생산이 시작되었습니다."
+                        )
+                );
+
+            }
         }
     }
 
@@ -306,5 +340,19 @@ public class SellerOrderService {
                 OrderStatus.SHIPPED
         );
 
+        if (order.getOrderType() == OrderType.CUSTOM) {
+            orderLogRepository.save(
+                    OrderLog.createProcessLog(
+                            order,
+                            order.getIsSample()
+                                    ? OrderProcessStep.SAMPLE_SHIPPED
+                                    : OrderProcessStep.PRODUCTION_COMPLETED,
+                            user,
+                            order.getIsSample()
+                                    ? "샘플이 발송되었습니다."
+                                    : "본 생산이 완료되어 발송되었습니다."
+                    )
+            );
+        }
     }
 }

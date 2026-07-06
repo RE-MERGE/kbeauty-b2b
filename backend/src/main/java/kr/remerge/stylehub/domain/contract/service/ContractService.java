@@ -40,7 +40,7 @@ public class ContractService {
                 .sum() + quote.getShippingFee();
 
         Optional<Contract> existingContract
-                = contractRepository.findByQuote_QuoteId(quote.getQuoteId());
+                = contractRepository.findFirstByQuote_QuoteIdOrderByVersionDesc(quote.getQuoteId());
 
         if (existingContract.isPresent()) {
             Contract contract = existingContract.get();
@@ -158,6 +158,58 @@ public class ContractService {
         if(contractRepository.existsByQuote_QuoteId(quoteId)) {
             throw new BusinessException(ErrorCode.CONTRACT_ALREADY_EXISTS);
         }
+    }
+
+    // 협의(재계약 요청)에 대한 셀러 응답으로 새 버전의 계약서 초안을 만든다.
+    // 품목은 원본 계약서 그대로 복사하고, 조건(계약명/납품일/결제조건/반품정책/특약사항/금액)만 새로 반영한다.
+    // 원본은 새 버전으로 대체되었으므로 CANCELED로 전환한다.
+    @Transactional
+    public Contract createRevisedDraft(
+            Contract original,
+            String contractName,
+            LocalDate deliveryDate,
+            String paymentTerms,
+            String returnPolicy,
+            String specialTerms,
+            Long contractAmount
+    ) {
+
+        Contract revision = Contract.createRevision(
+                original,
+                createContractNo(),
+                contractName,
+                contractAmount,
+                deliveryDate,
+                paymentTerms,
+                returnPolicy,
+                specialTerms
+        );
+
+        Contract savedRevision = contractRepository.save(revision);
+
+        List<ContractItem> originalItems = contractItemRepository
+                .findByContract_ContractIdOrderByContractItemIdAsc(
+                        original.getContractId()
+                );
+
+        List<ContractItem> copiedItems = originalItems.stream()
+                .map(item -> new ContractItem(
+                        savedRevision,
+                        item.getProduct(),
+                        item.getProductOption(),
+                        item.getProductName(),
+                        item.getOptionSummary(),
+                        item.getMaterial(),
+                        item.getQuantity(),
+                        item.getUnitPrice()
+                ))
+                .toList();
+
+        contractItemRepository.saveAll(copiedItems);
+
+        original.cancel();
+
+        return savedRevision;
     }
 
 }

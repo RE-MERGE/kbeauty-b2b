@@ -184,5 +184,10 @@ public class Order extends BaseEntity {
         this.canceledAt = LocalDateTime.now();
     }
 
+    public void agree() {
+        this.status = OrderStatus.COMPLETED;
+        this.agreedAt = LocalDateTime.now();
+    }
+
 
 }

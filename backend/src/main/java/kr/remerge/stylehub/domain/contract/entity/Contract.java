@@ -287,5 +287,60 @@ public class Contract {
                 quote.getShippingFee()
         );
     }
+
+    // 협의(재계약 요청)에 대한 셀러 응답으로 새 버전의 계약서를 만든다.
+    // 기존 계약서(원본)는 buyer/seller/company 등 식별 정보를 그대로 물려받고,
+    // 조건(계약명/납품일/결제조건/반품정책/특약사항/금액)만 새로 반영한다.
+    public static Contract createRevision(
+            Contract original,
+            String contractNo,
+            String contractName,
+            Long contractAmount,
+            LocalDate deliveryDate,
+            String paymentTerms,
+            String returnPolicy,
+            String specialTerms
+    ) {
+
+        if (contractName == null || contractName.isBlank()) {
+            throw new IllegalArgumentException("계약명은 필수입니다.");
+        }
+
+        if (contractName.trim().length() > 150) {
+            throw new IllegalArgumentException("계약명은 150자 이하여야 합니다.");
+        }
+
+        if (deliveryDate == null) {
+            throw new IllegalArgumentException("납품 예정일은 필수입니다.");
+        }
+
+        if (paymentTerms == null || paymentTerms.isBlank()) {
+            throw new IllegalArgumentException("결제 조건은 필수입니다.");
+        }
+
+        if (returnPolicy == null || returnPolicy.isBlank()) {
+            throw new IllegalArgumentException("반품·교환 조건은 필수입니다.");
+        }
+
+        Contract revision = new Contract(
+                original.getQuote(),
+                original.getCompany(),
+                original.getBuyerCompanyName(),
+                original.getSellerCompanyName(),
+                contractNo,
+                contractName.trim(),
+                contractAmount,
+                deliveryDate,
+                paymentTerms,
+                returnPolicy,
+                specialTerms,
+                original.getShippingFee()
+        );
+
+        revision.parentContract = original;
+        revision.version = original.getVersion() + 1;
+
+        return revision;
+    }
 }
 

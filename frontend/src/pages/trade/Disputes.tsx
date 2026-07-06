@@ -1,533 +1,813 @@
-import { useState } from "react";
-import { Link } from "react-router";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
-  CheckCircle,
   Clock,
   FileText,
-  Image,
   MessageSquare,
-  Package,
   Search,
-  ShieldCheck,
-  Store,
+  Send,
   User,
-  XCircle,
+  ShieldAlert,
 } from "lucide-react";
+import { useLocation, useParams } from "react-router";
+import api from "@/api/axios";
 
 type DisputeStatus =
   | "RECEIVED"
   | "REVIEWING"
   | "WAITING_SELLER"
-  | "PROCESSING"
+  | "WAITING_BUYER"
   | "RESOLVED"
-  | "REJECTED";
+  | "REJECTED"
+  | "CANCELED";
 
-type DisputeType = "수량 부족" | "오염 / 하자" | "오배송" | "파손" | "기타";
+type ResponderRole = "BUYER" | "SELLER" | "ADMIN";
 
-type Dispute = {
-  id: string;
-  orderId: string;
-  negotiationId?: string;
+type DisputeListResponse = {
+  disputeId: number;
+  orderId: number;
+  orderNo: string;
   title: string;
-  type: DisputeType;
+  disputeType: string;
   status: DisputeStatus;
-  buyerName: string;
-  sellerName: string;
-  createdAt: string;
-  updatedAt: string;
-  content: string;
-  files: string[];
   requestedAction: string;
-  adminMemo?: string;
-  result?: {
-    type: string;
-    amount?: number;
-    completedAt: string;
-  };
-  steps: {
-    label: string;
-    time: string;
-    done: boolean;
-  }[];
+  buyerClaim: string;
+  receivedAt: string;
 };
 
-const statusConfig: Record<
+type DisputeResponseItem = {
+  responseId: number;
+  responderRole: ResponderRole;
+  status: DisputeStatus;
+  content: string;
+  createdAt: string;
+};
+
+type DisputeDetailResponse = DisputeListResponse & {
+  responses: DisputeResponseItem[];
+};
+
+const STATUS_CONFIG: Record<
   DisputeStatus,
-  { label: string; color: string; bg: string; icon: React.ReactNode }
+  { label: string; className: string }
 > = {
   RECEIVED: {
     label: "접수 완료",
-    color: "text-blue-700",
-    bg: "bg-blue-50 border-blue-200",
-    icon: <FileText size={13} />,
+    className: "bg-blue-50 text-blue-700 ring-blue-600/20",
   },
   REVIEWING: {
-    label: "관리자 검토중",
-    color: "text-amber-700",
-    bg: "bg-amber-50 border-amber-200",
-    icon: <Clock size={13} />,
+    label: "관리자 검토 중",
+    className: "bg-amber-50 text-amber-700 ring-amber-600/20",
   },
   WAITING_SELLER: {
-    label: "공급사 답변 대기",
-    color: "text-purple-700",
-    bg: "bg-purple-50 border-purple-200",
-    icon: <Store size={13} />,
+    label: "판매사 답변 대기",
+    className: "bg-purple-50 text-purple-700 ring-purple-600/20",
   },
-  PROCESSING: {
-    label: "처리중",
-    color: "text-primary",
-    bg: "bg-secondary border-primary/20",
-    icon: <ShieldCheck size={13} />,
+  WAITING_BUYER: {
+    label: "바이어 답변 대기",
+    className: "bg-pink-50 text-pink-700 ring-pink-600/20",
   },
   RESOLVED: {
     label: "처리 완료",
-    color: "text-green-700",
-    bg: "bg-green-50 border-green-200",
-    icon: <CheckCircle size={13} />,
+    className: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
   },
   REJECTED: {
-    label: "반려",
-    color: "text-red-700",
-    bg: "bg-red-50 border-red-200",
-    icon: <XCircle size={13} />,
+    label: "기각",
+    className: "bg-rose-50 text-rose-700 ring-rose-600/20",
+  },
+  CANCELED: {
+    label: "취소",
+    className: "bg-gray-50 text-gray-600 ring-gray-500/10",
   },
 };
 
-const sampleDisputes: Dispute[] = [
-  {
-    id: "DSP-2024-001",
-    orderId: "ORD-2024-0841",
-    negotiationId: "NEG-2024-002",
-    title: "블라우스 일부 상품 오염 접수",
-    type: "오염 / 하자",
-    status: "REVIEWING",
-    buyerName: "스타일마켓㈜",
-    sellerName: "르블랑 어패럴",
-    createdAt: "2024.05.22 09:10",
-    updatedAt: "2024.05.22 10:20",
-    content:
-      "입고 검수 과정에서 화이트 M 사이즈 3장에 오염이 확인되었습니다. 사진 첨부드립니다. 교환 또는 부분 환불 요청드립니다.",
-    files: ["오염사진_1.jpg", "오염사진_2.jpg", "검수내역서.pdf"],
-    requestedAction: "불량 수량 3장 교환 또는 부분 환불",
-    adminMemo:
-      "증빙 사진 확인 완료. 공급사에 불량 여부 확인 요청 예정입니다.",
-    steps: [
-      { label: "이의제기 접수", time: "2024.05.22 09:10", done: true },
-      { label: "관리자 검토중", time: "2024.05.22 10:20", done: true },
-      { label: "공급사 답변 요청", time: "—", done: false },
-      { label: "처리 결과 안내", time: "—", done: false },
-    ],
-  },
-  {
-    id: "DSP-2024-002",
-    orderId: "ORD-2024-0799",
-    title: "플리츠 스커트 수량 부족",
-    type: "수량 부족",
-    status: "RESOLVED",
-    buyerName: "온라인샵 패션픽",
-    sellerName: "어반드레스",
-    createdAt: "2024.05.15 14:30",
-    updatedAt: "2024.05.17 11:00",
-    content:
-      "주문 수량은 총 45장이었으나 실제 입고 수량은 42장입니다. 부족 수량 3장에 대한 환불 요청드립니다.",
-    files: ["입고수량확인서.pdf", "박스개봉사진.jpg"],
-    requestedAction: "부족 수량 3장 환불",
-    adminMemo:
-      "공급사 확인 결과 포장 누락 인정. 부분 환불 처리 완료.",
-    result: {
-      type: "부분 환불 승인",
-      amount: 45000,
-      completedAt: "2024.05.17 11:00",
-    },
-    steps: [
-      { label: "이의제기 접수", time: "2024.05.15 14:30", done: true },
-      { label: "관리자 검토", time: "2024.05.15 15:10", done: true },
-      { label: "공급사 답변 완료", time: "2024.05.16 10:40", done: true },
-      { label: "부분 환불 완료", time: "2024.05.17 11:00", done: true },
-    ],
-  },
-  {
-    id: "DSP-2024-003",
-    orderId: "ORD-2024-0802",
-    negotiationId: "NEG-2024-001",
-    title: "색상 오배송 접수",
-    type: "오배송",
-    status: "WAITING_SELLER",
-    buyerName: "스타일마켓㈜",
-    sellerName: "모아뜨",
-    createdAt: "2024.05.18 16:20",
-    updatedAt: "2024.05.19 09:00",
-    content:
-      "핑크 색상으로 주문한 원피스 일부가 블루 색상으로 배송되었습니다. 교환 가능 여부 확인 부탁드립니다.",
-    files: ["주문서.pdf", "오배송사진.jpg"],
-    requestedAction: "오배송 상품 교환",
-    adminMemo:
-      "주문서와 수령 사진 비교 완료. 공급사 답변 대기 중입니다.",
-    steps: [
-      { label: "이의제기 접수", time: "2024.05.18 16:20", done: true },
-      { label: "관리자 검토 완료", time: "2024.05.19 09:00", done: true },
-      { label: "공급사 답변 대기", time: "—", done: false },
-      { label: "처리 결과 안내", time: "—", done: false },
-    ],
-  },
-];
+const TYPE_LABELS: Record<string, string> = {
+  DELIVERY_DELAY: "배송 지연",
+  MISSING_ITEM: "수량 부족",
+  PAYMENT: "결제 문제",
+  PRODUCT_DEFECT: "상품 하자",
+  WRONG_ITEM: "오배송",
+  ETC: "기타",
+};
 
-const filters = [
-  { value: "ALL", label: "전체" },
-  { value: "REVIEWING", label: "검토중" },
-  { value: "WAITING_SELLER", label: "공급사 답변" },
-  { value: "RESOLVED", label: "처리 완료" },
-  { value: "REJECTED", label: "반려" },
-];
+const ACTION_LABELS: Record<string, string> = {
+  EXCHANGE: "교환",
+  PARTIAL_REFUND: "부분 환불",
+  REFUND: "환불",
+  RE_DELIVERY: "재배송",
+  ETC: "기타",
+};
+
+const ROLE_LABELS: Record<ResponderRole, string> = {
+  BUYER: "바이어",
+  SELLER: "판매사",
+  ADMIN: "관리자",
+};
+
+const formatDate = (value: string) =>
+  new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 
 export function Disputes() {
-  const [selectedId, setSelectedId] = useState(sampleDisputes[0].id);
-  const [filter, setFilter] = useState("ALL");
+  const location = useLocation();
+  const { disputeId } = useParams();
+  const isSeller = location.pathname.startsWith("/seller");
+  const [disputes, setDisputes] = useState<DisputeListResponse[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(
+    disputeId ? Number(disputeId) : null,
+  );
+  const [detail, setDetail] = useState<DisputeDetailResponse | null>(null);
+  const [filter, setFilter] = useState<DisputeStatus | "ALL">("ALL");
   const [search, setSearch] = useState("");
+  const [reply, setReply] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [detailError, setDetailError] = useState("");
 
-  const filtered = sampleDisputes.filter((item) => {
-    const matchFilter = filter === "ALL" || item.status === filter;
-    const matchSearch =
-      item.id.includes(search) ||
-      item.orderId.includes(search) ||
-      item.title.includes(search) ||
-      item.buyerName.includes(search) ||
-      item.sellerName.includes(search);
+  const apiPrefix = isSeller ? "/seller/orders" : "/buyer/orders";
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [adminReason, setAdminReason] = useState("");
 
-    return matchFilter && matchSearch;
-  });
+  useEffect(() => {
+    const loadDisputes = async () => {
+      try {
+        setIsLoading(true);
+        setError("");
+        const response = await api.get<DisputeListResponse[]>(
+          `${apiPrefix}/disputes`,
+        );
+        setDisputes(response);
+        setSelectedId((current) => {
+          if (current && response.some((item) => item.disputeId === current)) {
+            return current;
+          }
+          return response[0]?.disputeId ?? null;
+        });
+      } catch (loadError) {
+        console.error("이의제기 목록 조회 실패", loadError);
+        setError("이의제기 목록을 불러오지 못했습니다.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  const selected = sampleDisputes.find((item) => item.id === selectedId);
+    void loadDisputes();
+  }, [apiPrefix]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setDetail(null);
+      return;
+    }
+
+    const loadDetail = async () => {
+      try {
+        setIsDetailLoading(true);
+        setDetailError("");
+        const response = await api.get<DisputeDetailResponse>(
+          `${apiPrefix}/disputes/${selectedId}`,
+        );
+        setDetail(response);
+      } catch (loadError) {
+        console.error("이의제기 상세 조회 실패", loadError);
+        setDetail(null);
+        setDetailError("이의제기 상세 내용을 불러오지 못했습니다.");
+      } finally {
+        setIsDetailLoading(false);
+      }
+    };
+
+    void loadDetail();
+  }, [apiPrefix, selectedId]);
+
+  useEffect(() => {
+    const syncDisputes = async () => {
+      try {
+        const list = await api.get<DisputeListResponse[]>(
+          `${apiPrefix}/disputes`,
+        );
+        setDisputes(list);
+
+        if (selectedId) {
+          const selectedDetail = await api.get<DisputeDetailResponse>(
+            `${apiPrefix}/disputes/${selectedId}`,
+          );
+          setDetail(selectedDetail);
+        }
+      } catch (syncError) {
+        console.error("이의제기 상태 동기화 실패", syncError);
+      }
+    };
+
+    const handleFocus = () => {
+      void syncDisputes();
+    };
+
+    const intervalId = window.setInterval(() => {
+      void syncDisputes();
+    }, 10_000);
+
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [apiPrefix, selectedId]);
+
+  const filtered = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+    return disputes.filter((item) => {
+      const matchesFilter = filter === "ALL" || item.status === filter;
+      const matchesSearch =
+        !keyword ||
+        item.orderNo.toLowerCase().includes(keyword) ||
+        item.title.toLowerCase().includes(keyword) ||
+        item.buyerClaim.toLowerCase().includes(keyword);
+      return matchesFilter && matchesSearch;
+    });
+  }, [disputes, filter, search]);
+
+  const canReply =
+    detail != null &&
+    (isSeller
+      ? detail.status === "RECEIVED" || detail.status === "WAITING_SELLER"
+      : detail.status === "WAITING_BUYER");
+
+  const counts = {
+    all: disputes.length,
+    received: disputes.filter((item) => item.status === "RECEIVED").length,
+    waiting: disputes.filter(
+      (item) =>
+        item.status === "WAITING_SELLER" || item.status === "WAITING_BUYER",
+    ).length,
+    resolved: disputes.filter((item) => item.status === "RESOLVED").length,
+  };
+
+  const submitReply = async () => {
+    if (!detail || !reply.trim() || !canReply) return;
+
+    try {
+      setIsSubmitting(true);
+      setDetailError("");
+      const response = await api.post<DisputeResponseItem>(
+        `${apiPrefix}/disputes/${detail.disputeId}/responses`,
+        { content: reply.trim() },
+      );
+      const nextStatus = response.status;
+      setDetail((current) =>
+        current
+          ? {
+              ...current,
+              status: nextStatus,
+              responses: [...current.responses, response],
+            }
+          : current,
+      );
+      setDisputes((current) =>
+        current.map((item) =>
+          item.disputeId === detail.disputeId
+            ? { ...item, status: nextStatus }
+            : item,
+        ),
+      );
+      setReply("");
+    } catch (submitError) {
+      console.error("이의제기 답변 등록 실패", submitError);
+      setDetailError(
+        submitError instanceof Error
+          ? submitError.message
+          : "답변을 등록하지 못했습니다.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const resolveDispute = async () => {
+    if (!detail) return;
+
+    try {
+      await api.post(`${apiPrefix}/disputes/${detail.disputeId}/resolve`);
+
+      setDetail((current) =>
+        current ? { ...current, status: "RESOLVED" } : current,
+      );
+
+      setDisputes((current) =>
+        current.map((item) =>
+          item.disputeId === detail.disputeId
+            ? { ...item, status: "RESOLVED" }
+            : item,
+        ),
+      );
+    } catch (error) {
+      console.error("이의제기 처리 완료 실패", error);
+      alert("처리 완료에 실패했습니다.");
+    }
+  };
+
+  const requestAdminReview = async () => {
+    if (!detail || !adminReason.trim()) return;
+
+    try {
+      await api.post(`${apiPrefix}/disputes/${detail.disputeId}/admin-review`, {
+        content: adminReason.trim(),
+      });
+
+      setDetail((current) =>
+        current ? { ...current, status: "REVIEWING" } : current,
+      );
+
+      setDisputes((current) =>
+        current.map((item) =>
+          item.disputeId === detail.disputeId
+            ? { ...item, status: "REVIEWING" }
+            : item,
+        ),
+      );
+
+      setAdminReason("");
+      setIsAdminModalOpen(false);
+    } catch (error) {
+      console.error("관리자 검토 요청 실패", error);
+      alert("관리자 검토 요청에 실패했습니다.");
+    }
+  };
 
   return (
-    <div className="max-w-[1280px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-          <AlertCircle size={24} className="text-primary" />
-          이의제기
-        </h1>
-        <p className="text-sm text-muted-foreground mt-2">
-          상품 수령 후 발생한 수량 부족, 하자, 오배송 등의 문제를 접수하고 처리 상태를 확인합니다.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-[380px_1fr] gap-5">
-        <div className="space-y-4">
-          <div className="bg-white border border-border rounded-lg p-4">
-            <div className="flex items-center border border-border rounded px-3 py-2 gap-2 mb-3">
-              <Search size={14} className="text-muted-foreground" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="이의번호, 주문번호, 업체명 검색"
-                className="text-sm outline-none flex-1"
-              />
-            </div>
-
-            <div className="flex gap-2 flex-wrap">
-              {filters.map((item) => (
-                <button
-                  key={item.value}
-                  onClick={() => setFilter(item.value)}
-                  className={`px-3 py-1.5 text-xs rounded border transition-colors ${
-                    filter === item.value
-                      ? "bg-primary text-white border-primary"
-                      : "border-border text-muted-foreground hover:border-primary hover:text-primary"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {filtered.map((item) => {
-              const status = statusConfig[item.status];
-              const active = selectedId === item.id;
-
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setSelectedId(item.id)}
-                  className={`w-full text-left bg-white border rounded-lg p-4 transition-colors ${
-                    active
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/40"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border bg-red-50 border-red-200 text-red-700">
-                      <AlertCircle size={11} />
-                      {item.type}
-                    </span>
-
-                    <span
-                      className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border ${status.bg} ${status.color}`}
-                    >
-                      {status.icon}
-                      {status.label}
-                    </span>
-                  </div>
-
-                  <div className="font-semibold text-sm text-foreground line-clamp-1">
-                    {item.title}
-                  </div>
-
-                  <div className="text-xs text-muted-foreground mt-1 font-mono">
-                    {item.id} · {item.orderId}
-                  </div>
-
-                  <div className="text-xs text-muted-foreground mt-2">
-                    {item.buyerName} ↔ {item.sellerName}
-                  </div>
-
-                  <div className="text-[11px] text-muted-foreground mt-2">
-                    최근 수정 {item.updatedAt}
-                  </div>
-                </button>
-              );
-            })}
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* 상단 헤더 */}
+        <div className="md:flex md:items-center md:justify-between mb-8">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
+              이의제기 관리
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              {isSeller
+                ? "판매 주문에 접수된 이의제기와 답변 상태를 확인합니다."
+                : "접수한 이의제기와 판매사의 답변을 확인합니다."}
+            </p>
           </div>
         </div>
 
-        {selected && (
-          <div className="bg-white border border-border rounded-lg overflow-hidden">
-            <div className="bg-gradient-to-r from-[#1a2e1a] to-[#2d4a35] text-white p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs bg-white/15 border border-white/20 px-2 py-1 rounded">
-                      이의제기
-                    </span>
-                    <span className="text-xs font-mono text-white/70">
-                      {selected.id}
-                    </span>
-                  </div>
+        {/* 대시보드 카드 섹션 */}
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+          <StatCard
+            label="전체 이의제기"
+            value={counts.all}
+            icon={<AlertCircle className="h-6 w-6 text-gray-600" />}
+            bgClass="bg-white"
+          />
+          <StatCard
+            label="접수 완료"
+            value={counts.received}
+            icon={<FileText className="h-6 w-6 text-blue-600" />}
+            bgClass="bg-white"
+          />
+          <StatCard
+            label="답변 대기"
+            value={counts.waiting}
+            icon={<MessageSquare className="h-6 w-6 text-purple-600" />}
+            bgClass="bg-white"
+          />
+          <StatCard
+            label="처리 완료"
+            value={counts.resolved}
+            icon={<Clock className="h-6 w-6 text-emerald-600" />}
+            bgClass="bg-white"
+          />
+        </div>
 
-                  <h2 className="text-xl font-bold">{selected.title}</h2>
+        {/* 메인 대시보드 레이아웃 */}
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 items-start">
 
-                  <p className="text-sm text-white/70 mt-2">
-                    관련 주문 {selected.orderId}
-                    {selected.negotiationId && ` · 관련 협의 ${selected.negotiationId}`}
-                  </p>
+          {/* 왼쪽: 이의제기 목록 영역 */}
+          <div className="lg:col-span-1 bg-white shadow rounded-lg overflow-hidden border border-gray-200">
+            <div className="p-4 border-b border-gray-200 bg-gray-50 flex flex-col gap-3">
+              <div className="relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
                 </div>
-
-                <div className="text-right text-sm">
-                  <div className="text-white/60 mb-1">현재 상태</div>
-                  <div className="font-semibold">
-                    {statusConfig[selected.status].label}
-                  </div>
-                </div>
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-9 sm:text-sm border-gray-300 rounded-md h-9 outline-none border px-2"
+                  placeholder="주문번호 또는 제목 검색"
+                />
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 border-b border-border">
-              <div className="p-4 border-r border-border">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                  <User size={13} />
-                  바이어
-                </div>
-                <div className="font-semibold text-sm text-foreground">
-                  {selected.buyerName}
-                </div>
-              </div>
-
-              <div className="p-4">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                  <Store size={13} />
-                  공급사
-                </div>
-                <div className="font-semibold text-sm text-foreground">
-                  {selected.sellerName}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-5 bg-muted/20 space-y-5">
-              <section className="bg-white border border-border rounded-lg p-5">
-                <h3 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
-                  <FileText size={15} className="text-primary" />
-                  접수 내용
-                </h3>
-
-                <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-0.5">
-                      이의 유형
-                    </div>
-                    <div className="font-semibold text-foreground">
-                      {selected.type}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-0.5">
-                      요청 처리
-                    </div>
-                    <div className="font-semibold text-foreground">
-                      {selected.requestedAction}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-0.5">
-                      접수일시
-                    </div>
-                    <div className="font-mono text-foreground">
-                      {selected.createdAt}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-0.5">
-                      최근 수정
-                    </div>
-                    <div className="font-mono text-foreground">
-                      {selected.updatedAt}
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">
-                    상세 내용
-                  </div>
-                  <div className="bg-secondary/50 rounded px-3 py-3 text-sm text-foreground leading-relaxed">
-                    {selected.content}
-                  </div>
-                </div>
-              </section>
-
-              <section className="bg-white border border-border rounded-lg p-5">
-                <h3 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
-                  <Image size={15} className="text-primary" />
-                  증빙자료
-                </h3>
-
-                <div className="flex flex-wrap gap-2">
-                  {selected.files.map((file) => (
-                    <button
-                      key={file}
-                      className="border border-border bg-secondary/40 hover:border-primary hover:text-primary text-xs px-3 py-2 rounded transition-colors flex items-center gap-1.5"
-                    >
-                      <FileText size={12} />
-                      {file}
-                    </button>
+              <div className="flex items-center justify-between">
+                <select
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value as DisputeStatus | "ALL")}
+                  className="block w-full text-xs border-gray-300 rounded-md bg-white border h-8 px-2 font-medium text-gray-600 focus:ring-indigo-500 focus:border-indigo-500"
+                >
+                  <option value="ALL">전체 상태</option>
+                  {Object.entries(STATUS_CONFIG).map(([value, config]) => (
+                    <option key={value} value={value}>
+                      {config.label}
+                    </option>
                   ))}
+                </select>
+                <span className="text-xs font-semibold text-gray-500 ml-2 shrink-0">
+                  총 {filtered.length}건
+                </span>
+              </div>
+            </div>
+
+            <div className="divide-y divide-gray-200 max-h-[600px] overflow-y-auto">
+              {isLoading ? (
+                <div className="p-8 text-center text-sm text-gray-500 font-medium">
+                  이의제기 목록을 불러오는 중입니다.
                 </div>
-              </section>
-
-              <section className="bg-white border border-border rounded-lg p-5">
-                <h3 className="font-bold text-sm text-foreground mb-4 flex items-center gap-2">
-                  <Clock size={15} className="text-primary" />
-                  처리 진행 상태
-                </h3>
-
-                <div className="relative">
-                  <div className="absolute left-[15px] top-0 bottom-0 w-px bg-muted" />
-                  <div className="space-y-4">
-                    {selected.steps.map((step, index) => (
-                      <div key={index} className="flex items-start gap-4 relative">
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 z-10 ${
-                            step.done ? "bg-primary" : "bg-muted"
-                          }`}
-                        >
-                          {step.done ? (
-                            <CheckCircle size={14} className="text-white" />
-                          ) : (
-                            <Clock size={14} className="text-[#bbb]" />
-                          )}
-                        </div>
-
-                        <div className="pt-1">
-                          <div
-                            className={`text-sm font-semibold ${
-                              step.done
-                                ? "text-foreground"
-                                : "text-muted-foreground"
-                            }`}
-                          >
-                            {step.label}
-                          </div>
-                          <div className="text-xs text-muted-foreground font-mono">
-                            {step.time}
-                          </div>
-                        </div>
+              ) : error ? (
+                <div className="p-8 text-center">
+                  <AlertCircle className="mx-auto h-8 w-8 text-red-500" />
+                  <p className="mt-2 text-sm font-semibold text-gray-900">목록 로드 실패</p>
+                  <p className="mt-1 text-xs text-gray-500">{error}</p>
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="p-8 text-center">
+                  <FileText className="mx-auto h-8 w-8 text-gray-300" />
+                  <p className="mt-2 text-sm font-semibold text-gray-900">표시할 내용 없음</p>
+                </div>
+              ) : (
+                filtered.map((item) => {
+                  const isSelected = selectedId === item.disputeId;
+                  return (
+                    <div
+                      key={item.disputeId}
+                      onClick={() => setSelectedId(item.disputeId)}
+                      className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
+                        isSelected ? "bg-indigo-50/70 hover:bg-indigo-50" : ""
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-mono text-gray-400">
+                          {item.orderNo}
+                        </span>
+                        <StatusBadge status={item.status} />
                       </div>
-                    ))}
-                  </div>
-                </div>
-              </section>
-
-              {selected.adminMemo && (
-                <section className="bg-blue-50 border border-blue-200 rounded-lg p-5">
-                  <h3 className="font-bold text-sm text-blue-800 mb-2 flex items-center gap-2">
-                    <ShieldCheck size={15} />
-                    관리자 검토 메모
-                  </h3>
-                  <p className="text-sm text-blue-700 leading-relaxed">
-                    {selected.adminMemo}
-                  </p>
-                </section>
+                      <h4 className="text-sm font-semibold text-gray-900 truncate">
+                        {item.title}
+                      </h4>
+                      <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                        <span>{TYPE_LABELS[item.disputeType] ?? item.disputeType}</span>
+                        <span>{formatDate(item.receivedAt)}</span>
+                      </div>
+                    </div>
+                  );
+                })
               )}
+            </div>
+          </div>
 
-              {selected.result && (
-                <section className="bg-green-50 border border-green-200 rounded-lg p-5">
-                  <h3 className="font-bold text-sm text-green-800 mb-3 flex items-center gap-2">
-                    <CheckCircle size={15} />
-                    처리 결과
-                  </h3>
-
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-green-700">처리 유형</span>
-                      <span className="font-semibold text-green-900">
-                        {selected.result.type}
-                      </span>
+          {/* 오른쪽: 상세 정보 및 히스토리 영역 */}
+          <div className="lg:col-span-2">
+            {selectedId && (
+              <div className="bg-white shadow rounded-lg border border-gray-200 overflow-hidden">
+                {isDetailLoading ? (
+                  <div className="p-12 text-center text-sm text-gray-500 font-medium">
+                    상세 내용을 불러오는 중입니다.
+                  </div>
+                ) : detailError && !detail ? (
+                  <div className="p-12 text-center">
+                    <AlertCircle className="mx-auto h-10 w-10 text-red-500" />
+                    <p className="mt-3 text-base font-semibold text-gray-900">상세 로드 실패</p>
+                    <p className="mt-1 text-sm text-gray-500">{detailError}</p>
+                  </div>
+                ) : detail ? (
+                  <>
+                    <div className="px-6 py-5 border-b border-gray-200 bg-gray-50 flex items-center justify-between flex-wrap gap-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="text-base font-bold leading-6 text-gray-900">
+                            {detail.title}
+                          </h3>
+                          <StatusBadge status={detail.status} />
+                        </div>
+                        <p className="text-xs font-mono text-gray-500">
+                          주문번호: {detail.orderNo} | 이의제기 번호: #{detail.disputeId}
+                        </p>
+                      </div>
                     </div>
 
-                    {selected.result.amount && (
-                      <div className="flex justify-between">
-                        <span className="text-green-700">환불 금액</span>
-                        <span className="font-semibold text-green-900">
-                          ₩{selected.result.amount.toLocaleString()}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 border-b border-gray-200 divide-y sm:divide-y-0 sm:divide-x divide-gray-200 bg-white">
+                      <div className="px-6 py-4">
+                        <span className="text-xs text-gray-400 block mb-1">유형</span>
+                        <span className="text-sm font-medium text-gray-900">
+                          {TYPE_LABELS[detail.disputeType] ?? detail.disputeType}
                         </span>
                       </div>
-                    )}
-
-                    <div className="flex justify-between">
-                      <span className="text-green-700">처리 완료일</span>
-                      <span className="font-mono text-green-900">
-                        {selected.result.completedAt}
-                      </span>
+                      <div className="px-6 py-4">
+                        <span className="text-xs text-gray-400 block mb-1">요청 처리 사항</span>
+                        <span className="text-sm font-medium text-gray-900">
+                          {ACTION_LABELS[detail.requestedAction] ?? detail.requestedAction}
+                        </span>
+                      </div>
+                      <div className="px-6 py-4">
+                        <span className="text-xs text-gray-400 block mb-1">접수 일시</span>
+                        <span className="text-sm font-medium text-gray-900">
+                          {formatDate(detail.receivedAt)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </section>
-              )}
 
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                  <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
-                  이의제기 내역은 관리자 검토 및 분쟁 처리 이력으로 보관됩니다.
+                    {/* 대화 히스토리 (isSeller 변수를 같이 넘겨서 나를 구분하게 함) */}
+                    <div className="px-6 py-6 bg-gray-50/50">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4 flex items-center gap-1.5">
+                        <MessageSquare className="h-3.5 w-3.5 text-gray-400" />
+                        진행 및 답변 이력
+                      </h4>
+
+                      <div className="space-y-4">
+                        <ResponseBubble
+                          role="BUYER"
+                          content={detail.buyerClaim}
+                          createdAt={detail.receivedAt}
+                          isSellerPage={isSeller}
+                          initial
+                        />
+
+                        {detail.responses.map((response) => (
+                          <ResponseBubble
+                            key={response.responseId}
+                            role={response.responderRole}
+                            content={response.content}
+                            createdAt={response.createdAt}
+                            isSellerPage={isSeller}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="px-6 py-5 bg-white border-t border-gray-200">
+                      {canReply ? (
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label htmlFor="reply-input" className="text-sm font-semibold text-gray-800">
+                              {isSeller ? "바이어에게 답변 작성" : "판매사에게 추가 답변 작성"}
+                            </label>
+                            <span className="text-xs text-gray-400">{reply.length}/3000자</span>
+                          </div>
+                          <textarea
+                            id="reply-input"
+                            rows={4}
+                            value={reply}
+                            onChange={(e) => setReply(e.target.value.slice(0, 3000))}
+                            placeholder="명확하고 친절한 해결 방안이나 답변 내용을 작성해 주세요."
+                            className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md p-3 border outline-none resize-none"
+                          />
+
+                          {detailError && (
+                            <div className="mt-3 p-3 rounded-md bg-rose-50 border border-rose-100 text-xs font-medium text-rose-700">
+                              {detailError}
+                            </div>
+                          )}
+
+                          <div className="mt-4 flex flex-wrap justify-end gap-2.5">
+                            {!isSeller && detail.status === "WAITING_BUYER" && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => void resolveDispute()}
+                                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none transition-colors"
+                                >
+                                  판매사 조치 수락
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsAdminModalOpen(true)}
+                                  className="inline-flex items-center px-4 py-2 border border-amber-300 text-sm font-semibold rounded-md shadow-sm text-amber-700 bg-amber-50 hover:bg-amber-100 focus:outline-none transition-colors"
+                                >
+                                  관리자 검토 요청
+                                </button>
+                              </>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => void submitReply()}
+                              disabled={isSubmitting || reply.trim().length === 0}
+                              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <Send className="h-4 w-4 mr-1.5" />
+                              {isSubmitting ? "등록 중..." : "답변 등록"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-2.5 p-3.5 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-600">
+                          <Clock className="h-5 w-5 text-gray-400 shrink-0 mt-0.5" />
+                          <div className="font-medium">
+                            {getWaitingMessage(detail.status, isSeller)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            )}
+          </div>
+
+        </div>
+      </div>
+
+      {/* 관리자 검토 요청 모달 */}
+      {isAdminModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity backdrop-blur-sm"
+              onClick={() => {
+                setIsAdminModalOpen(false);
+                setAdminReason("");
+              }}
+            />
+
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">
+              &#8203;
+            </span>
+
+            <div className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6 border border-gray-200">
+              <div>
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-amber-100">
+                  <ShieldAlert className="h-6 w-6 text-amber-600" />
                 </div>
+                <div className="mt-3 text-center sm:mt-5">
+                  <h3 className="text-lg leading-6 font-bold text-gray-900">
+                    관리자 검토 요청 사유 작성
+                  </h3>
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-500">
+                      판매사의 답변이나 해결 조치로 문제가 해결되지 않은 구체적인 사유를 작성해주세요. 플랫폼 관리자가 중재 및 검토를 시작합니다.
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-                {selected.negotiationId && (
-                  <Link
-                    to="/negotiations"
-                    className="border border-border text-foreground hover:border-primary hover:text-primary px-4 py-2 rounded text-sm font-medium transition-colors flex items-center gap-2"
-                  >
-                    <MessageSquare size={14} />
-                    관련 협의내역 보기
-                  </Link>
-                )}
+              <div className="mt-4">
+                <textarea
+                  rows={5}
+                  value={adminReason}
+                  onChange={(e) => setAdminReason(e.target.value)}
+                  placeholder="예: 재배송 프로세스로 진행되었으나 온 상품에 여전히 동일 결함이 확인되어 중재 조치를 요청합니다."
+                  className="shadow-sm focus:ring-amber-500 focus:border-amber-500 block w-full sm:text-sm border-gray-300 rounded-md p-3 border outline-none resize-none"
+                />
+              </div>
+
+              <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3 sm:flow-row-start">
+                <button
+                  type="button"
+                  onClick={() => void requestAdminReview()}
+                  disabled={adminReason.trim().length === 0}
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-amber-600 text-sm font-semibold text-white hover:bg-amber-700 focus:outline-none transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  검토 요청 제출
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminModalOpen(false);
+                    setAdminReason("");
+                  }}
+                  className="mt-3 sm:mt-0 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none transition-colors"
+                >
+                  취소
+                </button>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  icon,
+  bgClass,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  bgClass: string;
+}) {
+  return (
+    <div className={`${bgClass} overflow-hidden shadow rounded-lg border border-gray-200`}>
+      <div className="p-5">
+        <div className="flex items-center">
+          <div className="flex-shrink-0">{icon}</div>
+          <div className="ml-5 w-0 flex-1">
+            <dl>
+              <dt className="text-sm font-medium text-gray-500 truncate">{label}</dt>
+              <dd className="flex items-baseline">
+                <div className="text-2xl font-bold text-gray-900">{value}</div>
+              </dd>
+            </dl>
+          </div>
+        </div>
       </div>
     </div>
   );
+}
+
+function StatusBadge({ status }: { status: DisputeStatus }) {
+  const config = STATUS_CONFIG[status];
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ring-1 ring-inset ${config.className}`}
+    >
+      {config.label}
+    </span>
+  );
+}
+
+/* ==========================================================================
+   수정된 대화 버블 컴포넌트 (좌우 반전 및 나/상대방 색상 강조 로직 반영)
+   ========================================================================== */
+function ResponseBubble({
+  role,
+  content,
+  createdAt,
+  isSellerPage,
+  initial = false,
+}: {
+  role: ResponderRole;
+  content: string;
+  createdAt: string;
+  isSellerPage: boolean;
+  initial?: boolean;
+}) {
+  const isAdmin = role === "ADMIN";
+
+  // 현재 페이지 주인(=나) 인지 판별하는 플래그
+  // 바이어페이지인데 바이어가 쓴 글이거나, 셀러페이지인데 셀러가 쓴 글이면 "나" 임
+  const isMe = (!isSellerPage && role === "BUYER") || (isSellerPage && role === "SELLER");
+
+  return (
+    <div className={`flex gap-3 items-start w-full ${
+      isAdmin ? "justify-start" : isMe ? "flex-row-reverse" : "flex-row"
+    }`}>
+      {/* 프로필 아바타 (관리자 글이거나 내가 아닐 때만 노출하여 더욱 메신저 느낌 구현) */}
+      {!isMe && (
+        <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 shadow-sm border ${
+          isAdmin ? "bg-amber-100 border-amber-200 text-amber-700" :
+          role === "BUYER" ? "bg-blue-100 border-blue-200 text-blue-700" : "bg-purple-100 border-purple-200 text-purple-700"
+        }`}>
+          <User className="h-4 w-4" />
+        </div>
+      )}
+
+      {/* 말풍선 바디 */}
+      <div className={`max-w-[85%] rounded-lg p-4 shadow-sm border ${
+        isAdmin ? "bg-amber-50/70 border-amber-200" :
+        isMe ? "bg-indigo-600 border-indigo-600 text-white" : "bg-white border-gray-200 text-gray-700"
+      }`}>
+        <div className="flex items-center justify-between mb-1.5 flex-wrap gap-2">
+          <span className={`text-xs font-bold ${isMe ? "text-indigo-100" : "text-gray-900"}`}>
+            {ROLE_LABELS[role]} {isMe && "(나)"}
+            <span className={`text-[11px] font-normal ml-1 ${isMe ? "text-indigo-200" : "text-gray-400"}`}>
+              {initial ? "최초 접수 내용" : "답변 피드백"}
+            </span>
+          </span>
+          <span className={`text-[11px] font-medium ${isMe ? "text-indigo-200" : "text-gray-400"}`}>
+            {formatDate(createdAt)}
+          </span>
+        </div>
+        <p className={`whitespace-pre-wrap text-sm leading-6 font-normal ${isMe ? "text-white" : "text-gray-700"}`}>
+          {content}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function getWaitingMessage(status: DisputeStatus, isSeller: boolean) {
+  if (status === "RESOLVED") return "처리가 완료된 이의제기입니다.";
+  if (status === "REJECTED") return "관리자 검토 후 기각된 이의제기입니다.";
+  if (status === "CANCELED") return "취소된 이의제기입니다.";
+  if (status === "REVIEWING") return "관리자가 내용을 중재 검토하고 있습니다. 조금만 기다려주세요.";
+  if (status === "WAITING_BUYER") {
+    return isSeller
+      ? "바이어의 추가 조치 수락 또는 답변을 기다리고 있습니다."
+      : "판매사의 답변이 접수되었습니다. 처리 방안을 확인하신 후 수락하거나 추가 의견을 등록해 주세요.";
+  }
+  if (status === "WAITING_SELLER" || status === "RECEIVED") {
+    return isSeller
+      ? "새로운 이의제기가 도달했습니다. 세부 내용을 검토하신 후 적절한 안내 및 피드백 답변을 작성해 주세요."
+      : "판매사의 공식 답변을 기다리고 있습니다.";
+  }
+  return "현재 처리 프로세스를 확인해 주세요.";
 }

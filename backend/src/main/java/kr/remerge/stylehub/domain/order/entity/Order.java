@@ -172,4 +172,17 @@ public class Order extends BaseEntity {
         this.status = OrderStatus.DELIVERED;
         this.deliveredAt = LocalDateTime.now();
     }
+
+    public void cancel(User canceledBy, String reason) {
+        if (this.status != OrderStatus.PENDING) {
+            throw new IllegalStateException("결제 대기 주문만 바로 취소할 수 있습니다.");
+        }
+
+        this.status = OrderStatus.CANCELED;
+        this.canceledByUser = canceledBy;
+        this.canceledReason = reason.trim();
+        this.canceledAt = LocalDateTime.now();
+    }
+
+
 }

@@ -1,4 +1,4 @@
-package kr.remerge.stylehub.domain.order.dto;
+package kr.remerge.stylehub.domain.order.dto.contract;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

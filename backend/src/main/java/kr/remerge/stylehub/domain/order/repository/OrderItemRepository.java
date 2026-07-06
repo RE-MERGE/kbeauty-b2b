@@ -17,13 +17,11 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Integer> {
     @EntityGraph(attributePaths = "order")
     List<OrderItem> findByAssignedUser_UserIdOrderByOrder_CreatedAtDesc(Integer userId);
 
-    List<OrderItem> findByOrder_OrderIdAndAssignedUser_UserId(Integer orderId, Integer userId);
-
-    boolean existsByOrder_OrderIdAndAssignedUser_UserId(Integer orderId, Integer userId);
-
     Optional<OrderItem> findByOrderItemIdAndAssignedUser_UserId(Integer orderItemId, Integer userId);
 
     long countByOrder_OrderId(Integer orderId);
 
     long countByOrder_OrderIdAndItemStatus(Integer orderId, OrderItemStatus orderItemStatus);
+
+    List<OrderItem> findByOrderItemIdInAndOrder_OrderId(List<Integer> orderItemIds, Integer orderId);
 }

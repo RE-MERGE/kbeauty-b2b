@@ -18,8 +18,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.AnonymousAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -36,30 +34,22 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<Void>> login(
             @Valid @RequestBody LoginRequest request,
-            HttpServletRequest httpRequest,
-            Authentication authentication) {
-
-        if (authentication != null && authentication.isAuthenticated()
-                && !(authentication instanceof AnonymousAuthenticationToken)) {
-            throw new BusinessException(ErrorCode.ALREADY_LOGGED_IN);
-        }
+            HttpServletRequest httpRequest) {
 
         String clientIp = resolveClientIp(httpRequest);
         TokenResponse tokenResponse = authService.login(request, clientIp);
 
         ResponseCookie accessTokenCookie;
         ResponseCookie refreshTokenCookie;
+        long accessTokenMaxAge = jwtProperties.getAccessTokenExpiration() / 1000;
+        accessTokenCookie = createCookie("accessToken", tokenResponse.accessToken(), accessTokenMaxAge);
 
         if (request.rememberMe()) {
             // 1. '로그인 상태 유지' 체크 시: Max-Age를 명시적으로 부여 (지정된 시간만큼 유지)
-            long accessTokenMaxAge = jwtProperties.getAccessTokenExpiration() / 1000;
             long refreshTokenMaxAge = jwtProperties.getRefreshTokenExpiration() / 1000;
-
-            accessTokenCookie = createCookie("accessToken", tokenResponse.accessToken(), accessTokenMaxAge);
             refreshTokenCookie = createCookie("refreshToken", tokenResponse.refreshToken(), refreshTokenMaxAge);
         } else {
             // 2. 미체크 시: Max-Age 설정을 아예 제외하여 '세션 쿠키'로 생성 (브라우저 종료 시 만료)
-            accessTokenCookie = createSessionCookie("accessToken", tokenResponse.accessToken());
             refreshTokenCookie = createSessionCookie("refreshToken", tokenResponse.refreshToken());
         }
 

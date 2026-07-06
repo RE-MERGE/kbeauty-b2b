@@ -2,9 +2,6 @@ package kr.remerge.stylehub.global.auth;
 
 import kr.remerge.stylehub.global.auth.jwt.JwtAuthenticationEntryPoint;
 import kr.remerge.stylehub.global.auth.jwt.JwtFilter;
-import kr.remerge.stylehub.global.auth.oauth2.CustomOAuth2UserService;
-import kr.remerge.stylehub.global.auth.oauth2.HttpCookieOAuth2AuthorizationRequestRepository;
-import kr.remerge.stylehub.global.auth.oauth2.OAuth2SuccessHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -33,15 +30,21 @@ public class SecurityConfig {
             "/login/**",
             "/oauth2/**",
             "/error",
-            "/favicon.ico"
+            "/favicon.ico",
+
+            // 회원가입
+            "/api/company/ocr",
+            "/api/company/verify",
+            "/api/company/lookup",
+            "/api/users/signup/buyer",
+            "/api/users/signup/seller",
+            "/api/users/signup/employee"
+
     };
 
     private final JwtFilter jwtFilter;
     private final JwtAuthenticationEntryPoint entryPoint;
     private final CorsConfigurationSource corsConfigurationSource;
-    private final CustomOAuth2UserService customOAuth2UserService;
-    private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
-    private final OAuth2SuccessHandler oAuth2SuccessHandler;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {

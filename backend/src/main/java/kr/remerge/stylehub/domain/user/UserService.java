@@ -17,6 +17,7 @@ import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.entity.UserPreferredCategory;
 import kr.remerge.stylehub.domain.user.enumtype.BusinessRole;
 import kr.remerge.stylehub.domain.user.enumtype.UserRole;
+import kr.remerge.stylehub.domain.user.enumtype.UserStatus;
 import kr.remerge.stylehub.domain.user.repository.UserPreferredCategoryRepository;
 import kr.remerge.stylehub.domain.user.repository.UserRepository;
 import kr.remerge.stylehub.global.auth.AuthService;
@@ -332,5 +333,21 @@ public class UserService {
 
         // 3. 엔티티 내부 메서드를 통한 선택적 수정 (더티 체킹 발동)
         targetUser.updateRoles(request.role(), request.businessRole());
+    }
+
+    @Transactional
+    public void updateUserStatus(Integer userId, UserStatus newStatus, AuthUser authUser) {
+        // 1. 상태를 바꿀 유저 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        // 2. 보안 검증: 대표(PRESIDENT)가 바꾸는 경우, 본인 회사 소속의 직원이 맞는지 확인
+        if ("PRESIDENT".equals(authUser.role()) && !authUser.companyId().equals(user.getCompany().getCompanyId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        // 3. 비즈니스 로직에 따른 상태 변경 처리 (JPA 더티 체킹 활용)
+        // 엔티티 내부에 user.changeStatus(newStatus) 같은 메서드가 있다면 그것을 호출하는 것이 좋습니다.
+        user.updateStatus(newStatus);
     }
 }

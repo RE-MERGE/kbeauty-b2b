@@ -1,517 +1,617 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronRight,
+  Clock3,
+  FileText,
+  Handshake,
+  LoaderCircle,
+  MessageSquareText,
+  Search,
+  Send,
+  UserRound,
+  X,
+} from "lucide-react";
 import api from "@/api/axios";
 
-import {
-  MessageSquare,
-  Search,
-  Package,
-  FileText,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  Send,
-  User,
-  Store,
-  Paperclip,
-  X,
-  Plus,
-  ShieldCheck,
-  Download,
-} from "lucide-react";
+type NegotiationStatus = "OPEN" | "AGREED" | "CLOSED";
+type NegotiationFilter = "ALL" | NegotiationStatus;
 
-type TargetType = "ORDER" | "QUOTE";
-type NegotiationStatus = "PENDING" | "APPROVED" | "REVISION" | "DONE";
-type WriterType = "BUYER" | "SELLER" | "ADMIN";
-
-type NegotiationItem = {
-  id: string;
-  writer: WriterType;
-  writerName: string;
+type NegotiationResponse = {
+  negotiationId: number;
+  negotiationType: "QUOTE" | "CONTRACT";
+  quoteId: number | null;
+  quoteNo: string | null;
+  productName: string | null;
+  buyerName: string | null;
+  sellerName: string | null;
+  adminName: string | null;
   status: NegotiationStatus;
   title: string;
-  content: string;
-  createdAt: string;
-  approvedAt?: string;
-  adminMemo?: string;
-  files: string[];
+  latestRequest: string | null;
+  openedAt: string;
+  updatedAt: string;
+  agreedAt: string | null;
+  closedAt: string | null;
 };
 
-type Negotiation = {
-  id: string;
-  targetType: TargetType;
-  targetId: string;
-  title: string;
-  buyerName: string;
-  sellerName: string;
-  status: NegotiationStatus;
-  lastUpdatedAt: string;
-  items: NegotiationItem[];
+type NegotiationLocationState = {
+  quoteId?: number;
+  requestId?: number;
 };
+
+const filters: Array<{ value: NegotiationFilter; label: string }> = [
+  { value: "ALL", label: "전체" },
+  { value: "OPEN", label: "협의 중" },
+  { value: "AGREED", label: "합의 완료" },
+  { value: "CLOSED", label: "종료" },
+];
 
 const statusConfig: Record<
   NegotiationStatus,
-  { label: string; color: string; bg: string; icon: React.ReactNode }
+  { label: string; className: string; icon: React.ReactNode }
 > = {
-  PENDING: {
-    label: "관리자 검토중",
-    color: "text-amber-700",
-    bg: "bg-amber-50 border-amber-200",
-    icon: <Clock size={13} />,
+  OPEN: {
+    label: "협의 중",
+    className: "border-blue-200 bg-blue-50 text-blue-700",
+    icon: <Clock3 size={13} />,
   },
-  APPROVED: {
-    label: "전달 완료",
-    color: "text-blue-700",
-    bg: "bg-blue-50 border-blue-200",
-    icon: <ShieldCheck size={13} />,
+  AGREED: {
+    label: "합의 완료",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    icon: <CheckCircle2 size={13} />,
   },
-  REVISION: {
-    label: "수정 요청",
-    color: "text-red-700",
-    bg: "bg-red-50 border-red-200",
-    icon: <AlertCircle size={13} />,
-  },
-  DONE: {
-    label: "협의 완료",
-    color: "text-green-700",
-    bg: "bg-green-50 border-green-200",
-    icon: <CheckCircle size={13} />,
+  CLOSED: {
+    label: "종료",
+    className: "border-slate-200 bg-slate-100 text-slate-600",
+    icon: <X size={13} />,
   },
 };
 
+function formatDateTime(value: string | null) {
+  if (!value) return "-";
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
 
 export function Negotiations() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const locationState = location.state as NegotiationLocationState | null;
 
-  const [negotiations, setNegotiations] = useState<Negotiation[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"ALL" | TargetType>("ALL");
-  const [search, setSearch] = useState("");
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [form, setForm] = useState({
-    title: "",
-    content: "",
-    fileName: "",
-  });
+  const [negotiations, setNegotiations] = useState<NegotiationResponse[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [activeFilter, setActiveFilter] =
+    useState<NegotiationFilter>("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [modalQuoteId, setModalQuoteId] = useState<number | null>(null);
+  const [buyerRequest, setBuyerRequest] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
-useEffect(() => {
-  const fetchNegotiations = async () => {
-    const data = await api.get<Negotiation[]>("/negotiations");
+  const loadNegotiations = async () => {
+    try {
+      setIsLoading(true);
+      setLoadError("");
+      const response =
+        await api.get<NegotiationResponse[]>("/negotiations");
 
-    setNegotiations(data);
+      setNegotiations(response);
+      setSelectedId((current) => {
+        if (
+          current !== null
+          && response.some((item) => item.negotiationId === current)
+        ) {
+          return current;
+        }
 
-    if (data.length > 0) {
-      setSelectedId(data[0].id);
+        return response[0]?.negotiationId ?? null;
+      });
+    } catch (error) {
+      console.error("협의 목록 조회 실패", error);
+      setLoadError(
+        error instanceof Error
+          ? error.message
+          : "협의 목록을 불러오지 못했습니다.",
+      );
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  fetchNegotiations();
-}, []);
+  useEffect(() => {
+    void loadNegotiations();
+  }, []);
 
-  const filtered = negotiations.filter((item) => {
-    const matchFilter = filter === "ALL" || item.targetType === filter;
-    const matchSearch =
-      item.title.includes(search) ||
-      item.targetId.includes(search) ||
-      item.buyerName.includes(search) ||
-      item.sellerName.includes(search);
+  useEffect(() => {
+    if (!locationState?.quoteId) return;
 
-    return matchFilter && matchSearch;
-  });
+    setModalQuoteId(locationState.quoteId);
+    setBuyerRequest("");
+    setSubmitError("");
 
-  const selected = negotiations.find((item) => item.id === selectedId);
+    navigate(location.pathname, {
+      replace: true,
+      state: null,
+    });
+  }, [location.pathname, locationState?.quoteId, navigate]);
 
-  const handleSubmit = () => {
-    if (!form.title.trim() || !form.content.trim()) return;
-    alert("협의 요청이 등록되었습니다. 관리자 검토 후 상대방에게 전달됩니다.");
-    setShowCreateModal(false);
-    setForm({ title: "", content: "", fileName: "" });
+  const visibleNegotiations = useMemo(() => {
+    const keyword = searchQuery.trim().toLowerCase();
+
+    return negotiations.filter((item) => {
+      const matchesFilter =
+        activeFilter === "ALL" || item.status === activeFilter;
+
+      const matchesSearch =
+        keyword.length === 0
+        || item.title.toLowerCase().includes(keyword)
+        || (item.quoteNo?.toLowerCase().includes(keyword) ?? false)
+        || (item.productName?.toLowerCase().includes(keyword) ?? false);
+
+      return matchesFilter && matchesSearch;
+    });
+  }, [activeFilter, negotiations, searchQuery]);
+
+  const selected =
+    negotiations.find((item) => item.negotiationId === selectedId) ?? null;
+
+  const counts = {
+    all: negotiations.length,
+    open: negotiations.filter((item) => item.status === "OPEN").length,
+    agreed: negotiations.filter((item) => item.status === "AGREED").length,
+    closed: negotiations.filter((item) => item.status === "CLOSED").length,
+  };
+
+  const openRequestModal = (quoteId: number | null) => {
+    if (!quoteId) return;
+    setModalQuoteId(quoteId);
+    setBuyerRequest("");
+    setSubmitError("");
+  };
+
+  const closeRequestModal = () => {
+    if (isSubmitting) return;
+    setModalQuoteId(null);
+    setBuyerRequest("");
+    setSubmitError("");
+  };
+
+  const handleSubmit = async () => {
+    if (!modalQuoteId || !buyerRequest.trim() || isSubmitting) return;
+
+    try {
+      setIsSubmitting(true);
+      setSubmitError("");
+
+      await api.post(`/negotiations/${modalQuoteId}/new`, {
+        buyerRequest: buyerRequest.trim(),
+      });
+
+      setModalQuoteId(null);
+      setBuyerRequest("");
+      setSubmitError("");
+      setSuccessMessage("협의 요청을 등록했습니다.");
+      await loadNegotiations();
+    } catch (error) {
+      console.error("협의 요청 등록 실패", error);
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "협의 요청을 등록하지 못했습니다.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <div className="max-w-[1280px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-          <MessageSquare size={24} className="text-primary" />
-          협의내역
-        </h1>
+    <div className="min-h-screen bg-[#f7f9fb]">
+      <main className="mx-auto w-full max-w-[1380px] px-4 py-8 sm:px-6">
+        <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase text-blue-700">
+              Trade Communication
+            </p>
+            <h1 className="mt-1 text-2xl font-black text-slate-950">
+              협의 관리
+            </h1>
+            <p className="mt-2 text-sm text-slate-500">
+              견적 조건에 대한 요청과 합의 진행 상태를 확인합니다.
+            </p>
+          </div>
 
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded text-sm font-semibold transition-colors flex items-center gap-2"
-        >
-          <Plus size={15} />
-          협의 요청 작성
-        </button>
-      </div>
+          <div className="relative w-full md:w-80">
+            <Search
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="견적번호 또는 상품명 검색"
+              className="h-10 w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+        </header>
 
-      <div className="grid grid-cols-[380px_1fr] gap-5">
-        <div className="space-y-4">
-          <div className="bg-white border border-border rounded-lg p-4">
-            <div className="flex items-center border border-border rounded px-3 py-2 gap-2 mb-3">
-              <Search size={14} className="text-muted-foreground" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="주문번호, 견적번호, 업체명 검색"
-                className="text-sm outline-none flex-1"
-              />
-            </div>
+        {successMessage && (
+          <div className="mt-5 flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+            <span className="flex items-center gap-2">
+              <CheckCircle2 size={16} />
+              {successMessage}
+            </span>
+            <button
+              type="button"
+              title="알림 닫기"
+              onClick={() => setSuccessMessage("")}
+              className="inline-flex size-7 items-center justify-center rounded-md hover:bg-emerald-100"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
 
-            <div className="flex gap-2">
-              {[
-                { value: "ALL", label: "전체" },
-                { value: "ORDER", label: "주문" },
-                { value: "QUOTE", label: "견적" },
-              ].map((item) => (
+        <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="전체 협의"
+            value={counts.all}
+            icon={<MessageSquareText size={18} />}
+            iconClassName="bg-slate-100 text-slate-600"
+          />
+          <StatCard
+            label="진행 중"
+            value={counts.open}
+            icon={<Handshake size={18} />}
+            iconClassName="bg-blue-50 text-blue-700"
+          />
+          <StatCard
+            label="합의 완료"
+            value={counts.agreed}
+            icon={<CheckCircle2 size={18} />}
+            iconClassName="bg-emerald-50 text-emerald-700"
+          />
+          <StatCard
+            label="종료"
+            value={counts.closed}
+            icon={<X size={18} />}
+            iconClassName="bg-slate-100 text-slate-500"
+          />
+        </section>
+
+        <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4">
+            <div className="flex flex-wrap gap-2">
+              {filters.map((filter) => (
                 <button
-                  key={item.value}
-                  onClick={() => setFilter(item.value as "ALL" | TargetType)}
-                  className={`px-3 py-1.5 text-xs rounded border transition-colors ${
-                    filter === item.value
-                      ? "bg-primary text-white border-primary"
-                      : "border-border text-muted-foreground hover:border-primary hover:text-primary"
+                  key={filter.value}
+                  type="button"
+                  onClick={() => setActiveFilter(filter.value)}
+                  className={`h-8 rounded-md border px-3 text-xs font-bold transition ${
+                    activeFilter === filter.value
+                      ? "border-slate-950 bg-slate-950 text-white"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-400"
                   }`}
                 >
-                  {item.label}
+                  {filter.label}
                 </button>
               ))}
             </div>
+            <p className="text-xs font-semibold text-slate-500">
+              {visibleNegotiations.length}건
+            </p>
           </div>
 
-          <div className="space-y-2">
-            {filtered.map((item) => {
-              const status = statusConfig[item.status];
-              const active = selectedId === item.id;
+          {isLoading ? (
+            <div className="flex min-h-72 items-center justify-center text-sm font-semibold text-slate-500">
+              <LoaderCircle size={18} className="mr-2 animate-spin" />
+              협의 목록을 불러오는 중입니다.
+            </div>
+          ) : loadError ? (
+            <div className="flex min-h-72 flex-col items-center justify-center px-4 text-center">
+              <AlertCircle size={30} className="text-rose-500" />
+              <p className="mt-3 text-sm font-bold text-slate-900">
+                협의 목록을 불러오지 못했습니다.
+              </p>
+              <p className="mt-1 text-xs text-slate-500">{loadError}</p>
+            </div>
+          ) : visibleNegotiations.length === 0 ? (
+            <div className="flex min-h-72 flex-col items-center justify-center px-4 text-center">
+              <MessageSquareText size={32} className="text-slate-300" />
+              <p className="mt-3 text-sm font-bold text-slate-900">
+                표시할 협의가 없습니다.
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                견적 목록에서 협의를 요청하면 이곳에서 확인할 수 있습니다.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1040px] text-left">
+                <thead className="border-b border-slate-200 text-xs font-bold text-slate-500">
+                  <tr>
+                    <th className="px-5 py-3">협의 대상</th>
+                    <th className="px-4 py-3">참여자</th>
+                    <th className="px-4 py-3">상태</th>
+                    <th className="px-4 py-3">최근 요청</th>
+                    <th className="px-4 py-3">최근 수정</th>
+                    <th className="px-5 py-3 text-right">관리</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {visibleNegotiations.map((item) => {
+                    const status =
+                      statusConfig[item.status] ?? statusConfig.OPEN;
+                    const isSelected =
+                      selectedId === item.negotiationId;
 
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setSelectedId(item.id)}
-                  className={`w-full text-left bg-white border rounded-lg p-4 transition-colors ${
-                    active
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/40"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <span
-                      className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border ${
-                        item.targetType === "ORDER"
-                          ? "bg-blue-50 border-blue-200 text-blue-700"
-                          : "bg-purple-50 border-purple-200 text-purple-700"
-                      }`}
-                    >
-                      {item.targetType === "ORDER" ? (
-                        <Package size={11} />
-                      ) : (
-                        <FileText size={11} />
-                      )}
-                      {item.targetType === "ORDER" ? "주문" : "견적"}
-                    </span>
-
-                    <span
-                      className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border ${status.bg} ${status.color}`}
-                    >
-                      {status.icon}
-                      {status.label}
-                    </span>
-                  </div>
-
-                  <div className="font-semibold text-sm text-foreground line-clamp-1">
-                    {item.title}
-                  </div>
-
-                  <div className="text-xs text-muted-foreground mt-1 font-mono">
-                    {item.targetId}
-                  </div>
-
-                  <div className="text-xs text-muted-foreground mt-2">
-                    {item.buyerName} ↔ {item.sellerName}
-                  </div>
-
-                  <div className="text-[11px] text-muted-foreground mt-2">
-                    최근 수정 {item.lastUpdatedAt}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+                    return (
+                      <tr
+                        key={item.negotiationId}
+                        className={`transition ${
+                          isSelected ? "bg-blue-50/60" : "hover:bg-slate-50"
+                        }`}
+                      >
+                        <td className="px-5 py-4">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedId(item.negotiationId)
+                            }
+                            className="text-left"
+                          >
+                            <p className="text-sm font-black text-slate-950">
+                              {item.productName || item.title}
+                            </p>
+                            <p className="mt-1 font-mono text-xs text-slate-400">
+                              {item.quoteNo || `협의 #${item.negotiationId}`}
+                            </p>
+                          </button>
+                        </td>
+                        <td className="px-4 py-4">
+                          <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+                            <UserRound size={14} className="text-slate-400" />
+                            {item.buyerName || "바이어"}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            상대 {item.sellerName || "셀러"}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-bold ${status.className}`}
+                          >
+                            {status.icon}
+                            {status.label}
+                          </span>
+                        </td>
+                        <td className="max-w-[300px] px-4 py-4">
+                          <p className="truncate text-sm text-slate-700">
+                            {item.latestRequest || "등록된 요청 내용 없음"}
+                          </p>
+                        </td>
+                        <td className="px-4 py-4 text-xs font-semibold text-slate-500">
+                          {formatDateTime(item.updatedAt)}
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              title="협의 상세 보기"
+                              onClick={() =>
+                                setSelectedId(item.negotiationId)
+                              }
+                              className="inline-flex size-9 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:border-slate-400 hover:text-slate-900"
+                            >
+                              <ChevronRight size={16} />
+                            </button>
+                            {item.status === "OPEN" && item.quoteId && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openRequestModal(item.quoteId)
+                                }
+                                className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-blue-600 px-3 text-xs font-bold text-white transition hover:bg-blue-700"
+                              >
+                                <MessageSquareText size={14} />
+                                협의 계속
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
         {selected && (
-          <div className="bg-white border border-border rounded-lg overflow-hidden">
-            <div className="bg-gradient-to-r from-[#1a2e1a] to-[#2d4a35] text-white p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs bg-white/15 border border-white/20 px-2 py-1 rounded">
-                      {selected.targetType === "ORDER" ? "주문 협의" : "견적 협의"}
-                    </span>
-                    <span className="text-xs font-mono text-white/70">
-                      {selected.targetId}
-                    </span>
-                  </div>
-
-                  <h2 className="text-xl font-bold">{selected.title}</h2>
-
-                  <p className="text-sm text-white/70 mt-2">
-                    바이어와 셀러가 작성한 협의 요청은 관리자 검토 후 상대방에게 전달됩니다.
-                  </p>
-                </div>
-
-                <div className="text-right text-sm">
-                  <div className="text-white/60 mb-1">현재 상태</div>
-                  <div className="font-semibold">
-                    {statusConfig[selected.status].label}
-                  </div>
-                </div>
+          <section className="mt-6 grid overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm lg:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="p-5 sm:p-6">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">
+                  <FileText size={13} />
+                  {selected.negotiationType === "QUOTE"
+                    ? "견적 협의"
+                    : "계약 협의"}
+                </span>
+                <span className="font-mono text-xs text-slate-400">
+                  {selected.quoteNo || `#${selected.negotiationId}`}
+                </span>
               </div>
+              <h2 className="mt-3 text-lg font-black text-slate-950">
+                {selected.title}
+              </h2>
+              <p className="mt-4 whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+                {selected.latestRequest || "등록된 협의 요청 내용이 없습니다."}
+              </p>
             </div>
 
-            <div className="grid grid-cols-2 border-b border-border">
-              <div className="p-4 border-r border-border">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                  <User size={13} />
-                  바이어
-                </div>
-                <div className="font-semibold text-sm text-foreground">
-                  {selected.buyerName}
-                </div>
+            <dl className="border-t border-slate-200 bg-slate-50 p-5 text-sm lg:border-l lg:border-t-0">
+              <DetailRow
+                label="협의 시작"
+                value={formatDateTime(selected.openedAt)}
+              />
+              <DetailRow
+                label="최근 수정"
+                value={formatDateTime(selected.updatedAt)}
+              />
+              <DetailRow
+                label="합의 일시"
+                value={formatDateTime(selected.agreedAt)}
+              />
+              <DetailRow
+                label="종료 일시"
+                value={formatDateTime(selected.closedAt)}
+              />
+            </dl>
+          </section>
+        )}
+      </main>
+
+      {modalQuoteId !== null && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="negotiation-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4"
+        >
+          <div className="w-full max-w-[560px] overflow-hidden rounded-lg bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
+              <div>
+                <p className="text-xs font-black text-blue-700">
+                  견적 #{modalQuoteId}
+                </p>
+                <h2
+                  id="negotiation-modal-title"
+                  className="mt-1 text-lg font-black text-slate-950"
+                >
+                  협의 요청 작성
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  조정이 필요한 수량, 단가, 납기 또는 상품 조건을 구체적으로
+                  작성해 주세요.
+                </p>
               </div>
-
-              <div className="p-4">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                  <Store size={13} />
-                  셀러
-                </div>
-                <div className="font-semibold text-sm text-foreground">
-                  {selected.sellerName}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-5 bg-muted/20 min-h-[480px]">
-              <div className="space-y-4">
-                {selected.items.map((item, index) => {
-                  const status = statusConfig[item.status];
-
-                  return (
-                    <div key={item.id} className="relative">
-                      {index !== selected.items.length - 1 && (
-                        <div className="absolute left-5 top-12 bottom-[-18px] w-px bg-border" />
-                      )}
-
-                      <div className="flex gap-4">
-                        <div
-                          className={`w-10 h-10 rounded-full flex items-center justify-center border bg-white z-10 ${
-                            item.writer === "BUYER"
-                              ? "text-blue-700 border-blue-200"
-                              : item.writer === "SELLER"
-                              ? "text-green-700 border-green-200"
-                              : "text-primary border-primary/30"
-                          }`}
-                        >
-                          {item.writer === "BUYER" ? (
-                            <User size={16} />
-                          ) : item.writer === "SELLER" ? (
-                            <Store size={16} />
-                          ) : (
-                            <ShieldCheck size={16} />
-                          )}
-                        </div>
-
-                        <div className="flex-1 bg-white border border-border rounded-lg p-4">
-                          <div className="flex items-start justify-between gap-3 mb-3">
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-xs font-semibold text-foreground">
-                                  {item.writerName}
-                                </span>
-                                <span
-                                  className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border ${status.bg} ${status.color}`}
-                                >
-                                  {status.icon}
-                                  {status.label}
-                                </span>
-                              </div>
-
-                              <h3 className="font-bold text-sm text-foreground">
-                                {item.title}
-                              </h3>
-                            </div>
-
-                            <div className="text-[11px] text-muted-foreground font-mono">
-                              {item.createdAt}
-                            </div>
-                          </div>
-
-                          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-line">
-                            {item.content}
-                          </p>
-
-                          {item.files.length > 0 && (
-                            <div className="mt-3 space-y-2">
-                              <div className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                                <Paperclip size={12} />
-                                첨부파일
-                              </div>
-
-                              <div className="flex flex-wrap gap-2">
-                                {item.files.map((file) => (
-                                  <button
-                                    key={file}
-                                    className="border border-border bg-secondary/40 hover:border-primary hover:text-primary text-xs px-3 py-1.5 rounded transition-colors flex items-center gap-1.5"
-                                  >
-                                    <Download size={12} />
-                                    {file}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {item.adminMemo && (
-                            <div className="mt-3 bg-blue-50 border border-blue-200 rounded p-3 text-xs text-blue-700">
-                              <div className="font-semibold mb-1 flex items-center gap-1">
-                                <ShieldCheck size={12} />
-                                관리자 검토 메모
-                              </div>
-                              {item.adminMemo}
-                            </div>
-                          )}
-
-                          {item.approvedAt && (
-                            <div className="mt-2 text-[11px] text-muted-foreground">
-                              관리자 승인일시 {item.approvedAt}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="border-t border-border p-4 bg-white flex items-center justify-between gap-3">
-              <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
-                <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
-                협의 요청은 바로 상대방에게 전달되지 않고, 관리자 검토 후 전달됩니다.
-              </div>
-
               <button
-                onClick={() => setShowCreateModal(true)}
-                className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded text-sm font-semibold transition-colors flex items-center gap-2"
+                type="button"
+                title="모달 닫기"
+                onClick={closeRequestModal}
+                className="inline-flex size-8 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
               >
-                <Plus size={14} />
-                협의 추가
+                <X size={17} />
               </button>
             </div>
-          </div>
-        )}
-      </div>
 
-      {showCreateModal && selected && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 relative">
-            <button
-              onClick={() => setShowCreateModal(false)}
-              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
-            >
-              <X size={18} />
-            </button>
-
-            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-              <MessageSquare size={26} className="text-primary" />
-            </div>
-
-            <h3 className="text-lg font-bold text-foreground mb-2">
-              협의 요청 작성
-            </h3>
-
-            <p className="text-sm text-muted-foreground leading-relaxed mb-5">
-              작성한 협의 내용과 첨부파일은 관리자 검토 후 상대방에게 전달됩니다.
-            </p>
-
-            <div className="bg-secondary/60 border border-border rounded p-3 text-xs text-muted-foreground mb-5">
-              <div className="font-semibold text-foreground mb-1">
-                {selected.targetType === "ORDER" ? "주문번호" : "견적번호"}{" "}
-                {selected.targetId}
-              </div>
-              <div>
-                {selected.buyerName} ↔ {selected.sellerName}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                  제목
-                </label>
-                <input
-                  value={form.title}
-                  onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-                  placeholder="예: 수량 조정 요청, 납기 변경 문의"
-                  className="w-full border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-primary"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                  협의 내용
-                </label>
+            <div className="px-6 py-5">
+              <label htmlFor="buyer-request" className="block">
+                <span className="text-sm font-black text-slate-800">
+                  협의 요청 내용
+                </span>
                 <textarea
-                  value={form.content}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, content: e.target.value }))
-                  }
-                  rows={5}
-                  placeholder="협의할 내용을 작성해 주세요."
-                  className="w-full border border-border rounded px-3 py-2 text-sm resize-none focus:outline-none focus:border-primary"
+                  id="buyer-request"
+                  rows={7}
+                  maxLength={2000}
+                  value={buyerRequest}
+                  onChange={(event) => setBuyerRequest(event.target.value)}
+                  placeholder="예: 최소 주문 수량을 300개에서 200개로 조정할 수 있는지 확인 부탁드립니다."
+                  className="mt-2 w-full resize-none rounded-md border border-slate-200 px-3 py-3 text-sm leading-6 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 />
+              </label>
+
+              <div className="mt-2 flex items-start justify-between gap-3">
+                <p className="text-xs leading-5 text-slate-500">
+                  연락처, 계좌번호 등 직접 거래를 유도하는 정보는 입력하지
+                  마세요.
+                </p>
+                <span className="shrink-0 text-xs font-semibold text-slate-400">
+                  {buyerRequest.length}/2000
+                </span>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                  첨부파일
-                </label>
-                <input
-                  value={form.fileName}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, fileName: e.target.value }))
-                  }
-                  placeholder="예: 작업지시서.xlsx, 샘플사진.zip"
-                  className="w-full border border-border rounded px-3 py-2 text-sm focus:outline-none focus:border-primary"
-                />
-                <div className="text-[11px] text-muted-foreground mt-1">
-                  실제 구현 시 S3 업로드 후 파일 URL을 저장하면 됩니다.
-                </div>
-              </div>
+              {submitError && (
+                <p className="mt-4 flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-semibold text-rose-700">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                  {submitError}
+                </p>
+              )}
             </div>
 
-            <div className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-amber-700 mt-5">
-              외부 연락처, 계좌번호, 직거래 유도 문구는 관리자 검토 과정에서 반려될 수 있습니다.
-            </div>
-
-            <div className="flex gap-2 mt-5">
+            <div className="flex gap-2 border-t border-slate-200 bg-slate-50 px-6 py-4">
               <button
-                onClick={() => setShowCreateModal(false)}
-                className="flex-1 border border-border text-foreground hover:border-primary hover:text-primary py-2.5 rounded text-sm font-medium transition-colors"
+                type="button"
+                disabled={isSubmitting}
+                onClick={closeRequestModal}
+                className="h-10 flex-1 rounded-md border border-slate-200 bg-white text-sm font-bold text-slate-600 transition hover:bg-slate-100 disabled:opacity-50"
               >
                 취소
               </button>
-
               <button
-                onClick={handleSubmit}
-                disabled={!form.title.trim() || !form.content.trim()}
-                className="flex-1 bg-primary hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed text-white py-2.5 rounded text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                type="button"
+                disabled={!buyerRequest.trim() || isSubmitting}
+                onClick={() => void handleSubmit()}
+                className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-md bg-blue-600 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <Send size={14} />
-                관리자 검토 요청
+                {isSubmitting ? (
+                  <LoaderCircle size={15} className="animate-spin" />
+                ) : (
+                  <Send size={15} />
+                )}
+                {isSubmitting ? "등록 중..." : "협의 요청 보내기"}
               </button>
             </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  icon,
+  iconClassName,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  iconClassName: string;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between">
+        <p className="text-sm font-bold text-slate-500">{label}</p>
+        <span
+          className={`inline-flex size-9 items-center justify-center rounded-md ${iconClassName}`}
+        >
+          {icon}
+        </span>
+      </div>
+      <p className="mt-4 text-3xl font-black text-slate-950">{value}</p>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="mb-4 last:mb-0">
+      <dt className="text-xs font-bold text-slate-400">{label}</dt>
+      <dd className="mt-1 font-semibold text-slate-700">{value}</dd>
     </div>
   );
 }

@@ -108,6 +108,10 @@ public class Negotiation {
         this.admin = admin;
     }
 
+    public void markRequested() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
     public void agree() {
         this.status = "AGREED";
         this.agreedAt = LocalDateTime.now();

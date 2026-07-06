@@ -1,5 +1,6 @@
 package kr.remerge.stylehub.domain.negotiation;
 
+import jakarta.validation.Valid;
 import kr.remerge.stylehub.domain.negotiation.dto.NegotiationCreateRequest;
 import kr.remerge.stylehub.domain.negotiation.dto.NegotiationListResponse;
 import kr.remerge.stylehub.domain.negotiation.service.NegotiationService;
@@ -31,14 +32,13 @@ public class NegotiationController {
 
     }
 
-    @PostMapping("{quoteId}/new")
+    @PostMapping()
     public ResponseEntity<ApiResponse<Void>> createNegotiation(
             @LoginUser AuthUser authUser,
-            @PathVariable Integer quoteId,
-            @RequestBody NegotiationCreateRequest request
+            @Valid @RequestBody NegotiationCreateRequest request
     ) {
 
-        negotiationService.createNegotiation(authUser.userId(), quoteId, request);
+        negotiationService.createNegotiation(authUser.userId(), request);
 
         return ResponseEntity.ok(ApiResponse.success(null));
 

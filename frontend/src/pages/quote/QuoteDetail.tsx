@@ -29,7 +29,8 @@ type QuoteStatus =
   | "NOT_SELECTED"
   | "NEGOTIATING"
   | "SAMPLE_REQUESTED"
-  | "EXPIRED";
+  | "EXPIRED"
+  | "SUPERSEDED";
 
 type QuoteItemData = {
   quoteItemId: number;
@@ -61,6 +62,12 @@ type QuoteData = {
   sellerName: string;
   companyName: string;
   submittedAt: string;
+  version: number;
+  parentQuoteId: number | null;
+  previousTotalAmount: number | null;
+  previousSubtotalAmount: number | null;
+  previousLeadTimeDays: number | null;
+  previousShippingFee: number | null;
   items: QuoteItemData[];
 };
 
@@ -108,6 +115,11 @@ const statusConfig: Record<
     className: "border-slate-200 bg-slate-100 text-slate-500",
     icon: <Clock3 size={13} />,
   },
+  SUPERSEDED: {
+    label: "재견적으로 대체됨",
+    className: "border-slate-200 bg-slate-100 text-slate-500",
+    icon: <Clock3 size={13} />,
+  },
 };
 
 function formatDate(value: string) {
@@ -120,6 +132,41 @@ function formatDate(value: string) {
 
 function formatPrice(value: number) {
   return `${value.toLocaleString("ko-KR")}원`;
+}
+
+// 협의로 새로 받은 견적(재견적)이 이전 조건 대비 얼마나 바뀌었는지 보여준다.
+function DeltaBadge({
+  before,
+  after,
+  unit,
+}: {
+  before: number;
+  after: number;
+  unit: string;
+}) {
+  const diff = after - before;
+
+  if (diff === 0) {
+    return (
+      <span className="ml-1.5 text-xs font-bold text-slate-400">
+        (변동 없음)
+      </span>
+    );
+  }
+
+  const decreased = diff < 0;
+
+  return (
+    <span
+      className={`ml-1.5 text-xs font-black ${
+        decreased ? "text-blue-600" : "text-rose-600"
+      }`}
+    >
+      ({decreased ? "▼" : "▲"}
+      {Math.abs(diff).toLocaleString("ko-KR")}
+      {unit})
+    </span>
+  );
 }
 
 async function fetchQuote(quoteId: string) {
@@ -137,6 +184,13 @@ export function QuoteDetail({
   const [loadError, setLoadError] = useState("");
   const [isPdfLoading, setIsPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState("");
+
+  // 바이어의 견적 채택/거절 (셀러는 이 액션을 사용하지 않는다)
+  const [pendingAction, setPendingAction] = useState<
+    "APPROVED" | "REJECTED" | null
+  >(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [statusActionError, setStatusActionError] = useState("");
 
   useEffect(() => {
     if (!quoteId) {
@@ -210,6 +264,29 @@ export function QuoteDetail({
     }
   };
 
+  const handleStatusUpdate = async () => {
+    if (!pendingAction || !quote || isUpdatingStatus) return;
+
+    try {
+      setIsUpdatingStatus(true);
+      setStatusActionError("");
+      await api.patch(`/quotes/${quote.quoteId}/status`, {
+        status: pendingAction,
+      });
+      setQuote({ ...quote, status: pendingAction });
+      setPendingAction(null);
+    } catch (error) {
+      console.error("견적 상태 변경 실패", error);
+      setStatusActionError(
+        error instanceof Error
+          ? error.message
+          : "견적 상태를 변경하지 못했습니다.",
+      );
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
   const backPath = role === "buyer" ? "/buyer/quotes" : "/seller/quotes";
 
   if (pageLoading) {
@@ -253,6 +330,17 @@ export function QuoteDetail({
       : 0;
   const status = statusConfig[quote.status] ?? statusConfig.SUBMITTED;
 
+  const canRespond =
+    role === "buyer"
+    && (
+      quote.status === "SUBMITTED"
+      || quote.status === "SAMPLE_REQUESTED"
+      || quote.status === "NEGOTIATING"
+    );
+  const canOpenNegotiation =
+    role === "buyer"
+    && (quote.status === "SUBMITTED" || quote.status === "NEGOTIATING");
+
   return (
     <div className="min-h-screen bg-[#f7f9fb] px-4 py-8 sm:px-6">
       <main className="mx-auto w-full max-w-[1280px]">
@@ -276,6 +364,11 @@ export function QuoteDetail({
                 {status.icon}
                 {status.label}
               </span>
+              {quote.parentQuoteId !== null && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-700">
+                  재견적 v{quote.version}
+                </span>
+              )}
             </div>
             <p className="mt-2 text-sm text-slate-500">
               제출일 {formatDate(quote.submittedAt)} · 견적번호{" "}
@@ -320,6 +413,65 @@ export function QuoteDetail({
 
         <div className="grid items-start gap-6 lg:grid-cols-12">
           <div className="space-y-6 lg:col-span-8">
+            {quote.parentQuoteId !== null && (
+              <section className="rounded-lg border border-violet-200 bg-violet-50/40 p-5 shadow-sm">
+                <SectionHeading
+                  icon={<MessageSquareText size={17} />}
+                  title="협의로 새로 받은 견적입니다"
+                />
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  이전 견적 대비 조건이 아래와 같이 변경되었습니다.
+                </p>
+                <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-400">
+                      예상 출고
+                    </p>
+                    <p className="mt-1 text-sm font-black text-slate-900">
+                      {quote.leadTimeDays}일
+                      {quote.previousLeadTimeDays !== null && (
+                        <DeltaBadge
+                          before={quote.previousLeadTimeDays}
+                          after={quote.leadTimeDays}
+                          unit="일"
+                        />
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-400">
+                      배송비
+                    </p>
+                    <p className="mt-1 text-sm font-black text-slate-900">
+                      {formatPrice(quote.shippingFee)}
+                      {quote.previousShippingFee !== null && (
+                        <DeltaBadge
+                          before={quote.previousShippingFee}
+                          after={quote.shippingFee}
+                          unit="원"
+                        />
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-400">
+                      최종 견적 금액
+                    </p>
+                    <p className="mt-1 text-sm font-black text-slate-900">
+                      {formatPrice(quote.totalAmount)}
+                      {quote.previousTotalAmount !== null && (
+                        <DeltaBadge
+                          before={quote.previousTotalAmount}
+                          after={quote.totalAmount}
+                          unit="원"
+                        />
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </section>
+            )}
+
             <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
               <SectionHeading icon={<FileText size={17} />} title="견적 개요" />
               <div className="mt-5 grid gap-x-8 gap-y-5 sm:grid-cols-2">
@@ -552,9 +704,120 @@ export function QuoteDetail({
                 계약서 작성
               </Link>
             )}
+
+            {canRespond && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setPendingAction("APPROVED")}
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-slate-950 text-sm font-black text-white hover:bg-slate-800"
+                >
+                  <CheckCircle2 size={16} />이 견적 채택하기
+                </button>
+                <div className="flex gap-2">
+                  {canOpenNegotiation && (
+                    <Link
+                      to="/negotiations"
+                      state={{ quoteId: quote.quoteId }}
+                      className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50"
+                    >
+                      <MessageSquareText size={14} />
+                      협의 요청
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setPendingAction("REJECTED")}
+                    className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-md border border-slate-200 bg-white text-xs font-bold text-slate-500 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    <XCircle size={14} />
+                    거절
+                  </button>
+                </div>
+                <p className="text-center text-[11px] leading-5 text-slate-400">
+                  채택하면 같은 소싱 요청의 다른 견적은 자동으로 미채택
+                  처리됩니다.
+                </p>
+              </div>
+            )}
           </aside>
         </div>
       </main>
+
+      {pendingAction && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="quote-status-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4"
+        >
+          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-xl">
+            <div
+              className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                pendingAction === "APPROVED"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-rose-50 text-rose-600"
+              }`}
+            >
+              {pendingAction === "APPROVED" ? (
+                <CheckCircle2 size={20} />
+              ) : (
+                <XCircle size={20} />
+              )}
+            </div>
+
+            <h2
+              id="quote-status-modal-title"
+              className="mt-4 text-lg font-black text-slate-950"
+            >
+              {pendingAction === "APPROVED"
+                ? "이 견적을 채택하시겠습니까?"
+                : "이 견적을 거절하시겠습니까?"}
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              {pendingAction === "APPROVED"
+                ? "채택하면 같은 소싱 요청의 다른 견적은 자동으로 미채택 처리되며, 셀러가 확인 후 계약서를 작성해 전달합니다."
+                : "거절한 견적은 다시 채택할 수 없습니다."}
+            </p>
+
+            {statusActionError && (
+              <p className="mt-3 flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-semibold text-rose-700">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                {statusActionError}
+              </p>
+            )}
+
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                disabled={isUpdatingStatus}
+                onClick={() => {
+                  setPendingAction(null);
+                  setStatusActionError("");
+                }}
+                className="h-10 flex-1 rounded-md border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={isUpdatingStatus}
+                onClick={() => void handleStatusUpdate()}
+                className={`h-10 flex-1 rounded-md text-sm font-bold text-white disabled:opacity-50 ${
+                  pendingAction === "APPROVED" ? "bg-primary" : "bg-rose-600"
+                }`}
+              >
+                {isUpdatingStatus
+                  ? "처리 중..."
+                  : pendingAction === "APPROVED"
+                    ? "견적 채택"
+                    : "견적 거절"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

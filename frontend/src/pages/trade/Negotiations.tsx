@@ -823,9 +823,7 @@ export function Negotiations() {
                         <td className="px-5 py-4">
                           <button
                             type="button"
-                            onClick={() =>
-                              selectNegotiation(item.negotiationId)
-                            }
+                            onClick={() => handleRowAction(item)}
                             className="text-left"
                           >
                             <p className="text-sm font-black text-slate-950">
@@ -864,7 +862,7 @@ export function Negotiations() {
                         <td className="px-5 py-4 text-right">
                           <button
                             type="button"
-                            onClick={() => selectNegotiation(item.negotiationId)}
+                            onClick={() => handleRowAction(item)}
                             className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-bold transition ${
                               rowAction.emphasize
                                 ? "bg-blue-600 text-white hover:bg-blue-700"

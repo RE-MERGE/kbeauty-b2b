@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import {
   Check,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   CreditCard,
   FileText,
@@ -59,6 +60,10 @@ type BuyerQuote = {
   contractId: number | null;
   contractName: string | null;
   contractStatus: ContractStatus | null;
+  version: number;
+  parentQuoteId: number | null;
+  previousTotalAmount: number | null;
+  previousLeadTimeDays: number | null;
 };
 
 type QuoteFilter = "ALL" | "REVIEW" | "APPROVED" | "CLOSED";
@@ -78,6 +83,41 @@ const filters: Array<{ value: QuoteFilter; label: string }> = [
 
 function formatPrice(value: number) {
   return `${value.toLocaleString()}원`;
+}
+
+// 이전 견적(협의 이전 버전) 대비 금액/납기가 얼마나 바뀌었는지 보여준다.
+function PriceDelta({
+  before,
+  after,
+  unit = "원",
+}: {
+  before: number;
+  after: number;
+  unit?: string;
+}) {
+  const diff = after - before;
+
+  if (diff === 0) {
+    return (
+      <span className="text-[11px] font-bold text-slate-400">
+        (변동 없음)
+      </span>
+    );
+  }
+
+  const decreased = diff < 0;
+
+  return (
+    <span
+      className={`text-[11px] font-black ${
+        decreased ? "text-blue-600" : "text-rose-600"
+      }`}
+    >
+      {decreased ? "▼" : "▲"}
+      {Math.abs(diff).toLocaleString()}
+      {unit}
+    </span>
+  );
 }
 
 function formatDate(value: string) {
@@ -220,6 +260,22 @@ export default function BuyerQuoteList() {
   const [actionError, setActionError] = useState("");
   const [negotiationContent, setNegotiationContent] = useState("");
   const [negotiationType, setNegotiationType] = useState("");
+  // 소싱 요청별 견적 그룹은 기본적으로 접혀 있고, 헤더를 눌러야 펼쳐진다.
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<number>>(
+    new Set(),
+  );
+
+  const toggleGroup = (sourcingRequestId: number) => {
+    setExpandedGroupIds((current) => {
+      const next = new Set(current);
+      if (next.has(sourcingRequestId)) {
+        next.delete(sourcingRequestId);
+      } else {
+        next.add(sourcingRequestId);
+      }
+      return next;
+    });
+  };
 
 
   const requestedFilter = searchParams.get("status") as QuoteFilter | null;
@@ -269,6 +325,15 @@ export default function BuyerQuoteList() {
       const current = groups.get(quote.sourcingRequestId) ?? [];
       current.push(quote);
       groups.set(quote.sourcingRequestId, current);
+    });
+
+    // 채택된 견적이 있으면 그 그룹 안에서 맨 위로 올라오도록 정렬한다.
+    groups.forEach((groupQuotes) => {
+      groupQuotes.sort((a, b) => {
+        const aRank = a.status === "APPROVED" ? 0 : 1;
+        const bRank = b.status === "APPROVED" ? 0 : 1;
+        return aRank - bRank;
+      });
     });
 
     return Array.from(groups.entries());
@@ -608,13 +673,32 @@ export default function BuyerQuoteList() {
                   quote.status === "APPROVED"
               );
 
+              const isExpanded = expandedGroupIds.has(sourcingRequestId);
+
               return (
                 <section
                   key={sourcingRequestId}
                   className="overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm"
                 >
-                  <header className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <header
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => toggleGroup(sourcingRequestId)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        toggleGroup(sourcingRequestId);
+                      }
+                    }}
+                    className="flex cursor-pointer flex-col gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 transition hover:bg-slate-100 sm:flex-row sm:items-center sm:justify-between"
+                  >
                     <div className="flex min-w-0 items-center gap-3">
+                      <ChevronDown
+                        size={16}
+                        className={`shrink-0 text-slate-400 transition-transform ${
+                          isExpanded ? "rotate-180" : ""
+                        }`}
+                      />
                       <span
                         className={`shrink-0 rounded px-2 py-1 text-[11px] font-black ${
                           groupHasApprovedQuote
@@ -636,15 +720,17 @@ export default function BuyerQuoteList() {
                     </div>
                     <button
                       type="button"
-                      onClick={() =>
-                        navigate(`/buyer/sourcing-detail/${sourcingRequestId}`)
-                      }
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        navigate(`/buyer/sourcing-detail/${sourcingRequestId}`);
+                      }}
                       className="shrink-0 text-left text-xs font-bold text-blue-700 transition hover:text-blue-900 sm:text-right"
                     >
                       요청 상세 보기
                     </button>
                   </header>
 
+                  {isExpanded && (
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[1360px] table-fixed text-left">
                       <thead className="border-b border-slate-200 bg-white text-xs font-bold text-slate-500">
@@ -725,12 +811,27 @@ export default function BuyerQuoteList() {
                                   );
                                 }
                               }}
-                              className="cursor-pointer align-middle outline-none transition-colors hover:bg-blue-50/50 focus-visible:bg-blue-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                              className={`cursor-pointer align-middle outline-none transition-colors focus-visible:bg-blue-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 ${
+                                quote.status === "APPROVED"
+                                  ? "bg-emerald-50/60 hover:bg-emerald-50"
+                                  : "hover:bg-blue-50/50"
+                              }`}
                             >
                               <td className="px-4 py-5">
+                                {quote.status === "APPROVED" && (
+                                  <span className="mb-1.5 inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-black text-white">
+                                    <CheckCircle2 size={11} />
+                                    채택된 견적
+                                  </span>
+                                )}
                                 <p className="truncate font-mono text-sm font-black text-slate-950">
                                   {quote.quoteNo}
                                 </p>
+                                {quote.parentQuoteId !== null && (
+                                  <span className="mt-1 inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-0.5 text-[11px] font-bold text-violet-700">
+                                    재견적 v{quote.version}
+                                  </span>
+                                )}
                                 <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-emerald-700">
                                   <Check size={11} />
                                   수신 완료
@@ -774,6 +875,14 @@ export default function BuyerQuoteList() {
                                 <p className="text-sm font-black text-slate-950">
                                   {formatPrice(quote.totalAmount)}
                                 </p>
+                                {quote.previousTotalAmount !== null && (
+                                  <p className="mt-0.5">
+                                    <PriceDelta
+                                      before={quote.previousTotalAmount}
+                                      after={quote.totalAmount}
+                                    />
+                                  </p>
+                                )}
                                 {isLowest && groupQuotes.length > 1 && (
                                   <span className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
                                     최저 견적
@@ -784,6 +893,15 @@ export default function BuyerQuoteList() {
                                 <p className="text-sm font-bold text-slate-700">
                                   {quote.leadTimeDays}일
                                 </p>
+                                {quote.previousLeadTimeDays !== null && (
+                                  <p className="mt-0.5">
+                                    <PriceDelta
+                                      before={quote.previousLeadTimeDays}
+                                      after={quote.leadTimeDays}
+                                      unit="일"
+                                    />
+                                  </p>
+                                )}
                                 {isFastest && groupQuotes.length > 1 && (
                                   <p className="mt-1 text-[11px] font-bold text-blue-700">
                                     최단 납기
@@ -970,6 +1088,7 @@ export default function BuyerQuoteList() {
                       </tbody>
                     </table>
                   </div>
+                  )}
                 </section>
               );
             })}

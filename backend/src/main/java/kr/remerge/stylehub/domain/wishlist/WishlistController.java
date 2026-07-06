@@ -2,11 +2,11 @@ package kr.remerge.stylehub.domain.wishlist;
 
 import kr.remerge.stylehub.domain.wishlist.dto.WishlistDto;
 import kr.remerge.stylehub.domain.wishlist.service.WishlistService;
-import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
+import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
+import kr.remerge.stylehub.global.auth.security.LoginUser;
 import kr.remerge.stylehub.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,28 +21,28 @@ public class WishlistController {
     // 내 폴더 목록
     @GetMapping("/folders")
     public ResponseEntity<ApiResponse<List<WishlistDto.FolderResponse>>> getFolders(
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @LoginUser AuthUser userDetails
     ) {
-        return ResponseEntity.ok(ApiResponse.success(wishlistService.getFolders(userDetails.getUserId())));
+        return ResponseEntity.ok(ApiResponse.success(wishlistService.getFolders(userDetails.userId())));
     }
 
     // 폴더 생성
     @PostMapping("/folders")
     public ResponseEntity<ApiResponse<WishlistDto.FolderResponse>> createFolder(
-            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @LoginUser AuthUser userDetails,
             @RequestBody WishlistDto.FolderCreateRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(
-                wishlistService.createFolder(userDetails.getUserId(), request.getFolderName())));
+                wishlistService.createFolder(userDetails.userId(), request.getFolderName())));
     }
 
     // 찜 추가
     @PostMapping
     public ResponseEntity<ApiResponse<WishlistDto.ItemResponse>> add(
-            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @LoginUser AuthUser userDetails,
             @RequestBody WishlistDto.AddRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success(wishlistService.addWishlist(userDetails.getUserId(), request)));
+        return ResponseEntity.ok(ApiResponse.success(wishlistService.addWishlist(userDetails.userId(), request)));
     }
 
     // 찜 삭제
@@ -57,9 +57,9 @@ public class WishlistController {
     // 내 찜 목록 전체
     @GetMapping
     public ResponseEntity<ApiResponse<List<WishlistDto.ItemResponse>>> getMyWishlist(
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @LoginUser AuthUser userDetails
     ) {
-        return ResponseEntity.ok(ApiResponse.success(wishlistService.getMyWishlist(userDetails.getUserId())));
+        return ResponseEntity.ok(ApiResponse.success(wishlistService.getMyWishlist(userDetails.userId())));
     }
 
     // 특정 폴더 찜 목록

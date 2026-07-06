@@ -1,22 +1,30 @@
-import React, { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Briefcase, Building2, Camera, CheckCircle2, IdCard, Loader2, Lock, User, XCircle } from "lucide-react";
-import { useAuthStore } from "@/store/useAuthStore";
-import { formatPhoneNumber } from "@/pages/auth/register/shared";
+import React, {useEffect, useRef, useState} from "react";
 import {
-    checkEmailDuplicate,
-    checkPhoneDuplicate,
-    uploadFile,
-} from "@/api/auth/auth.service";
+    AlertTriangle,
+    Briefcase,
+    Building2,
+    Camera,
+    CheckCircle2,
+    IdCard,
+    Loader2,
+    Lock,
+    User,
+    XCircle
+} from "lucide-react";
+import {useAuthStore} from "@/store/useAuthStore";
+import {formatPhoneNumber} from "@/pages/auth/register/shared";
+import {checkEmailDuplicate, checkPhoneDuplicate, uploadFile,} from "@/api/auth/auth.service";
 import {
     sendEmailChangeOtp,
     sendPhoneChangeOtp,
+    updateProfileInfo,
     verifyEmailChangeOtp,
+    verifyGatePassword,
     verifyPhoneChangeOtp,
 } from "@/api/user/user.service";
-import { updateProfileInfo, verifyGatePassword } from "@/api/user/user.service";
-import { OtpVerificationPanel } from "@/app/components/ui/otp-vertification-panel";
-import { toast } from "sonner";
-import { ErrorResponse } from "@/api/types";
+import {OtpVerificationPanel} from "@/app/components/ui/otp-vertification-panel";
+import {toast} from "sonner";
+import {ErrorResponse} from "@/api/types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -409,7 +417,7 @@ export function ProfileTab() {
             setImageFile(null);
             emailOtp.reset();
             phoneOtp.reset();
-            // 💡 저장 성공 후 플래그 다시 꺼주기
+            // 저장 성공 후 플래그 다시 꺼주기
             setIsEmailDirty(false);
             setIsPhoneDirty(false);
             setTimeout(() => setSaved(false), 2500);

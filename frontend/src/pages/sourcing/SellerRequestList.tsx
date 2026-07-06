@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router";
 import api from "@/api/axios";
+import { useAuthStore } from "@/store/useAuthStore";
 import {
   X, Zap, AlertTriangle, Calendar,
   Search, Filter, FlaskConical,
@@ -490,6 +491,8 @@ function CompletedRow({ req, onDetail }: { req: SellerSourcingResponse; onDetail
 export function SellerRequestList() {
   const navigate = useNavigate();
   const location = useLocation();
+  const currentUser = useAuthStore((state) => state.user);
+  const isPresident = currentUser?.role === "PRESIDENT";
   const [activeTab, setActiveTab] = useState<SourcingType>("READY");
   const [subTab, setSubTab] = useState<"current" | "my" | "completed" | "past">("current");
   const [search, setSearch] = useState("");
@@ -562,12 +565,14 @@ export function SellerRequestList() {
           <div className="max-w-[1280px] mx-auto px-4">
             <div className="flex items-start justify-between gap-4 mb-4">
               <div className="inline-block bg-primary text-xs font-mono px-2 py-1 rounded tracking-wider uppercase">소싱 요청 게시판</div>
-              <button
-                  onClick={() => setShowSettings(true)}
-                  className="flex items-center gap-1.5 border border-white/20 hover:border-white/40 bg-white/5 hover:bg-white/10 text-white/90 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex-shrink-0"
-              >
-                <Settings size={13} /> 소싱 수신 설정
-              </button>
+              {isPresident && (
+                  <button
+                      onClick={() => setShowSettings(true)}
+                      className="flex items-center gap-1.5 border border-white/20 hover:border-white/40 bg-white/5 hover:bg-white/10 text-white/90 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex-shrink-0"
+                  >
+                    <Settings size={13} /> 소싱 수신 설정
+                  </button>
+              )}
             </div>
             <h1 className="text-4xl font-bold mb-3">
               배정된 소싱 요청 <span className="text-accent">{requests.length}</span>건
@@ -698,7 +703,7 @@ export function SellerRequestList() {
         </div>
 
         {declineReq && <DeclineModal req={declineReq} onClose={() => setDeclineReq(null)} onConfirm={handleDeclineConfirm} />}
-        {showSettings && <SourcingSettingsModal onClose={() => setShowSettings(false)} />}
+        {showSettings && isPresident && <SourcingSettingsModal onClose={() => setShowSettings(false)} />}
       </div>
   );
 }

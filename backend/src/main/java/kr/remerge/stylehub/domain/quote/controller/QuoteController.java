@@ -81,8 +81,11 @@ public class QuoteController {
             @PathVariable Integer quoteId
     ) {
         QuoteDetailResponse quoteDetail
-                = quoteService.getQuoteDetail(authUser.userId(), quoteId);
-
+                = quoteService.getQuoteDetail(
+                authUser.userId(),
+                quoteId,
+                authUser.companyId()  // 추가
+        );
         return ResponseEntity.ok(ApiResponse.success(quoteDetail));
     }
 

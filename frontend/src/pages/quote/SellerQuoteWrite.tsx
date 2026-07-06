@@ -571,7 +571,7 @@ export function SellerQuoteWrite() {
       const quoteData =
           await api.post<QuoteCreateResponse>("/quotes", payload);
 
-      navigate(`/seller/quotes/${quoteData.quoteId}`);
+      navigate(`/seller/quotes`);
     } catch (err) {
       if (isAxiosError<QuoteErrorResponse>(err)) {
         const fieldErrors = Object.values(err.response?.data?.data ?? {});

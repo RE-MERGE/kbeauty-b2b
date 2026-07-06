@@ -1,14 +1,13 @@
 package kr.remerge.stylehub.domain.sourcing;
 
-import kr.remerge.stylehub.domain.sourcing.dto.BuyerSourcingResponse;
+import kr.remerge.stylehub.domain.sourcing.dto.BuyerSourcingBoardResponse;
 import kr.remerge.stylehub.domain.sourcing.service.BuyerSourcingService;
 import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
 import kr.remerge.stylehub.global.auth.security.LoginUser;
+import kr.remerge.stylehub.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/sourcing/buyer")
@@ -17,20 +16,24 @@ public class BuyerSourcingController {
 
     private final BuyerSourcingService buyerSourcingService;
 
-    // 회사 단위 소싱 요청 리스트
     @GetMapping("/requests")
-    public ResponseEntity<List<BuyerSourcingResponse>> getBuyerRequests(
+    public ResponseEntity<ApiResponse<BuyerSourcingBoardResponse>> getBuyerRequests(
             @RequestParam String type,
+            @RequestParam(required = false) String status,
             @LoginUser AuthUser user
     ) {
         Integer buyerCompanyId = user.companyId();
-        return ResponseEntity.ok(buyerSourcingService.getBuyerRequests(buyerCompanyId, type));
+        BuyerSourcingBoardResponse response =
+                buyerSourcingService.getBuyerSourcingBoard(buyerCompanyId, type, status);
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    // buyer 직접 취소 → WITHDRAWN
     @PatchMapping("/requests/{sourcingRequestId}/withdraw")
-    public ResponseEntity<Void> withdraw(@PathVariable Integer sourcingRequestId) {
-        buyerSourcingService.withdraw(sourcingRequestId);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<ApiResponse<Void>> withdraw(
+            @LoginUser AuthUser user,
+            @PathVariable Integer sourcingRequestId
+    ) {
+        buyerSourcingService.withdraw(sourcingRequestId, user.userId(), user.companyId(), user.role());
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

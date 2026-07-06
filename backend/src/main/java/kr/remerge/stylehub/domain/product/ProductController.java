@@ -2,11 +2,11 @@ package kr.remerge.stylehub.domain.product;
 
 import kr.remerge.stylehub.domain.product.dto.ProductDto;
 import kr.remerge.stylehub.domain.product.service.ProductService;
-import kr.remerge.stylehub.global.auth.security.CustomUserDetails;
+import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
+import kr.remerge.stylehub.global.auth.security.LoginUser;
 import kr.remerge.stylehub.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,7 +21,7 @@ public class ProductController {
     // [POST] 상품 등록
     @PostMapping
     public ResponseEntity<ApiResponse<ProductDto.DetailResponse>> create(
-            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @LoginUser AuthUser userDetails,
             @RequestBody ProductDto.CreateRequest request
     ) {
         return ResponseEntity.ok(ApiResponse.success(productService.create(userDetails, request)));
@@ -56,7 +56,7 @@ public class ProductController {
     // [GET] 내 상품 목록 (셀러용)
     @GetMapping("/my")
     public ResponseEntity<ApiResponse<List<ProductDto.SummaryResponse>>> getMy(
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @LoginUser AuthUser userDetails
     ) {
         return ResponseEntity.ok(ApiResponse.success(productService.getMy(userDetails)));
     }

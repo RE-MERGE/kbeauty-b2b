@@ -29,10 +29,9 @@ import {CompanySettings} from "@/pages/company/CompanySettings";
 import {SellerContractSign} from "@/pages/contract/SellerContractSign";
 import {SellerContractCreate} from "@/pages/contract/SellerContractCreate";
 import {BuyerContractSign} from "@/pages/contract/BuyerContractSign";
-import {BuyerContractList} from "@/pages/contract/BuyerContractList";
 
-import {Inquiry} from "@/pages/inquiry/Inquiry";
-import {Support} from "@/pages/inquiry/Support";
+import {Inquiry} from "@/pages/support/Inquiry";
+import {Support} from "@/pages/support/Support";
 
 import {Cart} from "@/pages/order/Cart";
 import {Orders} from "@/pages/order/Orders";
@@ -47,6 +46,7 @@ import {SellerProductRegister} from "@/pages/product/SellerProductRegister";
 import {SellerQuoteWrite} from "@/pages/quote/SellerQuoteWrite";
 import {SellerQuoteList} from "@/pages/quote/SellerQuoteList";
 import BuyerQuoteList from "@/pages/quote/BuyerQuoteList";
+import { QuoteDetail } from "@/pages/quote/QuoteDetail";
 import {QuoteDetailBuyer, QuoteDetailSeller} from "@/pages/quote/QuoteDetailWrappers";
 
 import {SellerDashboard} from "@/pages/seller/SellerDashboard";

@@ -20,4 +20,11 @@ public interface NegotiationRepository extends JpaRepository<Negotiation, Intege
             Integer buyerId,
             String status
     );
+
+    Optional<Negotiation>
+    findFirstByContract_ContractIdAndBuyer_UserIdAndStatusOrderByOpenedAtDesc(
+            Integer contractId,
+            Integer buyerId,
+            String status
+    );
 }

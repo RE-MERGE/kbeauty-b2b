@@ -3,18 +3,19 @@ package kr.remerge.stylehub.domain.dispute.service;
 import kr.remerge.stylehub.domain.dispute.dto.DisputeCreateRequest;
 import kr.remerge.stylehub.domain.dispute.dto.DisputeCreateResponse;
 import kr.remerge.stylehub.domain.dispute.dto.DisputeListResponse;
-import kr.remerge.stylehub.domain.dispute.dto.DisputeResponseCreateRequest;
 import kr.remerge.stylehub.domain.dispute.entity.Dispute;
 import kr.remerge.stylehub.domain.dispute.entity.DisputeItem;
 import kr.remerge.stylehub.domain.dispute.enumtype.DisputeStatus;
 import kr.remerge.stylehub.domain.dispute.enumtype.DisputeType;
-import kr.remerge.stylehub.domain.dispute.enumtype.ResponderRole;
 import kr.remerge.stylehub.domain.dispute.repository.DisputeItemRepository;
 import kr.remerge.stylehub.domain.dispute.repository.DisputeRepository;
 import kr.remerge.stylehub.domain.order.entity.Order;
 import kr.remerge.stylehub.domain.order.entity.OrderItem;
+import kr.remerge.stylehub.domain.order.entity.OrderLog;
+import kr.remerge.stylehub.domain.order.enumtype.OrderLogMemo;
 import kr.remerge.stylehub.domain.order.enumtype.OrderStatus;
 import kr.remerge.stylehub.domain.order.repository.OrderItemRepository;
+import kr.remerge.stylehub.domain.order.repository.OrderLogRepository;
 import kr.remerge.stylehub.domain.order.repository.OrderRepository;
 import kr.remerge.stylehub.domain.order.service.OrderStatusService;
 import kr.remerge.stylehub.domain.user.entity.User;
@@ -57,6 +58,7 @@ public class DisputeService {
     private final DisputeItemRepository disputeItemRepository;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final OrderLogRepository orderLogRepository;
     private final OrderStatusService orderStatusService;
     private final UserReader userReader;
 
@@ -114,15 +116,6 @@ public class DisputeService {
         );
 
         return DisputeCreateResponse.from(dispute);
-    }
-
-    public void createResponse(
-            Integer userId,
-            Integer disputeId,
-            DisputeResponseCreateRequest request,
-            ResponderRole responderRole
-    ) {
-
     }
 
     private Order findBuyerOrder(
@@ -321,6 +314,22 @@ public class DisputeService {
         }
 
         dispute.changeStatus(DisputeStatus.RESOLVED);
+
+        // 이의제기 종료 시 DISPUTE 상태에 갇혀있던 주문을 거래 확정(COMPLETED)으로 넘겨준다.
+        // 그래야 정산 대상(SettlementService)에 다시 포함된다.
+        Order order = dispute.getOrder();
+        OrderStatus previousStatus = order.getStatus();
+        order.agree();
+
+        orderLogRepository.save(
+                OrderLog.createStatusLog(
+                        order,
+                        previousStatus,
+                        OrderStatus.COMPLETED,
+                        dispute.getBuyer(),
+                        OrderLogMemo.ORDER_COMPLETED
+                )
+        );
     }
 
     @Transactional

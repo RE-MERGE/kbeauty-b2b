@@ -10,6 +10,7 @@ import kr.remerge.stylehub.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -107,5 +108,22 @@ public class DisputeBuyerController {
         );
 
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @PostMapping("/disputes/{disputeId}/files")
+    public ResponseEntity<ApiResponse<DisputeFileResponse>> uploadFile(
+            @LoginUser AuthUser authUser,
+            @PathVariable Integer disputeId,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "disputeResponseId", required = false) Integer disputeResponseId
+    ) {
+        DisputeFileResponse response = disputeResponseService.uploadBuyerFile(
+                authUser.userId(),
+                disputeId,
+                disputeResponseId,
+                file
+        );
+
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

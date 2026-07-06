@@ -108,6 +108,13 @@ public enum ErrorCode {
     CONTRACT_ITEM_NOT_FOUND(HttpStatus.BAD_REQUEST,"CONTRACT_007","계약할 일반 상품이 없습니다."),
 
     // ───────────────────────────────────────────
+    // 협의 (NEGOTIATION)
+    // ───────────────────────────────────────────
+    NEGOTIATION_NOT_FOUND(HttpStatus.NOT_FOUND, "NEGOTIATION_001", "협의를 찾을 수 없습니다."),
+    NEGOTIATION_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, "NEGOTIATION_002", "협의 요청을 찾을 수 없습니다."),
+    INVALID_NEGOTIATION_STATUS(HttpStatus.BAD_REQUEST, "NEGOTIATION_003", "현재 상태에서는 처리할 수 없는 협의 요청입니다."),
+
+    // ───────────────────────────────────────────
     // 소싱 (SOURCING)
     // ───────────────────────────────────────────
     SAMPLE_OPTION_NOT_CONFIGURED(HttpStatus.BAD_REQUEST, "SOURCING_001", "선택한 옵션은 현재 샘플 주문을 이용할 수 없습니다."),
@@ -156,6 +163,7 @@ public enum ErrorCode {
     INVALID_DISPUTE_STATUS(HttpStatus.CONFLICT,"DISPUTE_006","현재 이의제기 상태에서는 답변할 수 없습니다."),
     DISPUTE_ALREADY_RESOLVED(HttpStatus.CONFLICT,"DISPUTE_007","이미 처리 완료된 이의제기입니다."),
     DISPUTE_RESOLVE_NOT_ALLOWED(HttpStatus.CONFLICT,"DISPUTE_008","현재 상태에서는 처리 완료할 수 없습니다."),
+    DISPUTE_RESPONSE_NOT_FOUND(HttpStatus.NOT_FOUND,"DISPUTE_009","이의제기 답변을 찾을 수 없습니다."),
 
     // ───────────────────────────────────────────
     // 공통 (COMMON)

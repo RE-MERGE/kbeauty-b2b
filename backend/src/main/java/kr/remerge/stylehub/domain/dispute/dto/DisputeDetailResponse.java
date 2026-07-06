@@ -1,6 +1,7 @@
 package kr.remerge.stylehub.domain.dispute.dto;
 
 import kr.remerge.stylehub.domain.dispute.entity.Dispute;
+import kr.remerge.stylehub.domain.dispute.entity.DisputeFile;
 import kr.remerge.stylehub.domain.dispute.entity.DisputeResponse;
 import kr.remerge.stylehub.domain.dispute.enumtype.DisputeStatus;
 import kr.remerge.stylehub.domain.dispute.enumtype.DisputeType;
@@ -19,11 +20,13 @@ public record DisputeDetailResponse(
         RequestedAction requestedAction,
         String buyerClaim,
         LocalDateTime receivedAt,
-        List<DisputeResponseItemResponse> responses
+        List<DisputeResponseItemResponse> responses,
+        List<DisputeFileResponse> files
 ) {
     public static DisputeDetailResponse from(
             Dispute dispute,
-            List<DisputeResponse> responses
+            List<DisputeResponse> responses,
+            List<DisputeFile> files
     ) {
         return new DisputeDetailResponse(
                 dispute.getDisputeId(),
@@ -37,6 +40,9 @@ public record DisputeDetailResponse(
                 dispute.getReceivedAt(),
                 responses.stream()
                         .map(DisputeResponseItemResponse::from)
+                        .toList(),
+                files.stream()
+                        .map(DisputeFileResponse::from)
                         .toList()
         );
     }

@@ -233,6 +233,11 @@ export function BuyerContractSign() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [isRenegotiateModalOpen, setIsRenegotiateModalOpen] = useState(false);
+  const [renegotiateMessage, setRenegotiateMessage] = useState("");
+  const [isRenegotiating, setIsRenegotiating] = useState(false);
+  const [renegotiateError, setRenegotiateError] = useState("");
+  const [renegotiateSuccess, setRenegotiateSuccess] = useState("");
 
   useEffect(() => {
     const parsedContractId = Number(contractId);
@@ -359,6 +364,46 @@ export function BuyerContractSign() {
       );
     } finally {
       setIsPreviewing(false);
+    }
+  };
+
+  const openRenegotiateModal = () => {
+    setRenegotiateMessage("");
+    setRenegotiateError("");
+    setIsRenegotiateModalOpen(true);
+  };
+
+  const closeRenegotiateModal = () => {
+    if (isRenegotiating) return;
+    setIsRenegotiateModalOpen(false);
+    setRenegotiateMessage("");
+    setRenegotiateError("");
+  };
+
+  const handleRequestRenegotiation = async () => {
+    if (!contract || !renegotiateMessage.trim() || isRenegotiating) return;
+
+    try {
+      setIsRenegotiating(true);
+      setRenegotiateError("");
+
+      await api.post("/negotiations", {
+        contractId: contract.contractId,
+        content: renegotiateMessage.trim(),
+        negotiationType: "CONTRACT",
+      });
+
+      setIsRenegotiateModalOpen(false);
+      setRenegotiateMessage("");
+      setRenegotiateSuccess("계약 조건 변경을 요청했습니다. 협의 관리 화면에서 진행 상황을 확인해 주세요.");
+    } catch (error) {
+      setRenegotiateError(
+        error instanceof Error
+          ? error.message
+          : "변경 요청을 등록하지 못했습니다.",
+      );
+    } finally {
+      setIsRenegotiating(false);
     }
   };
 
@@ -738,6 +783,20 @@ export function BuyerContractSign() {
                   서명 완료 후 계약 내용과 서명 정보가 최종 PDF로
                   보관됩니다.
                 </p>
+
+                <button
+                  type="button"
+                  onClick={openRenegotiateModal}
+                  className="mt-3 w-full text-center text-xs font-bold text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-slate-700"
+                >
+                  계약 조건 변경을 요청하고 싶어요
+                </button>
+
+                {renegotiateSuccess && (
+                  <p className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-700">
+                    {renegotiateSuccess}
+                  </p>
+                )}
               </>
             ) : isCompleted ? (
               <div className="py-2 text-center">
@@ -848,6 +907,70 @@ export function BuyerContractSign() {
                 className="h-10 rounded-md bg-blue-600 px-5 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
               >
                 서명 적용
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isRenegotiateModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="계약 조건 변경 요청"
+        >
+          <div className="w-full max-w-lg rounded-lg bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <div>
+                <h2 className="text-base font-black text-slate-950">
+                  계약 조건 변경 요청
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  변경을 원하는 조건과 이유를 적어주세요. 셀러가 확인 후 새 계약서로 응답합니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                title="닫기"
+                onClick={closeRenegotiateModal}
+                className="inline-flex size-9 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <textarea
+                value={renegotiateMessage}
+                onChange={(event) => setRenegotiateMessage(event.target.value)}
+                maxLength={2000}
+                rows={5}
+                placeholder="예) 납품 예정일을 2주 뒤로 조정하고 싶습니다."
+                className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              {renegotiateError && (
+                <p className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs font-semibold text-rose-700">
+                  {renegotiateError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-6 py-4">
+              <button
+                type="button"
+                onClick={closeRenegotiateModal}
+                className="h-10 rounded-md border border-slate-200 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={!renegotiateMessage.trim() || isRenegotiating}
+                onClick={handleRequestRenegotiation}
+                className="h-10 rounded-md bg-blue-600 px-5 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                {isRenegotiating ? "요청 중..." : "변경 요청 보내기"}
               </button>
             </div>
           </div>

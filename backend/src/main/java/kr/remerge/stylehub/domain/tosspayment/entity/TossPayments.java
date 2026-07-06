@@ -34,7 +34,7 @@ public class TossPayments {
     private String status;
 
     @Column(name = "toss_order_id", nullable = false, length = 64)
-    private String tossOrderId; // 👈 올려주신 이미지의 7번 빨간 열쇠(유니크 키) 마크와 매핑
+    private String tossOrderId; //
 
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(
@@ -44,4 +44,21 @@ public class TossPayments {
     @Column(name = "order_id")
     @Builder.Default
     private List<String> orderIds = new ArrayList<>();
+
+    @Column(name = "va_bank_code", length = 10)
+    private String vaBankCode;
+
+    @Column(name = "va_account_number", length = 30)
+    private String vaAccountNumber;
+
+    @Column(name = "va_customer_name", length = 50)
+    private String vaCustomerName;
+
+    @Column(name = "va_due_date")
+    private String vaDueDate;
+
+    public void markAsDone(LocalDateTime approvedAt) {
+        this.status = "DONE";
+        this.approvedAt = approvedAt;
+    }
 }

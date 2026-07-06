@@ -34,4 +34,5 @@ public interface OrderRepository extends JpaRepository<Order, Integer> {
     );
 
     List<Order> findByOrderNoInAndBuyer_UserId(List<String> orderNos, Integer userId);
+    List<Order> findByOrderNoIn(List<String> orderNos);
 }

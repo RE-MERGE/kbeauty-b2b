@@ -89,4 +89,5 @@ public class SourcingRequest extends BaseEntity {
     public void complete() {
         this.status = SourcingStatus.COMPLETED;
     }
+    public void negotiate(){ this.status = SourcingStatus.NEGOTIATING; }
 }

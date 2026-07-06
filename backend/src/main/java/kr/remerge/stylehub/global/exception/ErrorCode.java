@@ -146,6 +146,18 @@ public enum ErrorCode {
     DELIVERY_NOT_FOUND(HttpStatus.NOT_FOUND, "DELIVERY_001", "배송 정보를 찾을 수 없습니다."),
 
     // ───────────────────────────────────────────
+    //  이의제기 (Dispute)
+    // ───────────────────────────────────────────
+    DISPUTE_ALREADY_EXISTS(HttpStatus.CONFLICT,"DISPUTE_001","이미 처리 중인 이의제기가 있습니다."),
+    DISPUTE_ITEM_REQUIRED(HttpStatus.BAD_REQUEST,"DISPUTE_002","이의제기할 주문 상품을 선택해 주세요."),
+    DISPUTE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND,"DISPUTE_003","이의제기할 주문 상품을 찾을 수 없습니다."),
+    INVALID_DISPUTE_QUANTITY(HttpStatus.BAD_REQUEST,"DISPUTE_004","문제 수량이 주문 수량보다 많습니다."),
+    DISPUTE_NOT_FOUND(HttpStatus.NOT_FOUND,"DISPUTE_005","이의제기를 찾을 수 없습니다."),
+    INVALID_DISPUTE_STATUS(HttpStatus.CONFLICT,"DISPUTE_006","현재 이의제기 상태에서는 답변할 수 없습니다."),
+    DISPUTE_ALREADY_RESOLVED(HttpStatus.CONFLICT,"DISPUTE_007","이미 처리 완료된 이의제기입니다."),
+    DISPUTE_RESOLVE_NOT_ALLOWED(HttpStatus.CONFLICT,"DISPUTE_008","현재 상태에서는 처리 완료할 수 없습니다."),
+
+    // ───────────────────────────────────────────
     // 공통 (COMMON)
     // ───────────────────────────────────────────
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "COMMON_001", "잘못된 입력값입니다."),

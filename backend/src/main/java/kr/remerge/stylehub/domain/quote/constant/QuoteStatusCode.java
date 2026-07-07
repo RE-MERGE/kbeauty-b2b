@@ -23,6 +23,9 @@ public final class QuoteStatusCode {
     // 다른 견적이 채택되지 않은 상태
     public static final String NOT_SELECTED = "NOT_SELECTED";
 
+    // 협의(재견적)로 인해 새 버전이 발행되어 더 이상 유효하지 않은 이전 버전 상태
+    public static final String SUPERSEDED = "SUPERSEDED";
+
     private QuoteStatusCode() {
     }
 }

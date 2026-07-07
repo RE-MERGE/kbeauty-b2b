@@ -3,6 +3,7 @@ package kr.remerge.stylehub.domain.order.checkout;
 import jakarta.validation.Valid;
 import kr.remerge.stylehub.domain.order.checkout.dto.*;
 import kr.remerge.stylehub.domain.order.checkout.service.CheckoutService;
+import kr.remerge.stylehub.domain.order.checkout.service.ContractCheckoutService;
 import kr.remerge.stylehub.domain.order.checkout.service.SampleCheckoutService;
 import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
 import kr.remerge.stylehub.global.auth.security.LoginUser;
@@ -20,6 +21,7 @@ public class CheckoutController {
 
     private final CheckoutService checkoutService;
     private final SampleCheckoutService sampleCheckoutService;
+    private final ContractCheckoutService contractCheckoutService;
 
     @PostMapping("/preview")
     public ResponseEntity<ApiResponse<CartCheckoutResponse>> cartCheckout(
@@ -76,6 +78,21 @@ public class CheckoutController {
         return ResponseEntity.ok(
                 ApiResponse.success(response)
         );
+    }
+
+    @GetMapping("/contracts/{contractId}")
+    public ResponseEntity<ApiResponse<ContractCheckoutResponse>>
+    getContractCheckout(
+            @LoginUser AuthUser authUser,
+            @PathVariable Integer contractId
+    ) {
+        ContractCheckoutResponse response =
+                contractCheckoutService.getCheckout(
+                        authUser.userId(),
+                        contractId
+                );
+
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/address")

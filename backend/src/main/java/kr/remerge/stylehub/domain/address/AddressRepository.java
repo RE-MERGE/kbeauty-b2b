@@ -21,7 +21,7 @@ public interface AddressRepository extends JpaRepository<Address, Integer> {
      */
     Optional<Address> findByAddressIdAndDeletedAtIsNull(Integer addressId);
 
-    @Query("""
+        @Query("""
         SELECT a
         FROM Address a
         WHERE a.addressId = :addressId

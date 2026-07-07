@@ -75,6 +75,23 @@ type SellerOrderLogResponse = {
   createdAt: string;
 };
 
+type DeliveryTrackingEvent = {
+  time: string;
+  status: {
+    code: string;
+    name: string;
+  };
+  description: string | null;
+  location: {
+    name: string;
+  } | null;
+};
+
+type DeliveryTrackingResponse = {
+  lastEvent: DeliveryTrackingEvent | null;
+  events: DeliveryTrackingEvent[];
+};
+
 type SellerOrderDetailResponse = {
   orderId: number;
   orderNo: string;
@@ -114,7 +131,7 @@ const statusConfig: Record<
   },
   SHIPPED: {
     label: "배송 중",
-    className: "border-primary/20 bg-secondary text-primary",
+    className: "border-sky-200 bg-sky-50 text-sky-700",
     icon: <Truck size={14} />,
   },
   DELIVERED: {
@@ -159,6 +176,18 @@ const paymentMethodLabel: Record<PaymentMethod, string> = {
   CORP_CARD: "법인카드",
 };
 
+const trackingStatusLabel: Record<string, string> = {
+  DELIVERED: "배송 완료",
+  OUT_FOR_DELIVERY: "배송 출발",
+  IN_TRANSIT: "배송 중",
+  AT_PICKUP: "집화 완료",
+  UNKNOWN: "배송 상태 확인 중",
+};
+
+function getTrackingStatusLabel(code: string, fallback: string) {
+  return trackingStatusLabel[code] ?? fallback;
+}
+
 const normalOrderStatuses: OrderStatus[] = [
   "PENDING",
   "CONFIRMED",
@@ -185,6 +214,11 @@ export function SellerOrderDetail() {
   const [carrier, setCarrier] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
   const [isRegisteringShipment, setIsRegisteringShipment] = useState(false);
+  const [tracking, setTracking] = useState<DeliveryTrackingResponse | null>(
+    null
+  );
+  const [isTrackingLoading, setIsTrackingLoading] = useState(false);
+  const [trackingError, setTrackingError] = useState("");
   const [actionNotice, setActionNotice] = useState<{
     type: "success" | "error";
     message: string;
@@ -207,6 +241,33 @@ export function SellerOrderDetail() {
           `/seller/orders/${id}`
         );
         setOrder(response);
+
+        if (
+          response.delivery.carrier &&
+          response.delivery.trackingNumber
+        ) {
+          try {
+            setIsTrackingLoading(true);
+            setTrackingError("");
+
+            const trackingResponse =
+              await api.get<DeliveryTrackingResponse>(
+                `/delivery/orders/${response.orderId}`
+              );
+
+            setTracking(trackingResponse);
+          } catch (trackingLoadError) {
+            console.error("배송 추적 조회 실패", trackingLoadError);
+            setTracking(null);
+            setTrackingError("배송 이력을 불러오지 못했습니다.");
+          } finally {
+            setIsTrackingLoading(false);
+          }
+        } else {
+          setTracking(null);
+          setTrackingError("");
+          setIsTrackingLoading(false);
+        }
       } catch (error) {
         console.error("셀러 주문 상세 조회 실패", error);
         setLoadError(
@@ -326,7 +387,7 @@ export function SellerOrderDetail() {
         <p className="mb-5 text-sm text-muted-foreground">{loadError}</p>
         <Link
           to="/seller/orders"
-          className="inline-flex rounded bg-primary px-5 py-2.5 text-sm font-semibold text-white"
+          className="inline-flex rounded-md bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
         >
           주문 목록으로
         </Link>
@@ -352,52 +413,64 @@ export function SellerOrderDetail() {
   const exceptionLogs = order.statusLogs.filter(
     (log) => log.newStatus && exceptionStatuses.includes(log.newStatus)
   );
-
+  const trackingEvents = tracking
+    ? [...tracking.events].reverse()
+    : [];
   return (
-    <div className="mx-auto max-w-[1180px] px-4 py-8">
-      <Link
-        to="/seller/orders"
-        className="mb-5 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-primary"
-      >
-        <ChevronLeft size={15} />
-        주문 목록으로
-      </Link>
+    <div className="min-h-screen bg-[#f7f9fb]">
+      <header className="bg-[#24352d] text-white">
+        <div className="mx-auto max-w-[1280px] px-4 py-7 sm:px-6 lg:px-10">
+          <Link
+            to="/seller/orders"
+            className="mb-5 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-300 transition hover:text-white"
+          >
+            <ChevronLeft size={16} />
+            주문 목록으로
+          </Link>
 
-      <section className="mb-5 rounded-lg bg-[#24352d] px-6 py-5 text-white">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <span className="rounded border border-white/25 px-2 py-1 text-xs">
-                {order.isSample ? "샘플 주문" : "일반 주문"}
-              </span>
-              <span
-                className={`inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-semibold ${status.className}`}
-              >
-                {status.icon}
-                {status.label}
-              </span>
+          <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
+            <div>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="rounded-md border border-white/20 bg-white/5 px-2.5 py-1 text-xs font-bold text-slate-100">
+                  {order.isSample ? "샘플 주문" : "일반 주문"}
+                </span>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-bold ${status.className}`}
+                >
+                  {status.icon}
+                  {status.label}
+                </span>
+              </div>
+              <h1 className="font-mono text-2xl font-black tracking-normal md:text-3xl">
+                {order.orderNo}
+              </h1>
+              <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-300">
+                <span>구매사 <strong className="text-white">{order.buyerCompanyName}</strong></span>
+                <span>주문일 <strong className="text-white">{formatDate(order.createdAt)}</strong></span>
+              </div>
             </div>
-            <h1 className="font-mono text-xl font-bold">{order.orderNo}</h1>
-            <p className="mt-2 text-sm text-white/65">
-              구매 회사 {order.buyerCompanyName} · 주문일{" "}
-              {formatDate(order.createdAt)}
-            </p>
-          </div>
 
-          <div className="text-right">
-            <p className="text-2xl font-bold">
-              {order.amountSummary.totalAmount.toLocaleString()}원
-            </p>
-            <p className="mt-1 text-xs text-white/65">
-              총 {totalQuantity.toLocaleString()}개
-            </p>
+            <div className="min-w-[240px] rounded-lg border border-white/10 bg-white/5 p-5 md:text-right">
+              <p className="text-xs font-bold uppercase tracking-[0.08em] text-slate-300">
+                Total amount
+              </p>
+              <p className="mt-2 text-3xl font-black text-white">
+                {order.amountSummary.totalAmount.toLocaleString()}원
+              </p>
+              <p className="mt-2 text-xs font-semibold text-emerald-300">
+                {order.amountSummary.paymentMethod
+                  ? `${paymentMethodLabel[order.amountSummary.paymentMethod]} 결제`
+                  : "결제 수단 미등록"} · 총 {totalQuantity.toLocaleString()}개
+              </p>
+            </div>
           </div>
         </div>
-      </section>
+      </header>
 
+      <main className="mx-auto max-w-[1280px] px-4 py-8 sm:px-6 lg:px-10">
       {actionNotice && (
         <div
-          className={`mb-5 flex items-center justify-between gap-3 border px-4 py-3 text-sm font-semibold ${
+          className={`mb-6 flex items-center justify-between gap-3 rounded-md border px-4 py-3 text-sm font-semibold ${
             actionNotice.type === "success"
               ? "border-emerald-200 bg-emerald-50 text-emerald-800"
               : "border-red-200 bg-red-50 text-red-700"
@@ -414,287 +487,339 @@ export function SellerOrderDetail() {
         </div>
       )}
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-5">
-          <section className="overflow-hidden rounded-lg border border-border bg-white">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
-              <div>
-                <h2 className="flex items-center gap-2 font-bold text-foreground">
-                  <Package size={17} className="text-primary" />
-                  주문 상품
-                </h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  준비 완료 {order.preparation.readyItemCount} /{" "}
-                  {order.preparation.totalItemCount}
-                  {order.preparation.allItemsReady
-                    ? " · 모든 상품 준비 완료"
-                    : " · 출고 준비 진행 중"}
-                </p>
-              </div>
-              {isPresident &&
-                canPrepareItems &&
-                !order.preparation.allItemsReady && (
-                  <button
-                    type="button"
-                    disabled={isUpdatingAll}
-                    onClick={() => void handleMarkAllItemsReady()}
-                    className="h-9 bg-primary px-3 text-xs font-bold text-white transition hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
-                  >
-                    {isUpdatingAll ? "처리 중" : "전체 준비 완료"}
-                  </button>
-                )}
-            </div>
+      <div className="grid items-start gap-8 lg:grid-cols-12">
+        <div className="flex flex-col gap-7 lg:col-span-8">
 
-            {order.items.length === 0 ? (
-              <div className="px-5 py-12 text-center text-sm text-muted-foreground">
-                조회된 주문 상품이 없습니다.
-              </div>
-            ) : (
-              <div className="divide-y divide-border">
-                {order.items.map((item) => (
-                  <article
-                    key={item.orderItemId}
-                    className="grid gap-4 px-5 py-5 sm:grid-cols-[88px_minmax(0,1fr)_120px]"
-                  >
-                    <div className="flex h-[88px] w-[88px] items-center justify-center overflow-hidden rounded border border-border bg-muted/40">
-                      {item.productImageUrl ? (
-                        <img
-                          src={item.productImageUrl}
-                          alt={item.productName}
-                          className="h-full w-full object-cover"
-                        />
+
+          <section className="order-1 space-y-4">
+                      <div className="flex flex-wrap items-end justify-between gap-3">
+                        <div>
+                          <h2 className="text-xl font-black text-slate-950">
+                            주문 상품 ({order.items.length})
+                          </h2>
+                          <p className="mt-1 text-sm text-slate-500">
+                            준비 완료 {order.preparation.readyItemCount} /{" "}
+                            {order.preparation.totalItemCount}
+                            {order.preparation.allItemsReady
+                              ? " · 모든 상품 준비 완료"
+                              : " · 출고 준비 진행 중"}
+                          </p>
+                        </div>
+                        {isPresident &&
+                          canPrepareItems &&
+                          !order.preparation.allItemsReady && (
+                            <button
+                              type="button"
+                              disabled={isUpdatingAll}
+                              onClick={() => void handleMarkAllItemsReady()}
+                              className="inline-flex h-10 items-center gap-2 rounded-md bg-blue-600 px-4 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60"
+                            >
+                              <CheckCircle size={14} />
+                              {isUpdatingAll ? "처리 중" : "전체 준비 완료"}
+                            </button>
+                          )}
+                      </div>
+
+                      {order.items.length === 0 ? (
+                        <div className="rounded-lg border border-slate-200 bg-white px-5 py-12 text-center text-sm text-slate-500 shadow-sm">
+                          조회된 주문 상품이 없습니다.
+                        </div>
                       ) : (
-                        <Package
-                          size={28}
-                          className="text-muted-foreground/40"
-                        />
+                        <div className="space-y-4">
+                          {order.items.map((item) => (
+                            <article
+                              key={item.orderItemId}
+                              className="grid gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-[96px_minmax(0,1fr)_140px] sm:items-center"
+                            >
+                              <div className="flex size-24 items-center justify-center overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+                                {item.productImageUrl ? (
+                                  <img
+                                    src={item.productImageUrl}
+                                    alt={item.productName}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <Package
+                                    size={28}
+                                    className="text-slate-300"
+                                  />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="mb-2 flex flex-wrap gap-2">
+                                  <span
+                                    className={`rounded px-2 py-1 text-[11px] font-bold ${
+                                      item.assignedToMe
+                                        ? "bg-blue-100 text-blue-700"
+                                        : "bg-slate-100 text-slate-500"
+                                    }`}
+                                  >
+                                    {item.assignedToMe ? "내 담당 상품" : "다른 담당자 상품"}
+                                  </span>
+                                  <span
+                                    className={`rounded px-2 py-1 text-[11px] font-bold ${
+                                      item.itemStatus === "READY"
+                                        ? "bg-emerald-100 text-emerald-700"
+                                        : "bg-slate-100 text-slate-600"
+                                    }`}
+                                  >
+                                    {item.itemStatus === "READY" ? "준비 완료" : "준비 중"}
+                                  </span>
+                                </div>
+                                <h3 className="text-base font-black text-slate-950">
+                                  {item.productName}
+                                </h3>
+                                <div className="mt-3 grid grid-cols-2 gap-4 text-sm md:grid-cols-3">
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-slate-400">옵션</p>
+                                    <p className="mt-1 truncate font-bold text-slate-800">
+                                      {item.optionSummary || "기본 옵션"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs font-semibold text-slate-400">수량</p>
+                                    <p className="mt-1 font-bold text-slate-800">
+                                      {item.quantity.toLocaleString()}개
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs font-semibold text-slate-400">단가</p>
+                                    <p className="mt-1 font-bold text-slate-800">
+                                      {item.unitPrice.toLocaleString()}원
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="self-center text-left sm:text-right">
+                                <p className="text-xs font-semibold text-slate-400">합계</p>
+                                <p className="mt-1 text-lg font-black text-slate-950">
+                                  {item.totalPrice.toLocaleString()}원
+                                </p>
+                                {item.preparedAt && (
+                                  <p className="mt-1 text-xs text-slate-400">
+                                    {formatDate(item.preparedAt)}
+                                  </p>
+                                )}
+                                {item.canPrepare &&
+                                  canPrepareItems &&
+                                  item.itemStatus !== "READY" && (
+                                    <button
+                                      type="button"
+                                      disabled={updatingItemId === item.orderItemId}
+                                      onClick={() =>
+                                        void handleMarkItemReady(item.orderItemId)
+                                      }
+                                      className="mt-4 h-9 rounded-md border border-blue-600 px-3 text-xs font-bold text-blue-700 transition hover:bg-blue-50 disabled:cursor-wait disabled:opacity-60"
+                                    >
+                                      {updatingItemId === item.orderItemId
+                                        ? "처리 중"
+                                        : "준비 완료"}
+                                    </button>
+                                  )}
+                              </div>
+                            </article>
+                          ))}
+                        </div>
                       )}
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-foreground">
-                        {item.productName}
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {item.optionSummary || "기본 옵션"}
-                      </p>
-                      <span
-                        className={`mt-2 inline-flex border px-2 py-1 text-xs font-semibold ${
-                          item.assignedToMe
-                            ? "border-primary/30 bg-secondary text-primary"
-                            : "border-border bg-muted/40 text-muted-foreground"
-                        }`}
-                      >
-                        {item.assignedToMe ? "내 담당 상품" : "다른 담당자 상품"}
-                      </span>
-                      <p className="mt-3 text-xs text-muted-foreground">
-                        {item.quantity.toLocaleString()}개 x{" "}
-                        {item.unitPrice.toLocaleString()}원
-                      </p>
-                    </div>
-                    <div className="self-center text-left sm:text-right">
-                      <span
-                        className={`mb-2 inline-flex border px-2 py-1 text-xs font-semibold ${
-                          item.itemStatus === "READY"
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-slate-200 bg-slate-50 text-slate-500"
-                        }`}
-                      >
-                        {item.itemStatus === "READY"
-                          ? "준비 완료"
-                          : "준비 전"}
-                      </span>
-                      <p className="font-bold text-foreground">
-                        {item.totalPrice.toLocaleString()}원
-                      </p>
-                      {item.preparedAt && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {formatDate(item.preparedAt)}
-                        </p>
-                      )}
-                      {item.canPrepare &&
-                        canPrepareItems &&
-                        item.itemStatus !== "READY" && (
-                          <button
-                            type="button"
-                            disabled={updatingItemId === item.orderItemId}
-                            onClick={() =>
-                              void handleMarkItemReady(item.orderItemId)
-                            }
-                            className="mt-3 h-8 border border-primary px-2.5 text-xs font-bold text-primary transition hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
-                          >
-                            {updatingItemId === item.orderItemId
-                              ? "처리 중"
-                              : "준비 완료"}
-                          </button>
-                        )}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </section>
+                    </section>
+          <section className="order-2 mt-7 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                                <div className="border-b border-slate-200 px-5 py-4">
+                                  <h2 className="flex items-center gap-2 text-base font-black text-slate-950">
+                                    <History size={17} className="text-blue-700" />
+                                    주문 상태 흐름
+                                  </h2>
+                                </div>
+                                <ol className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
+                                  {normalOrderStatuses.map((step, index) => {
+                                    const stepLog = order.statusLogs.find(
+                                      (log) => log.newStatus === step
+                                    );
+                                    const isCompleted =
+                                      index === 0 ||
+                                      (currentNormalStatusIndex >= 0 &&
+                                        index <= currentNormalStatusIndex) ||
+                                      Boolean(stepLog);
+                                    const isCurrent = order.orderStatus === step;
 
-          <section className="rounded-lg border border-border bg-white">
-            <div className="border-b border-border px-5 py-4">
-              <h2 className="flex items-center gap-2 font-bold text-foreground">
-                <History size={17} className="text-primary" />
-                주문 진행 현황
-              </h2>
-            </div>
-            <ol className="grid gap-3 p-5 sm:grid-cols-2 xl:grid-cols-3">
-              {normalOrderStatuses.map((step, index) => {
-                const stepLog = order.statusLogs.find(
-                  (log) => log.newStatus === step
-                );
-                const isCompleted =
-                  index === 0 ||
-                  (currentNormalStatusIndex >= 0 &&
-                    index <= currentNormalStatusIndex) ||
-                  Boolean(stepLog);
-                const isCurrent = order.orderStatus === step;
+                                    return (
+                                      <li
+                                        key={step}
+                                        className={`flex min-h-[112px] items-start gap-3 rounded-lg border p-4 ${
+                                          isCurrent
+                                            ? "border-2 border-blue-600 bg-blue-50"
+                                            : isCompleted
+                                              ? "border-blue-200 bg-blue-50/50"
+                                              : "border-slate-200 bg-slate-50"
+                                        }`}
+                                      >
+                                        <span
+                                            className={`flex size-9 shrink-0 items-center justify-center rounded-full ${
+                                              isCurrent
+                                                ? "bg-blue-600 text-white"
+                                                : isCompleted
+                                                  ? "bg-blue-100 text-blue-700"
+                                                  : "bg-slate-200 text-slate-400"
+                                            }`}
+                                          >
+                                            {isCompleted ? (
+                                              <CheckCircle size={14} />
+                                            ) : (
+                                              <Clock size={14} />
+                                            )}
+                                          </span>
+                                        <div className="min-w-0">
+                                          <p
+                                            className={`text-sm font-black ${
+                                              isCompleted
+                                                ? "text-slate-900"
+                                                : "text-slate-400"
+                                            }`}
+                                          >
+                                            {statusConfig[step].label}
+                                            {isCurrent && (
+                                              <span className="ml-1.5 rounded bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">
+                                                현재
+                                              </span>
+                                            )}
+                                          </p>
+                                        <p className="mt-2 text-xs text-slate-500">
+                                          {stepLog
+                                            ? formatDate(stepLog.createdAt)
+                                            : index === 0
+                                              ? formatDate(order.createdAt)
+                                              : "진행 전"}
+                                        </p>
+                                        </div>
+                                      </li>
+                                    );
+                                  })}
+                                </ol>
 
-                return (
-                  <li
-                    key={step}
-                    className={`min-h-[108px] border p-3 ${
-                      isCompleted
-                        ? "border-primary/25 bg-secondary/60"
-                        : "border-border bg-muted/20"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`flex h-6 w-6 items-center justify-center rounded-full ${
-                          isCompleted
-                            ? "bg-primary text-white"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {isCompleted ? (
-                          <CheckCircle size={14} />
-                        ) : (
-                          <Clock size={14} />
-                        )}
-                      </span>
-                      <p
-                        className={`text-sm font-semibold ${
-                          isCompleted
-                            ? "text-foreground"
-                            : "text-muted-foreground"
-                        }`}
-                      >
-                        {statusConfig[step].label}
-                        {isCurrent && (
-                          <span className="ml-1.5 text-xs text-primary">
-                            현재
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      {stepLog
-                        ? formatDate(stepLog.createdAt)
-                        : index === 0
-                          ? formatDate(order.createdAt)
-                          : "진행 전"}
-                    </p>
-                    {stepLog && (
-                      <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {stepLog.actorName}
-                        {stepLog.memo ? ` · ${stepLog.memo}` : ""}
-                      </p>
-                    )}
-                  </li>
-                );
-              })}
-            </ol>
+                                {exceptionLogs.length > 0 && (
+                                  <div className="border-t border-slate-200 px-5 py-4">
+                                    <p className="mb-3 text-xs font-semibold text-red-700">
+                                      예외 처리 이력
+                                    </p>
+                                    <div className="space-y-2">
+                                      {exceptionLogs.map((log) => (
+                                        <div
+                                          key={log.orderLogId}
+                                          className="flex flex-wrap items-center justify-between gap-2 border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"
+                                        >
+                                          <span className="font-semibold">
+                                            {log.newStatus
+                                              ? statusConfig[log.newStatus].label
+                                              : "예외 처리"}
+                                          </span>
+                                          <span>
+                                            {formatDate(log.createdAt)} · {log.actorName}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </section>
 
-            {exceptionLogs.length > 0 && (
-              <div className="border-t border-border px-5 py-4">
-                <p className="mb-3 text-xs font-semibold text-red-700">
-                  예외 처리 이력
-                </p>
-                <div className="space-y-2">
-                  {exceptionLogs.map((log) => (
-                    <div
-                      key={log.orderLogId}
-                      className="flex flex-wrap items-center justify-between gap-2 border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"
-                    >
-                      <span className="font-semibold">
-                        {log.newStatus
-                          ? statusConfig[log.newStatus].label
-                          : "예외 처리"}
-                      </span>
-                      <span>
-                        {formatDate(log.createdAt)} · {log.actorName}
-                      </span>
-                    </div>
-                  ))}
+          {order.delivery.trackingNumber && (
+            <section className="order-3 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+                <div>
+                  <h2 className="flex items-center gap-2 text-base font-black text-slate-950">
+                    <Truck size={17} className="text-blue-700" />
+                    배송 추적
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {order.delivery.carrier} · {order.delivery.trackingNumber}
+                  </p>
                 </div>
+                {tracking?.lastEvent && (
+                  <span className="rounded-md bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-700">
+                    {getTrackingStatusLabel(
+                      tracking.lastEvent.status.code,
+                      tracking.lastEvent.status.name
+                    )}
+                  </span>
+                )}
               </div>
-            )}
-          </section>
+
+              {isTrackingLoading ? (
+                <p className="px-5 py-10 text-center text-sm text-slate-500">
+                  배송 이력을 불러오는 중입니다.
+                </p>
+              ) : trackingError ? (
+                <div className="m-5 flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  <AlertCircle size={16} className="shrink-0" />
+                  {trackingError}
+                </div>
+              ) : trackingEvents.length > 0 ? (
+                <ol className="divide-y divide-slate-100 px-5">
+                  {trackingEvents.map((event, index) => (
+                    <li
+                      key={`${event.time}-${event.status.code}-${index}`}
+                      className="grid gap-3 py-4 sm:grid-cols-[120px_140px_minmax(0,1fr)] sm:items-start"
+                    >
+                      <time className="text-xs font-semibold text-slate-500">
+                        {formatDate(event.time)}
+                      </time>
+                      <span
+                        className={`w-fit rounded-md px-2 py-1 text-xs font-bold ${
+                          index === 0
+                            ? "bg-blue-600 text-white"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {getTrackingStatusLabel(
+                          event.status.code,
+                          event.status.name
+                        )}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm text-slate-700">
+                          {event.description || "배송 상태가 갱신되었습니다."}
+                        </p>
+                        {event.location?.name && (
+                          <p className="mt-1 text-xs text-slate-400">
+                            {event.location.name}
+                          </p>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="px-5 py-10 text-center text-sm text-slate-500">
+                  표시할 배송 이력이 없습니다.
+                </p>
+              )}
+            </section>
+          )}
         </div>
 
-        <aside className="space-y-5">
-          <section className="rounded-lg border border-border bg-white p-5">
-            <h2 className="mb-4 flex items-center gap-2 font-bold text-foreground">
-              <CreditCard size={17} className="text-primary" />
-              결제 요약
-            </h2>
-            <dl className="space-y-3 text-sm">
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">상품 금액</dt>
-                <dd>{order.amountSummary.subtotalAmount.toLocaleString()}원</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">배송비</dt>
-                <dd>{order.amountSummary.shippingFee.toLocaleString()}원</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">플랫폼 수수료</dt>
-                <dd>{order.amountSummary.platformFee.toLocaleString()}원</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">결제 수단</dt>
-                <dd>
-                  {order.amountSummary.paymentMethod
-                    ? paymentMethodLabel[order.amountSummary.paymentMethod]
-                    : "미등록"}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3 border-t border-border pt-3">
-                <dt className="font-semibold text-foreground">최종 금액</dt>
-                <dd className="font-bold text-primary">
-                  {order.amountSummary.totalAmount.toLocaleString()}원
-                </dd>
-              </div>
-            </dl>
-          </section>
-
+        <aside className="flex flex-col gap-5 lg:col-span-4">
           {canRegisterShipment && (
-            <section className="rounded-lg border border-primary/25 bg-white p-5">
-              <div className="mb-4 flex items-start gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center bg-secondary text-primary">
+            <section className="order-1 rounded-lg border-2 border-blue-600 bg-white p-5 shadow-sm">
+              <div className="mb-5 flex items-start gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-700">
                   <Truck size={17} />
                 </div>
                 <div>
-                  <h2 className="font-bold text-foreground">출고 정보 등록</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <h2 className="font-black text-blue-700">출고 정보 등록</h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
                     모든 상품의 준비가 완료되었습니다.
                   </p>
                 </div>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold text-foreground">
+                  <span className="mb-1.5 block text-xs font-semibold text-slate-700">
                     택배사
                   </span>
                   <select
                     value={carrier}
                     onChange={(event) => setCarrier(event.target.value)}
-                    className="h-10 w-full border border-border bg-white px-3 text-sm outline-none transition focus:border-primary"
+                    className="h-11 w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   >
                     <option value="">택배사 선택</option>
                     <option value="CJ대한통운">CJ대한통운</option>
@@ -706,7 +831,7 @@ export function SellerOrderDetail() {
                 </label>
 
                 <label className="block">
-                  <span className="mb-1.5 block text-xs font-semibold text-foreground">
+                  <span className="mb-1.5 block text-xs font-semibold text-slate-700">
                     운송장 번호
                   </span>
                   <input
@@ -719,7 +844,7 @@ export function SellerOrderDetail() {
                       )
                     }
                     placeholder="운송장 번호 입력"
-                    className="h-10 w-full border border-border px-3 text-sm outline-none transition placeholder:text-muted-foreground/70 focus:border-primary"
+                    className="h-11 w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   />
                 </label>
 
@@ -731,7 +856,7 @@ export function SellerOrderDetail() {
                     isRegisteringShipment
                   }
                   onClick={() => void handleRegisterShipment()}
-                  className="flex h-10 w-full items-center justify-center gap-2 bg-primary text-sm font-bold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-blue-600 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                 >
                   <Truck size={16} />
                   {isRegisteringShipment ? "처리 중" : "배송 시작"}
@@ -740,20 +865,55 @@ export function SellerOrderDetail() {
             </section>
           )}
 
-          <section className="rounded-lg border border-border bg-white p-5">
-            <h2 className="mb-4 flex items-center gap-2 font-bold text-foreground">
-              <MapPin size={17} className="text-primary" />
+          <section className="order-2 mt-17 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-5 flex items-center gap-2 text-base font-black text-slate-950">
+              <CreditCard size={17} className="text-blue-700" />
+              주문 금액 요약
+            </h2>
+            <dl className="space-y-3 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">상품 금액</dt>
+                <dd>{order.amountSummary.subtotalAmount.toLocaleString()}원</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">배송비</dt>
+                <dd>{order.amountSummary.shippingFee.toLocaleString()}원</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">플랫폼 수수료</dt>
+                <dd>{order.amountSummary.platformFee.toLocaleString()}원</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-slate-500">결제 수단</dt>
+                <dd>
+                  {order.amountSummary.paymentMethod
+                    ? paymentMethodLabel[order.amountSummary.paymentMethod]
+                    : "미등록"}
+                </dd>
+              </div>
+              <div className="flex items-end justify-between gap-3 border-t border-slate-200 pt-4">
+                <dt className="font-black text-slate-950">최종 금액</dt>
+                <dd className="text-xl font-black text-blue-700">
+                  {order.amountSummary.totalAmount.toLocaleString()}원
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="order-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-5 flex items-center gap-2 text-base font-black text-slate-950">
+              <MapPin size={17} className="text-blue-700" />
               배송 정보
             </h2>
             <dl className="space-y-3 text-sm">
               <div>
-                <dt className="mb-1 text-xs text-muted-foreground">수령인</dt>
+                <dt className="mb-1 text-xs font-semibold text-slate-400">수령인</dt>
                 <dd className="font-medium">
                   {order.delivery.receiverName} · {order.delivery.receiverPhone}
                 </dd>
               </div>
               <div>
-                <dt className="mb-1 text-xs text-muted-foreground">배송지</dt>
+                <dt className="mb-1 text-xs font-semibold text-slate-400">배송지</dt>
                 <dd className="leading-6">
                   {order.delivery.receiverZipcode &&
                     `[${order.delivery.receiverZipcode}] `}
@@ -762,13 +922,13 @@ export function SellerOrderDetail() {
                 </dd>
               </div>
               <div>
-                <dt className="mb-1 text-xs text-muted-foreground">
+                <dt className="mb-1 text-xs font-semibold text-slate-400">
                   배송 요청사항
                 </dt>
                 <dd>{order.delivery.receiverMemo || "요청사항 없음"}</dd>
               </div>
-              <div className="border-t border-border pt-3">
-                <dt className="mb-1 text-xs text-muted-foreground">
+              <div className="border-t border-slate-200 pt-3">
+                <dt className="mb-1 text-xs font-semibold text-slate-400">
                   운송 정보
                 </dt>
                 <dd>
@@ -781,6 +941,7 @@ export function SellerOrderDetail() {
           </section>
         </aside>
       </div>
+      </main>
     </div>
   );
 }

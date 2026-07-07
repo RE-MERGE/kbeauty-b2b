@@ -2,15 +2,15 @@ package kr.remerge.stylehub.domain.contract.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import kr.remerge.stylehub.domain.contract.dto.SellerContractCreateRequest;
-import kr.remerge.stylehub.domain.contract.dto.SellerContractCreateResponse;
-import kr.remerge.stylehub.domain.contract.dto.SellerContractDetailResponse;
-import kr.remerge.stylehub.domain.contract.dto.SellerContractSignRequest;
+import kr.remerge.stylehub.domain.contract.dto.*;
 import kr.remerge.stylehub.domain.contract.service.SellerContractService;
 import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
 import kr.remerge.stylehub.global.auth.security.LoginUser;
 import kr.remerge.stylehub.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -66,5 +66,79 @@ public class SellerContractController {
         );
 
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @PatchMapping("/{contractId}")
+    public ResponseEntity<ApiResponse<Void>> updateDraft(
+            @LoginUser AuthUser authUser,
+            @PathVariable Integer contractId,
+            @Valid @RequestBody SellerContractUpdateRequest request
+    ) {
+
+        sellerContractService.updateDraft(
+                authUser.userId(),
+                contractId,
+                request
+        );
+
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @GetMapping("/{contractId}/preview")
+    public ResponseEntity<byte[]> previewContract(
+            @LoginUser AuthUser authUser,
+            @PathVariable Integer contractId
+    ) {
+
+        byte[] pdfBytes =
+                sellerContractService.getContractPreview(
+                        authUser.userId(),
+                        contractId
+                );
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline()
+                                .filename(
+                                        "contract-preview-"
+                                                + contractId
+                                                + ".pdf"
+                                )
+                                .build()
+                                .toString()
+                )
+                .body(pdfBytes);
+    }
+
+    @PostMapping("/{contractId}/preview")
+    public ResponseEntity<byte[]> previewContractWithSignature(
+            @LoginUser AuthUser authUser,
+            @PathVariable Integer contractId,
+            @Valid @RequestBody SellerContractPreviewRequest request
+    ) {
+
+        byte[] pdfBytes =
+                sellerContractService.getContractPreview(
+                        authUser.userId(),
+                        contractId,
+                        request
+                );
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline()
+                                .filename(
+                                        "contract-preview-"
+                                                + contractId
+                                                + ".pdf"
+                                )
+                                .build()
+                                .toString()
+                )
+                .body(pdfBytes);
     }
 }

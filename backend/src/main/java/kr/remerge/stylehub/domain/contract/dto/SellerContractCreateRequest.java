@@ -12,6 +12,10 @@ public record SellerContractCreateRequest(
         @NotNull(message = "견적서 ID는 필수입니다.")
         Integer quoteId,
 
+        @NotBlank(message = "계약명을 입력해주세요.")
+        @Size(max = 150, message = "계약명은 150자 이하여야 합니다.")
+        String contractName,
+
         @NotNull(message = "납품 예정일은 필수입니다.")
         @FutureOrPresent(message = "납품 예정일은 오늘 이후여야 합니다.")
         LocalDate deliveryDate,

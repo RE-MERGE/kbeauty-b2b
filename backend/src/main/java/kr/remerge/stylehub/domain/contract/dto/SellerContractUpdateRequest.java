@@ -9,6 +9,10 @@ import java.time.LocalDate;
 
 public record SellerContractUpdateRequest(
 
+        @NotBlank(message = "계약명을 입력해주세요.")
+        @Size(max = 150, message = "계약명은 150자 이하여야 합니다.")
+        String contractName,
+
         @NotNull
         @FutureOrPresent
         LocalDate deliveryDate,

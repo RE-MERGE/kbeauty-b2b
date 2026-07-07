@@ -1,3 +1,4 @@
+
 package kr.remerge.stylehub.domain.order.service;
 
 import kr.remerge.stylehub.domain.address.Address;
@@ -6,6 +7,8 @@ import kr.remerge.stylehub.domain.cart.entity.CartItem;
 import kr.remerge.stylehub.domain.cart.enumtype.CartType;
 import kr.remerge.stylehub.domain.cart.repository.CartRepository;
 import kr.remerge.stylehub.domain.company.entity.Company;
+import kr.remerge.stylehub.domain.contract.enumtype.ContractStatus;
+import kr.remerge.stylehub.domain.contract.repository.ContractRepository;
 import kr.remerge.stylehub.domain.order.dto.OrderCreateRequest;
 import kr.remerge.stylehub.domain.order.dto.OrderCreateResponse;
 import kr.remerge.stylehub.domain.order.dto.buyer.*;
@@ -19,6 +22,7 @@ import kr.remerge.stylehub.domain.order.enumtype.PaymentMethod;
 import kr.remerge.stylehub.domain.order.repository.OrderItemRepository;
 import kr.remerge.stylehub.domain.order.repository.OrderLogRepository;
 import kr.remerge.stylehub.domain.order.repository.OrderRepository;
+import kr.remerge.stylehub.domain.order.validation.CartOrderValidator;
 import kr.remerge.stylehub.domain.product.entity.Product;
 import kr.remerge.stylehub.domain.product.entity.ProductOption;
 import kr.remerge.stylehub.domain.user.entity.User;
@@ -47,8 +51,38 @@ public class BuyerOrderService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final CartRepository cartRepository;
+    private final ContractRepository contractRepository;
     private final AddressRepository addressRepository;
     private final OrderLogRepository orderLogRepository;
+    private final CartOrderValidator cartOrderValidator;
+
+    @Transactional
+    public void confirmOrder(Integer userId, Integer orderId) {
+
+        Order order = orderRepository
+                .findByOrderIdAndBuyer_UserId(orderId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+
+        if (order.getStatus() != OrderStatus.DELIVERED) {
+            throw new BusinessException(ErrorCode.INVALID_ORDER_STATUS);
+        }
+
+        User buyer = userReader.getUser(userId);
+
+        OrderStatus previousStatus = order.getStatus();
+
+        order.agree();
+
+        orderLogRepository.save(
+                OrderLog.createStatusLog(
+                        order,
+                        previousStatus,
+                        OrderStatus.COMPLETED,
+                        buyer,
+                        OrderLogMemo.ORDER_COMPLETED
+                )
+        );
+    }
 
     @Transactional
     public OrderCreateResponse createOrder(Integer userId, OrderCreateRequest request) {
@@ -57,10 +91,17 @@ public class BuyerOrderService {
 
         List<CartItem> cartItems = getCartItems(userId, request);
 
+        cartOrderValidator.validate(cartItems);
+
         Map<Integer, List<CartItem>> itemsByCompany = getItemsByCompany(cartItems);
 
-        Address address = addressRepository.findById(request.addressId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.ADDRESS_NOT_FOUND));
+        Address address = addressRepository.findActiveCompanyAddress(
+                        request.addressId(),
+                        buyer.getCompany().getCompanyId()
+                )
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.ADDRESS_NOT_FOUND)
+                );
 
         ArrayList<String> orderNos = new ArrayList<>();
         List<OrderLog> orderLogs = new ArrayList<>();
@@ -216,7 +257,7 @@ public class BuyerOrderService {
         );
 
         if (cartItems.size() != request.cartItemIds().size()) {
-             throw new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND);
+            throw new BusinessException(ErrorCode.CART_ITEM_NOT_FOUND);
         }
 
         return cartItems;
@@ -310,7 +351,31 @@ public class BuyerOrderService {
                 .map(BuyerOrderDetailItemResponse::from)
                 .toList();
 
-        return BuyerOrderDetailResponse.from(order, orderDetailItemResponseList, orderLogResponseList);
+        String sellerCompanyName = resolveSellerCompanyName(order);
 
+        return BuyerOrderDetailResponse.from(order, sellerCompanyName, orderDetailItemResponseList, orderLogResponseList);
+
+    }
+
+    // 셀러(공급사) 회사명은 1:1 직거래 우회 방지를 위해 원칙적으로 노출하지 않는다.
+    // - NORMAL(일반) 주문: 상품의 브랜드만 노출하고 셀러 회사명은 항상 비공개
+    // - CUSTOM(소싱) 주문: 계약이 체결(COMPLETED)된 뒤에만 공개
+    private String resolveSellerCompanyName(Order order) {
+
+        if (order.getOrderType() != OrderType.CUSTOM) {
+            return null;
+        }
+
+        if (!order.getIsSample()) {
+            // 계약이 COMPLETED된 뒤에만 생성되는 본주문이라 항상 공개 가능
+            return order.getSellerCompanyName();
+        }
+
+        boolean contractCompleted = contractRepository
+                .findFirstByQuote_QuoteIdOrderByVersionDesc(order.getQuote().getQuoteId())
+                .map(contract -> contract.getStatus() == ContractStatus.COMPLETED)
+                .orElse(false);
+
+        return contractCompleted ? order.getSellerCompanyName() : null;
     }
 }

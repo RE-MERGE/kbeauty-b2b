@@ -29,6 +29,7 @@ import {CompanySettings} from "@/pages/company/CompanySettings";
 import {SellerContractSign} from "@/pages/contract/SellerContractSign";
 import {SellerContractCreate} from "@/pages/contract/SellerContractCreate";
 import {BuyerContractSign} from "@/pages/contract/BuyerContractSign";
+import {BuyerContractList} from "@/pages/contract/BuyerContractList";
 
 import {Inquiry} from "@/pages/support/Inquiry";
 import {Support} from "@/pages/support/Support";
@@ -46,7 +47,8 @@ import {SellerProductRegister} from "@/pages/product/SellerProductRegister";
 import {SellerQuoteWrite} from "@/pages/quote/SellerQuoteWrite";
 import {SellerQuoteList} from "@/pages/quote/SellerQuoteList";
 import BuyerQuoteList from "@/pages/quote/BuyerQuoteList";
-import {QuoteDetail} from "@/pages/quote/QuoteDetail";
+import { QuoteDetail } from "@/pages/quote/QuoteDetail";
+import {QuoteDetailBuyer, QuoteDetailSeller} from "@/pages/quote/QuoteDetailWrappers";
 
 import {SellerDashboard} from "@/pages/seller/SellerDashboard";
 import {SellerProductManage} from "@/pages/seller/SellerProductManage";
@@ -141,14 +143,20 @@ export const router = createBrowserRouter([
                 children: [
                     {index: true, Component: BuyerDashboard},
                     {path: "orders", Component: Orders},
+                    {path: "orders/disputes", Component: Disputes},
+                    {path: "orders/disputes/:disputeId", Component: Disputes},
                     {path: "orders/:id", Component: OrderDetail},
                     {path: "quotes", Component: BuyerQuoteList},
-                    {path: "quotes/:quoteId", Component: QuoteDetail },
+                    {path: "quotes/:quoteId", Component: QuoteDetailBuyer},
                     {path: "sourcing-request", Component: SourcingRequest},
                     {path: "contracts/:contractId/sign", Component: BuyerContractSign},
+                    {path: "contracts", Component: BuyerContractList},
                     {path: "shipping-quotes", Component: BuyerShippingQuotes},
                     {path: "my-sourcing", Component: BuyerSourcingList},
                     {path: "sourcing-detail/:requestId", Component: BuyerSourcingDetail},
+//                     {path: "disputes", Component: Disputes},
+//                     {path: "disputes/:disputeId", Component: Disputes},
+
                 ],
             },
             {
@@ -166,8 +174,10 @@ export const router = createBrowserRouter([
                     {path: "contracts/new/:quoteId", Component: SellerContractCreate},
                     {path: "contracts/quotes/:quoteId", Component: SellerContractSign},
                     {path: "quotes", Component: SellerQuoteList},
-                    {path: "quotes/:quoteId", Component: QuoteDetail},
+                    {path: "quotes/:quoteId", Component: QuoteDetailSeller},
                     {path: "sourcing-detail/:requestId", Component: SellerSourcingDetail},
+                    {path: "disputes", Component: Disputes},
+                    {path: "disputes/:disputeId", Component: Disputes},
                 ],
             },
             {

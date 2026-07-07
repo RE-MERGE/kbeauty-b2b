@@ -2,6 +2,7 @@ package kr.remerge.stylehub.domain.negotiation.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
 // negotiationType이 QUOTE면 quoteId, CONTRACT면 contractId가 필요하다.
@@ -18,9 +19,4 @@ public record NegotiationCreateRequest(
         @Size(max = 2000, message = "요청 내용은 2000자 이하여야 합니다.")
         String content,
 
-        @NotBlank(message = "선택된 협의 유형이 없습니다.")
-        String negotiationType
-
-
-) {
-}
+        @NotBlank(message = "선택된 협의 유형이 없습

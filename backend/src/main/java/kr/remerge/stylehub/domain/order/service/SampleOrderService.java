@@ -155,6 +155,10 @@ public class SampleOrderService {
                 .receiverAddress(address.getAddress())
                 .receiverAddressDetail(address.getAddressDetail())
                 .receiverMemo(request.receiverMemo())
+                .senderName(sellerCompany.getName())
+                .senderPhone(sellerCompany.getRepresentativePhone())
+                .senderAddress(sellerCompany.getAddress())
+                .senderAddressDetail(sellerCompany.getAddressDetail())
                 .build();
     }
 
@@ -220,13 +224,4 @@ public class SampleOrderService {
         }
     }
 
-    private Quote findBuyerQuote(Integer quoteId, Integer buyerId) {
-
-        return quoteRepository
-                .findByQuoteIdAndBuyer_UserId(quoteId, buyerId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.QUOTE_NOT_FOUND)
-                );
-
-    }
-
-}
+    private Quote findBuyerQuote

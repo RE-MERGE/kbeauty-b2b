@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -71,11 +72,16 @@ public class QuoteBuyerService {
                 )
         );
 
+        // 한 견적에 계약 버전이 여러 개(재계약) 있을 수 있으므로, 버전 내림차순으로 먼저
+        // 처리해 최신 계약이 우선 저장되도록 한다. (DB가 조회 순서를 보장하지 않으므로
+        // 정렬 없이 그냥 덮어쓰면 오래된/취소된 계약이 남을 수 있음)
         Map<Integer, Contract> contractByQuoteId = new HashMap<>();
 
         contractRepository.findByQuote_QuoteIdIn(quoteIds)
+                .stream()
+                .sorted(Comparator.comparing(Contract::getVersion).reversed())
                 .forEach(contract ->
-                        contractByQuoteId.put(
+                        contractByQuoteId.putIfAbsent(
                                 contract.getQuote().getQuoteId(),
                                 contract
                         )

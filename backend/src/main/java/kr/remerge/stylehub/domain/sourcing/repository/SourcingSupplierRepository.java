@@ -78,9 +78,55 @@ public interface SourcingSupplierRepository extends JpaRepository<SourcingSuppli
             @Param("status") SourcingSupplierStatus status
     );
 
+    // SUGGESTED 상태 후보가 있는 sourcingRequestId + 그 개수를 함께 조회 (관리자 승인 대기 큐)
+    @Query("""
+        SELECT s.sourcingRequest.sourcingRequestId as requestId, COUNT(s) as cnt
+        FROM SourcingSupplier s
+        WHERE s.status = :status
+        GROUP BY s.sourcingRequest.sourcingRequestId
+        """)
+    List<Tuple> countByStatusGroupedByRequest(@Param("status") SourcingSupplierStatus status);
+
     Optional<SourcingSupplier> findBySourcingRequest_SourcingRequestIdAndSellerCompanyIdAndStatusIn(Integer sourcingRequestId, Integer companyId, List<SourcingSupplierStatus> suggested);
 
     // SourcingSupplierRepository.java
     Optional<SourcingSupplier> findBySourcingRequest_SourcingRequestIdAndSellerCompanyId(
             Integer sourcingRequestId, Integer sellerCompanyId);
+
+    // 셀러 완료 목록 조회 - 견적이 승인(APPROVED)된 건
+    @Query("""
+        SELECT ss FROM SourcingSupplier ss
+        JOIN FETCH ss.sourcingRequest sr
+        JOIN ss.quote q
+        WHERE ss.sellerCompanyId = :companyId
+        AND ss.status = kr.remerge.stylehub.domain.sourcing.enumtype.SourcingSupplierStatus.QUOTED
+        AND q.status = :quoteStatus
+        AND sr.type = :type
+        ORDER BY sr.createdAt DESC
+        """)
+    List<SourcingSupplier> findSellerCompletedRequests(
+            @Param("companyId") Integer companyId,
+            @Param("quoteStatus") String quoteStatus,
+            @Param("type") String type
+    );
+
+    // 셀러 이전 요청 조회 - 배정 자체가 DECLINED/EXPIRED 이거나, 견적이 REJECTED/NOT_SELECTED된 건
+    @Query("""
+        SELECT ss FROM SourcingSupplier ss
+        JOIN FETCH ss.sourcingRequest sr
+        LEFT JOIN FETCH ss.quote q
+        WHERE ss.sellerCompanyId = :companyId
+        AND (
+            ss.status IN :statuses
+            OR q.status IN :quoteEndedStatuses
+        )
+        AND sr.type = :type
+        ORDER BY sr.createdAt DESC
+        """)
+    List<SourcingSupplier> findSellerPastRequests(
+            @Param("companyId") Integer companyId,
+            @Param("statuses") List<SourcingSupplierStatus> statuses,
+            @Param("quoteEndedStatuses") List<String> quoteEndedStatuses,
+            @Param("type") String type
+    );
 }

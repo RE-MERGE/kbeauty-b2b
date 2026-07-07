@@ -2,9 +2,12 @@ package kr.remerge.stylehub.domain.sourcing.service;
 
 import kr.remerge.stylehub.domain.sourcing.entity.SourcingRequest;
 import kr.remerge.stylehub.domain.sourcing.entity.SourcingSupplier;
+import kr.remerge.stylehub.domain.sourcing.enumtype.SourcingStatus;
 import kr.remerge.stylehub.domain.sourcing.enumtype.SourcingSupplierStatus;
 import kr.remerge.stylehub.domain.sourcing.repository.SourcingRequestRepository;
 import kr.remerge.stylehub.domain.sourcing.repository.SourcingSupplierRepository;
+import kr.remerge.stylehub.global.exception.BusinessException;
+import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -49,7 +52,14 @@ public class SourcingAutoCancelService {
         }
 
         SourcingRequest sourcingRequest = sourcingRequestRepository.findById(sourcingRequestId)
-                .orElseThrow(() -> new IllegalArgumentException("소싱 요청 없음: " + sourcingRequestId));
+                .orElseThrow(() -> new BusinessException(ErrorCode.SOURCING_NOT_FOUND));
+
+        // 이미 TRADING/COMPLETED 등으로 진행된 요청은 공급사가 전부 종료 상태라도
+        // 자동취소 대상이 아님 (이 메서드가 향후 다른 곳에서도 호출될 경우를 대비한 안전장치)
+        if (sourcingRequest.getStatus() != SourcingStatus.PENDING
+                && sourcingRequest.getStatus() != SourcingStatus.QUOTED) {
+            return;
+        }
 
         sourcingRequest.cancel();
         log.info("[AutoCancel] 모든 공급사 거절/만료 → 소싱 요청 반려 처리 - sourcingRequestId: {}", sourcingRequestId);

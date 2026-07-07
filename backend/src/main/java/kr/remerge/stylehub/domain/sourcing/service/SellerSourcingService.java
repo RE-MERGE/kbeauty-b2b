@@ -7,14 +7,14 @@ import kr.remerge.stylehub.domain.sourcing.entity.SourcingSupplier;
 import kr.remerge.stylehub.domain.sourcing.enumtype.SourcingSupplierStatus;
 import kr.remerge.stylehub.domain.sourcing.repository.SourcingRequestRepository;
 import kr.remerge.stylehub.domain.sourcing.repository.SourcingSupplierRepository;
+import kr.remerge.stylehub.global.exception.BusinessException;
+import kr.remerge.stylehub.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-
-import static reactor.netty.http.HttpConnectionLiveness.log;
 
 @Slf4j
 @Service
@@ -53,10 +53,10 @@ public class SellerSourcingService {
     @Transactional
     public void decline(Integer sourcingSupplierId, Integer companyId, String feedback) {
         SourcingSupplier supplier = sourcingSupplierRepository.findById(sourcingSupplierId)
-                .orElseThrow(() -> new IllegalArgumentException("해당 배정 없음: " + sourcingSupplierId));
+                .orElseThrow(() -> new BusinessException(ErrorCode.SOURCING_SUPPLIER_NOT_FOUND));
 
         if (!supplier.getSellerCompanyId().equals(companyId)) {
-            throw new IllegalArgumentException("권한 없음");
+            throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
         supplier.decline(feedback);

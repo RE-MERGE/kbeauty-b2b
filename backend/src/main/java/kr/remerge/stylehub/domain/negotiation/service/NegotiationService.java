@@ -36,10 +36,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -91,17 +94,61 @@ public class NegotiationService {
                         )
                 );
 
+        Map<Integer, Integer> linkedNegotiationIdByNegotiationId =
+                buildLinkedNegotiationIdMap(negotiations);
+
         return negotiations.stream()
                 .map(negotiation ->
                         NegotiationListResponse.from(
                                 negotiation,
                                 latestRequestByNegotiationId.get(
                                         negotiation.getNegotiationId()
+                                ),
+                                linkedNegotiationIdByNegotiationId.get(
+                                        negotiation.getNegotiationId()
                                 )
                         )
                 )
                 .toList();
 
+    }
+
+    // 같은 딜(같은 견적, 같은 바이어·셀러)의 견적 협의(QUOTE)와 계약 협의(CONTRACT)를
+    // 서로의 negotiationId로 연결해준다. DB 행 자체는 그대로 2개로 유지하되, 화면에서
+    // 하나의 연속된 대화로 묶어 보여주기 위한 용도다.
+    private Map<Integer, Integer> buildLinkedNegotiationIdMap(
+            List<Negotiation> negotiations
+    ) {
+
+        Map<String, List<Negotiation>> groupsByDeal = negotiations.stream()
+                .filter(negotiation -> negotiation.getQuote() != null)
+                .collect(Collectors.groupingBy(negotiation ->
+                        negotiation.getQuote().getQuoteId()
+                                + ":" + negotiation.getBuyer().getUserId()
+                                + ":" + negotiation.getSeller().getUserId()
+                ));
+
+        Map<Integer, Integer> linkedIdByNegotiationId = new HashMap<>();
+
+        for (List<Negotiation> group : groupsByDeal.values()) {
+            if (group.size() < 2) {
+                continue;
+            }
+
+            for (Negotiation a : group) {
+                for (Negotiation b : group) {
+                    if (!Objects.equals(a.getNegotiationId(), b.getNegotiationId())
+                            && !Objects.equals(a.getNegotiationType(), b.getNegotiationType())) {
+                        linkedIdByNegotiationId.put(
+                                a.getNegotiationId(),
+                                b.getNegotiationId()
+                        );
+                    }
+                }
+            }
+        }
+
+        return linkedIdByNegotiationId;
     }
 
     @Transactional
@@ -240,7 +287,12 @@ public class NegotiationService {
         // Quote와 동일한 이유로, 넘어온 계약이 이미 재계약된 버전일 수 있으므로 항상 체인의
         // 최상위(root, v1) 계약을 기준으로 기존 협의를 찾아야 같은 대화로 묶인다.
         Contract rootContract = resolveRootContract(contract);
-        Quote quote = rootContract.getQuote();
+
+        // 계약이 실제로 만들어진 견적 버전(v2 등)이 아니라 항상 견적 체인의 최상위(v1)를
+        // 참조해야 한다. QUOTE 타입 협의도 항상 root 견적을 기준으로 저장되므로, 이렇게
+        // 맞춰둬야 같은 딜의 견적 협의/계약 협의가 같은 quote_id로 묶여서 셀러 협의관리
+        // 화면에서 하나의 연속된 대화로 이어 보여줄 수 있다.
+        Quote quote = resolveRootQuote(rootContract.getQuote());
         User buyer = userReader.getUser(userId);
         User seller = userReader.getUser(quote.getSeller().getUserId());
 
@@ -442,8 +494,17 @@ public class NegotiationService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
+        List<Integer> negotiationIds = new ArrayList<>();
+        negotiationIds.add(negotiationId);
+
+        // 견적 협의 -> 계약 협의처럼 같은 딜이 다른 단계의 별개 Negotiation 행으로 이어지는
+        // 경우, 이력 조회 시 짝이 되는 협의의 요청 이력도 함께 가져와 시간순으로 합쳐
+        // 하나의 연속된 대화처럼 보여준다.
+        findLinkedNegotiation(negotiation)
+                .ifPresent(linked -> negotiationIds.add(linked.getNegotiationId()));
+
         List<NegotiationRequest> requests = negotiationRequestRepository
-                .findByNegotiation_NegotiationIdOrderByCreatedAtAsc(negotiationId);
+                .findByNegotiation_NegotiationIdInOrderByCreatedAtAsc(negotiationIds);
 
         return requests.stream()
                 .map(request -> NegotiationRequestDetailResponse.from(
@@ -452,6 +513,25 @@ public class NegotiationService {
                         findQuoteItems(request.getRevisedQuote())
                 ))
                 .toList();
+    }
+
+    // 같은 딜(같은 견적, 같은 바이어·셀러)의 다른 타입 협의(QUOTE<->CONTRACT)를 찾는다.
+    private Optional<Negotiation> findLinkedNegotiation(Negotiation negotiation) {
+
+        if (negotiation.getQuote() == null) {
+            return Optional.empty();
+        }
+
+        String otherType =
+                "QUOTE".equals(negotiation.getNegotiationType()) ? "CONTRACT" : "QUOTE";
+
+        return negotiationRepository
+                .findFirstByQuote_QuoteIdAndBuyer_UserIdAndSeller_UserIdAndNegotiationTypeOrderByOpenedAtDesc(
+                        negotiation.getQuote().getQuoteId(),
+                        negotiation.getBuyer().getUserId(),
+                        negotiation.getSeller().getUserId(),
+                        otherType
+                );
     }
 
     private List<QuoteItem> findQuoteItems(Quote quote) {

@@ -13,8 +13,12 @@ import java.util.List;
 public interface SourcingRequestRepository extends JpaRepository<SourcingRequest, Integer> {
     List<SourcingRequest> findByBuyer_UserIdAndTypeOrderByCreatedAtDesc(Integer buyerId, String type);
 
-    // 회사 단위 조회 (대표/직원 구분 없이 같은 회사 buyer면 전체 조회)
+    // 대표 전용 - 회사 전체 요청 조회
     List<SourcingRequest> findByBuyerCompanyIdAndTypeOrderByCreatedAtDesc(Integer buyerCompanyId, String type);
+
+    // 직원 전용 - 본인이 작성한 요청만 조회
+    List<SourcingRequest> findByBuyerCompanyIdAndTypeAndBuyer_UserIdOrderByCreatedAtDesc(
+            Integer buyerCompanyId, String type, Integer userId);
 
     List<SourcingRequest> findByBuyerCompanyIdAndTypeAndStatusInOrderByCreatedAtDesc(
             Integer buyerCompanyId, String type, List<SourcingStatus> statuses);

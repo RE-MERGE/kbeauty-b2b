@@ -18,6 +18,7 @@ public interface SourcingSupplierRepository extends JpaRepository<SourcingSuppli
 
     // 셀러 목록 조회 - company_id + status + type 필터
     // quote도 함께 fetch하여 목록 화면에서 N+1 없이 견적 요약을 바로 내려줄 수 있게 함
+    // 견적(quote)이 아직 없으면(=담당자 미지정) 회사 전체 공개, 있으면 작성자 본인 또는 대표만 조회 가능
     @Query("""
             SELECT ss FROM SourcingSupplier ss
             JOIN FETCH ss.sourcingRequest sr
@@ -25,15 +26,18 @@ public interface SourcingSupplierRepository extends JpaRepository<SourcingSuppli
             WHERE ss.sellerCompanyId = :companyId
             AND ss.status = :status
             AND sr.type = :type
+            AND (:role = 'PRESIDENT' OR q IS NULL OR q.seller.userId = :userId)
             ORDER BY sr.createdAt DESC
             """)
     List<SourcingSupplier> findSellerRequests(
             @Param("companyId") Integer companyId,
             @Param("status") SourcingSupplierStatus status,
-            @Param("type") String type
+            @Param("type") String type,
+            @Param("userId") Integer userId,
+            @Param("role") String role
     );
 
-    // 셀러 이전 요청 조회 - DECLINED, EXPIRED
+    // 셀러 이전 요청 조회 - DECLINED, EXPIRED (구버전, 현재 서비스에서 미사용 - quoteEndedStatuses 포함 버전으로 대체됨)
     @Query("""
             SELECT ss FROM SourcingSupplier ss
             JOIN FETCH ss.sourcingRequest sr
@@ -41,7 +45,6 @@ public interface SourcingSupplierRepository extends JpaRepository<SourcingSuppli
             WHERE ss.sellerCompanyId = :companyId
             AND ss.status IN :statuses
             AND sr.type = :type
-            ORDER BY sr.createdAt DESC
             """)
     List<SourcingSupplier> findSellerPastRequests(
             @Param("companyId") Integer companyId,
@@ -101,6 +104,7 @@ public interface SourcingSupplierRepository extends JpaRepository<SourcingSuppli
             Integer sourcingRequestId, Integer sellerCompanyId);
 
     // 셀러 완료 목록 조회 - 견적이 승인(APPROVED)된 건
+    // APPROVED는 항상 quote가 존재하므로(작성자가 확정된 상태) 작성자 본인 또는 대표만 조회 가능
     @Query("""
         SELECT ss FROM SourcingSupplier ss
         JOIN FETCH ss.sourcingRequest sr
@@ -109,15 +113,19 @@ public interface SourcingSupplierRepository extends JpaRepository<SourcingSuppli
         AND ss.status = kr.remerge.stylehub.domain.sourcing.enumtype.SourcingSupplierStatus.QUOTED
         AND q.status = :quoteStatus
         AND sr.type = :type
+        AND (:role = 'PRESIDENT' OR q.seller.userId = :userId)
         ORDER BY sr.createdAt DESC
         """)
     List<SourcingSupplier> findSellerCompletedRequests(
             @Param("companyId") Integer companyId,
             @Param("quoteStatus") String quoteStatus,
-            @Param("type") String type
+            @Param("type") String type,
+            @Param("userId") Integer userId,
+            @Param("role") String role
     );
 
-    // 셀러 이전 요청 조회 - 배정 자체가 DECLINED/EXPIRED 이거나, 견적이 REJECTED/NOT_SELECTED된 건
+    // 셀러 이전 요청 조회 - 배정 자체가 DECLINED/EXPIRED/CANCELLED 이거나, 견적이 REJECTED/NOT_SELECTED된 건
+    // 견적이 없으면(=담당자 미지정) 회사 전체 공개, 있으면 작성자 본인 또는 대표만 조회 가능
     @Query("""
         SELECT ss FROM SourcingSupplier ss
         JOIN FETCH ss.sourcingRequest sr
@@ -128,12 +136,15 @@ public interface SourcingSupplierRepository extends JpaRepository<SourcingSuppli
             OR q.status IN :quoteEndedStatuses
         )
         AND sr.type = :type
+        AND (:role = 'PRESIDENT' OR q IS NULL OR q.seller.userId = :userId)
         ORDER BY sr.createdAt DESC
         """)
     List<SourcingSupplier> findSellerPastRequests(
             @Param("companyId") Integer companyId,
             @Param("statuses") List<SourcingSupplierStatus> statuses,
             @Param("quoteEndedStatuses") List<String> quoteEndedStatuses,
-            @Param("type") String type
+            @Param("type") String type,
+            @Param("userId") Integer userId,
+            @Param("role") String role
     );
 }

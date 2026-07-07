@@ -222,6 +222,28 @@ function collapseTrackingEvents(
   return collapsed;
 }
 
+// 실제 배송완료 시각은 주문 엔티티의 deliveredAt이 정답이다(이 값은 테스트용 배송완료 처리
+// 버튼을 눌렀을 때도 함께 채워진다). 외부 배송조회 API의 이벤트가 아직 이를 반영하지 못했더라도
+// (더미 캐리어의 폴링/동기화 지연 등) 화면에는 이 시각을 기준으로 "배송완료" 항목을 항상
+// 보여준다.
+function withDeliveredEvent(
+  events: DeliveryTrackingEvent[],
+  deliveredAt: string | null
+): DeliveryTrackingEvent[] {
+  if (!deliveredAt) return events;
+  if (events.some((event) => event.status.code === "DELIVERED")) return events;
+
+  return [
+    ...events,
+    {
+      time: deliveredAt,
+      status: { code: "DELIVERED", name: "배송 완료" },
+      description: null,
+      location: null,
+    },
+  ];
+}
+
 // 리머지택배(dev.track.dummy)는 실제 운송장 번호 대신, 3시간 단위(0/3/6/9/12/15/18/21시, UTC)로
 // "yyyy-MM-ddTHH:00:00Z" 형식의 운송장 번호를 매일 자동 생성해두고 그걸로만 조회가 된다.
 // 아무 숫자나 넣으면 조회가 실패하므로, 현재 시각 기준으로 이미 생성되어 있는(과거) 슬롯을
@@ -502,9 +524,9 @@ export function SellerOrderDetail() {
     (log) => log.newStatus && exceptionStatuses.includes(log.newStatus)
   );
   // 최신 이벤트(배송완료 등)가 가장 위로 오게 보여준다.
-  const trackingEvents = tracking
-    ? [...collapseTrackingEvents(tracking.events)].reverse()
-    : [];
+  const trackingEvents = [...collapseTrackingEvents(
+    withDeliveredEvent(tracking?.events ?? [], order.delivery.deliveredAt)
+  )].reverse();
   return (
     <div className="min-h-screen bg-[#f7f9fb]">
       <header className="bg-[#24352d] text-white">
@@ -823,13 +845,18 @@ export function SellerOrderDetail() {
                   <p className="mt-1 text-xs text-slate-500">
                     {order.delivery.carrier} · {order.delivery.trackingNumber}
                   </p>
+                  {order.delivery.deliveredAt && (
+                    <p className="mt-1 text-xs font-bold text-emerald-700">
+                      배송완료: {formatDate(order.delivery.deliveredAt)}
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  {tracking?.lastEvent && (
+                  {trackingEvents[0] && (
                     <span className="rounded-md bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-700">
                       {getTrackingStatusLabel(
-                        tracking.lastEvent.status.code,
-                        tracking.lastEvent.status.name
+                        trackingEvents[0].status.code,
+                        trackingEvents[0].status.name
                       )}
                     </span>
                   )}
@@ -1015,4 +1042,62 @@ export function SellerOrderDetail() {
               <div className="flex justify-between gap-3">
                 <dt className="text-slate-500">결제 수단</dt>
                 <dd>
-                  {order.amountSum
+                  {order.amountSummary.paymentMethod
+                    ? paymentMethodLabel[order.amountSummary.paymentMethod]
+                    : "미등록"}
+                </dd>
+              </div>
+              <div className="flex items-end justify-between gap-3 border-t border-slate-200 pt-4">
+                <dt className="font-black text-slate-950">최종 금액</dt>
+                <dd className="text-xl font-black text-blue-700">
+                  {order.amountSummary.totalAmount.toLocaleString()}원
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="order-3 rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-5 flex items-center gap-2 text-base font-black text-slate-950">
+              <MapPin size={17} className="text-blue-700" />
+              배송 정보
+            </h2>
+            <dl className="space-y-3 text-sm">
+              <div>
+                <dt className="mb-1 text-xs font-semibold text-slate-400">수령인</dt>
+                <dd className="font-medium">
+                  {order.delivery.receiverName} · {order.delivery.receiverPhone}
+                </dd>
+              </div>
+              <div>
+                <dt className="mb-1 text-xs font-semibold text-slate-400">배송지</dt>
+                <dd className="leading-6">
+                  {order.delivery.receiverZipcode &&
+                    `[${order.delivery.receiverZipcode}] `}
+                  {order.delivery.receiverAddress}{" "}
+                  {order.delivery.receiverAddressDetail}
+                </dd>
+              </div>
+              <div>
+                <dt className="mb-1 text-xs font-semibold text-slate-400">
+                  배송 요청사항
+                </dt>
+                <dd>{order.delivery.receiverMemo || "요청사항 없음"}</dd>
+              </div>
+              <div className="border-t border-slate-200 pt-3">
+                <dt className="mb-1 text-xs font-semibold text-slate-400">
+                  운송 정보
+                </dt>
+                <dd>
+                  {order.delivery.carrier && order.delivery.trackingNumber
+                    ? `${order.delivery.carrier} ${order.delivery.trackingNumber}`
+                    : "운송장 미등록"}
+                </dd>
+              </div>
+            </dl>
+          </section>
+        </aside>
+      </div>
+      </main>
+    </div>
+  );
+}

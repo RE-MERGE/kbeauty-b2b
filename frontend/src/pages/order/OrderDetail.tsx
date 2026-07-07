@@ -87,6 +87,7 @@ type Order = {
   senderPhone?: string;
   carrier?: string;
   trackingNo?: string;
+  deliveredAt?: string;
   subtotalAmount: number;
   platformFee: number;
   shippingFee: number | null;
@@ -113,6 +114,7 @@ type BuyerOrderDetailResponse = {
   receiverMemo: string | null;
   carrier: string | null;
   trackingNumber: string | null;
+  deliveredAt: string | null;
   subtotalAmount: number;
   platformFee: number;
   shippingFee: number;
@@ -507,6 +509,7 @@ function mapOrderDetailResponse(response: BuyerOrderDetailResponse): Order {
     receiverMemo: response.receiverMemo ?? undefined,
     carrier: response.carrier ?? undefined,
     trackingNo: response.trackingNumber ?? undefined,
+    deliveredAt: response.deliveredAt ?? undefined,
     subtotalAmount: response.subtotalAmount,
     platformFee: response.platformFee,
     shippingFee: response.shippingFee,
@@ -619,6 +622,28 @@ function collapseTrackingEvents(
     }
   }
   return collapsed;
+}
+
+// 실제 배송완료 시각은 주문 엔티티의 deliveredAt이 정답이다(셀러가 테스트용 배송완료 처리
+// 버튼을 눌렀을 때도 함께 채워진다). 외부 배송조회 API의 이벤트가 아직 이를 반영하지 못했더라도
+// (더미 캐리어의 폴링/동기화 지연 등) 화면에는 이 시각을 기준으로 "배송완료" 항목을 항상
+// 보여준다.
+function withDeliveredEvent(
+  events: DeliveryTrackingEvent[],
+  deliveredAt: string | null | undefined
+): DeliveryTrackingEvent[] {
+  if (!deliveredAt) return events;
+  if (events.some((event) => event.status.code === "DELIVERED")) return events;
+
+  return [
+    ...events,
+    {
+      time: deliveredAt,
+      status: { code: "DELIVERED", name: "배송 완료" },
+      description: null,
+      location: null,
+    },
+  ];
 }
 
 function getNextAction(order: Order) {
@@ -1067,6 +1092,9 @@ export function OrderDetail() {
                   <>
                     <SummaryRow label="택배사" value={order.carrier ?? "-"} />
                     <SummaryRow label="송장번호" value={order.trackingNo} />
+                    {order.deliveredAt && (
+                      <SummaryRow label="배송완료" value={formatOrderDate(order.deliveredAt)} />
+                    )}
                     <div className="mt-4 border-t border-slate-100 pt-4">
                       <p className="mb-3 text-xs font-black text-slate-500">
                         배송 이동 현황
@@ -1085,36 +1113,44 @@ export function OrderDetail() {
                         </div>
                       )}
 
-                      {!isTrackingLoading && tracking?.lastEvent && (
-                        <>
-                          <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="font-black text-sky-800">
-                                {getTrackingStatusLabel(tracking.lastEvent)}
-                              </span>
-                              <span className="text-[11px] font-semibold text-sky-600">
-                                {formatOrderDate(tracking.lastEvent.time)}
-                              </span>
-                            </div>
-                            {getTrackingDescription(tracking.lastEvent) && (
-                              <p className="mt-1 text-xs leading-5 text-sky-700">
-                                {getTrackingDescription(tracking.lastEvent)}
-                              </p>
-                            )}
-                          </div>
+                      {!isTrackingLoading && (() => {
+                        // 실제 배송완료 시각(order.deliveredAt)은 외부 배송조회 API의 이벤트
+                        // 동기화가 늦어지더라도 항상 정확하므로, 여기에 없는 DELIVERED 이벤트가
+                        // 있다면 보강해서 보여준다.
+                        const meaningfulEvents = collapseTrackingEvents(
+                          withDeliveredEvent(tracking?.events ?? [], order.deliveredAt)
+                        );
+                        if (meaningfulEvents.length === 0) return null;
 
-                          <div className="mt-3 space-y-0">
-                            {(() => {
-                              const meaningfulEvents = collapseTrackingEvents(
-                                tracking.events
-                              );
-                              // 최신 이벤트(배송완료 등)가 가장 위로 오게 보여준다.
-                              return [...meaningfulEvents].reverse().map((event, index) => (
+                        const effectiveLastEvent = meaningfulEvents[meaningfulEvents.length - 1];
+                        // 최신 이벤트(배송완료 등)가 가장 위로 오게 보여준다.
+                        const reversedEvents = [...meaningfulEvents].reverse();
+
+                        return (
+                          <>
+                            <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="font-black text-sky-800">
+                                  {getTrackingStatusLabel(effectiveLastEvent)}
+                                </span>
+                                <span className="text-[11px] font-semibold text-sky-600">
+                                  {formatOrderDate(effectiveLastEvent.time)}
+                                </span>
+                              </div>
+                              {getTrackingDescription(effectiveLastEvent) && (
+                                <p className="mt-1 text-xs leading-5 text-sky-700">
+                                  {getTrackingDescription(effectiveLastEvent)}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="mt-3 space-y-0">
+                              {reversedEvents.map((event, index) => (
                                 <div
                                   key={`${event.time}-${event.status.code}-${index}`}
                                   className="relative flex gap-3 pb-4 last:pb-0"
                                 >
-                                  {index < meaningfulEvents.length - 1 && (
+                                  {index < reversedEvents.length - 1 && (
                                     <span className="absolute left-[5px] top-3 h-full w-px bg-slate-200" />
                                   )}
                                 <span className="relative mt-1.5 h-3 w-3 shrink-0 rounded-full border-2 border-sky-400 bg-white" />
@@ -1136,8 +1172,174 @@ export function OrderDetail() {
                                   )}
                                 </div>
                               </div>
-                              ));
-                            })()}
-                          </div>
-                        </>
-                      )}
+                              ))}
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </>
+                )}
+              </div>
+            </section>
+          </aside>
+          </div>
+        </div>
+
+        {showConfirm && (
+          <ConfirmModal
+            title="거래를 확정하시겠습니까?"
+            description="상품 수량과 하자 여부를 확인한 뒤 거래를 확정해 주세요. 확정 후 셀러 정산이 진행됩니다."
+            confirmLabel="거래 확정"
+            onClose={() => setShowConfirm(false)}
+            onConfirm={() => {
+              void (async () => {
+                try {
+                  await api.post(`/buyer/orders/${order.id}/complete`);
+                  setShowConfirm(false);
+                  setOrder((current) => (current ? { ...current, status: "COMPLETED" } : current));
+                  setPageNotice({ type: "success", message: "거래가 확정되었습니다 감사합니다." });
+                } catch (confirmError) {
+                  console.error("거래 확정 실패", confirmError);
+                  setPageNotice({ type: "error", message: "거래 확정에 실패했습니다." });
+                }
+              })();
+            }}
+          />
+        )}
+
+        {showDispute && (
+          <DisputeModal
+            onClose={() => setShowDispute(false)}
+            onSubmit={() => {
+              setShowDispute(false);
+              setPageNotice({ type: "success", message: "요청이 접수되었습니다." });
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Badge({ children, className }: { children: ReactNode; className: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+function SectionTitle({ icon, title }: { icon: ReactNode; title: string }) {
+  return (
+    <div className="mb-4 flex items-center gap-2">
+      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-700">{icon}</span>
+      <h2 className="text-sm font-black text-slate-950">{title}</h2>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <span className="text-slate-500">{label}</span>
+      <span className={`text-right ${strong ? "text-lg font-black text-blue-700" : "font-semibold text-slate-900"}`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function InfoBlock({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-bold text-slate-500">{label}</p>
+      <p className="mt-1 text-sm font-semibold leading-6 text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function ConfirmModal({
+  title,
+  description,
+  confirmLabel,
+  onClose,
+  onConfirm,
+}: {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <button type="button" onClick={onClose} className="absolute right-4 top-4 text-slate-400 transition hover:text-slate-900">
+          <X size={20} />
+        </button>
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-green-600">
+          <CheckCircle size={26} />
+        </div>
+        <h3 className="text-lg font-black text-slate-950">{title}</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
+        <div className="mt-5 flex gap-2">
+          <button onClick={onClose} className="flex-1 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600">
+            취소
+          </button>
+          <button onClick={onConfirm} className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700">
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DisputeModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <button type="button" onClick={onClose} className="absolute right-4 top-4 text-slate-400 transition hover:text-slate-900">
+          <X size={20} />
+        </button>
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+          <AlertCircle size={26} />
+        </div>
+        <h3 className="text-lg font-black text-slate-950">이의제기 접수</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500">문제 유형과 요청 처리 방식을 선택하고 증빙 파일을 첨부합니다.</p>
+        <div className="mt-4 space-y-3">
+          <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-600">
+            <option>불량</option>
+            <option>오배송</option>
+            <option>수량 부족</option>
+            <option>배송 문제</option>
+            <option>기타</option>
+          </select>
+          <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-600">
+            <option>교환 요청</option>
+            <option>환불 요청</option>
+            <option>부분 환불 요청</option>
+            <option>기타</option>
+          </select>
+          <textarea
+            rows={4}
+            placeholder="이의제기 내용을 입력하세요."
+            className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-600"
+          />
+          <div className="rounded-lg border-2 border-dashed border-slate-200 p-4 text-center text-xs font-semibold text-slate-500">
+            증빙 파일 첨부
+          </div>
+        </div>
+        <div className="mt-5 flex gap-2">
+          <button onClick={onClose} className="flex-1 rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600">
+            취소
+          </button>
+          <button onClick={onSubmit} className="flex-1 rounded-lg bg-rose-500 px-4 py-2.5 text-sm font-bold text-white">
+            접수하기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

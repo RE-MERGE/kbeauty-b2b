@@ -1848,4 +1848,106 @@ function ActionButton({
   onClick: () => void;
 }) {
   const className = {
-    primary: "bg-bl
+    primary: "bg-blue-600 text-white hover:bg-blue-700",
+    ghost: "border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700",
+    red: "border border-red-200 bg-white text-red-600 hover:bg-red-50",
+    orange: "border border-orange-200 bg-white text-orange-600 hover:bg-orange-50",
+  }[tone];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${className}`}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+}
+
+function LinkButton({ to, icon, children }: { to: string; icon: ReactNode; children: ReactNode }) {
+  return (
+    <Link
+      to={to}
+      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition hover:bg-blue-700"
+    >
+      {icon}
+      {children}
+    </Link>
+  );
+}
+
+function BaseModal({
+  children,
+  icon,
+  onClose,
+  title,
+  tone,
+}: {
+  children: ReactNode;
+  icon: ReactNode;
+  onClose: () => void;
+  title: string;
+  tone: "green" | "red" | "orange";
+}) {
+  const toneClass = {
+    green: "bg-green-50 text-green-600",
+    red: "bg-red-50 text-red-600",
+    orange: "bg-orange-50 text-orange-600",
+  }[tone];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-md border border-slate-200 bg-white p-6 shadow-lg">
+        <button type="button" onClick={onClose} className="absolute right-4 top-4 text-slate-400 transition hover:text-slate-900">
+          <X size={20} />
+        </button>
+        <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-md ${toneClass}`}>{icon}</div>
+        <h3 className="mb-2 text-lg font-black text-slate-950">{title}</h3>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function OrderMiniSummary({ order }: { order: Order }) {
+  return (
+    <div className="border border-slate-200 bg-slate-50 p-3 text-sm">
+      <p className="font-black text-slate-950">{order.id}</p>
+      <p className="mt-1 text-slate-500">
+        {order.supplier} · {formatPrice(getOrderTotal(order))}
+      </p>
+    </div>
+  );
+}
+
+function ModalButton({
+  children,
+  disabled = false,
+  onClick,
+  tone = "primary",
+  variant = "solid",
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+  tone?: "primary" | "red";
+  variant?: "solid" | "ghost";
+}) {
+  const solidClass = tone === "red" ? "bg-red-500 text-white hover:bg-red-600" : "bg-blue-600 text-white hover:bg-blue-700";
+  const className = variant === "ghost"
+    ? "border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700"
+    : solidClass;
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`inline-flex flex-1 items-center justify-center rounded-md px-4 py-2.5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${className}`}
+    >
+      {children}
+    </button>
+  );
+}

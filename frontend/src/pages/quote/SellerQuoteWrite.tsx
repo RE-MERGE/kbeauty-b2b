@@ -1294,4 +1294,67 @@ export function SellerQuoteWrite() {
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="
+                    <dt className="text-slate-500">배송비</dt>
+                    <dd className="font-bold text-slate-900">{formatPrice(shippingFee)}</dd>
+                  </div>
+                  <div className="flex items-end justify-between gap-3 border-t border-slate-200 pt-4">
+                    <dt className="font-black text-slate-900">합계</dt>
+                    <dd className="text-lg font-black text-blue-700">
+                      {formatPrice(totalAmount)}
+                    </dd>
+                  </div>
+                </dl>
+
+                {submitErrors.length > 0 && (
+                  <div
+                    role="alert"
+                    className="mt-5 rounded-lg border border-rose-200 bg-rose-50 p-4"
+                  >
+                    <div className="flex gap-3 text-sm leading-5 text-rose-700">
+                      <AlertCircle size={17} className="mt-0.5 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-black">제출할 수 없는 항목이 있습니다.</p>
+                        <ul className="mt-2 space-y-1.5 text-xs">
+                          {submitErrors.map((error) => (
+                            <li key={error} className="flex gap-1.5">
+                              <span aria-hidden="true">•</span>
+                              <span>{error}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                  className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Send size={16} />
+                  {submitting ? "제출 중..." : "견적서 제출"}
+                </button>
+              </section>
+
+              <div className="flex gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
+                <Info size={17} className="mt-0.5 shrink-0 text-blue-700" />
+                <p className="text-xs leading-5 text-slate-700">
+                  제출 전 옵션별 단가와 배송비를 확인하세요. 플랫폼 이용
+                  수수료는 결제 단계에서 별도로 계산됩니다.
+                </p>
+              </div>
+
+              <Link
+                to="/seller/sourcing-requests"
+                className="inline-flex h-11 w-full items-center justify-center rounded-md border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50"
+              >
+                작성 취소
+              </Link>
+            </aside>
+          </div>
+        </div>
+      </div>
+  );
+}

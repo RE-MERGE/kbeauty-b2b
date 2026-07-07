@@ -132,4 +132,14 @@ export default function PaymentSuccessPage() {
         return (
             <div className="max-w-md mx-auto p-8 text-center">
                 <h2 className="text-xl font-bold text-red-600 mb-2">결제 승인 실패</h2>
-                <p className=
+                <p className="text-slate-500">{confirmError}</p>
+            </div>
+        );
+    }
+    return (
+      <div className="p-8 text-center">
+        <h2 className="text-xl font-bold text-slate-900">결제가 진행 중입니다...</h2>
+        <p className="text-slate-500 mt-2">잠시만 기다려주세요.</p>
+      </div>
+  );
+}

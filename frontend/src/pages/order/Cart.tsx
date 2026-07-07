@@ -227,13 +227,18 @@ export function Cart() {
         )
       );
 
-      const response = await api.patch<CartItem>(`/carts/${id}/quantity`, {
+      const response = await api.patch<CartApiItem>(`/carts/${id}/quantity`, {
         quantity: nextQuantity,
       });
       if (response?.cartItemId === id) {
+        // 백엔드는 GET /carts와 동일하게 companyId/baseShippingFee 형태로 응답한다.
+        // 여기서 mapCartApiItems를 거치지 않고 그대로 state에 덮어쓰면 이 아이템만
+        // sellerId/shippingFee가 undefined가 되어(-> 0으로 폴백) 같은 판매자의 다른
+        // 상품들과 배송비 묶음 키가 달라지면서 묶음이 쪼개져 보이는 버그가 있었다.
+        const [mappedItem] = mapCartApiItems([response]);
         setItems((prev) =>
           prev.map((cartItem) =>
-            cartItem.cartItemId === id ? response : cartItem
+            cartItem.cartItemId === id ? mappedItem : cartItem
           )
         );
       }
@@ -1083,4 +1088,69 @@ function OrderSummary({
 
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xs font-bold 
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-800">
+                <Truck size={14} />
+                배송비
+              </div>
+              {shipping > 0 && (
+                <span className="text-sm font-black text-amber-900">{shippingText}</span>
+              )}
+            </div>
+            <p className="mt-1 text-xs leading-5 text-amber-700">{shippingDescription}</p>
+          </div>
+        </div>
+
+        <div className="flex items-end justify-between border-b border-slate-100 py-5">
+          <div>
+                <h2 className="text-sm font-bold text-slate-950">
+                    결제 예정 금액
+                </h2>
+          </div>
+          <p className="whitespace-nowrap text-right text-xl font-black leading-none text-blue-600 md:text-2xl">
+            {formatPrice(total)}
+          </p>
+        </div>
+
+        <div className="my-4 rounded-lg border border-blue-400/15 bg-blue-50/60 px-3 py-2.5 text-xs leading-5 text-slate-700">
+          플랫폼 이용 수수료는 결제 단계에서 별도 계산됩니다.
+        </div>
+
+        {count === 0 ? (
+          <button
+            type="button"
+            disabled
+            className="inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-slate-100 px-4 py-3 text-sm font-bold text-slate-400"
+          >
+            주문하기
+            <ArrowRight size={16} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onCheckout}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-600"
+          >
+            {isSample ? "샘플 주문하기" : "주문하기"}
+            <ArrowRight size={16} />
+          </button>
+        )}
+
+        <Link
+          to="/products"
+          className="mt-2 inline-flex w-full items-center justify-center rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:border-blue-400 hover:text-blue-600"
+        >
+          쇼핑 계속하기
+        </Link>
+      </div>
+    </aside>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-slate-500">{label}</span>
+      <span className="font-semibold text-slate-900">{value}</span>
+    </div>
+  );
+}

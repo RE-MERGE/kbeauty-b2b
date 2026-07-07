@@ -551,4 +551,8 @@ export function SellerQuoteList() {
               </div>
             )}
           </div>
-   
+        </section>
+      </main>
+    </div>
+  );
+}

@@ -42,12 +42,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class NegotiationService {
+
+    // 재협의를 요청할 수 있는 견적 상태. 이 외의 상태(APPROVED/REJECTED/EXPIRED/NOT_SELECTED/SUPERSEDED)는
+    // 이미 결론이 난 견적이라 재협의를 받으면 안 된다.
+    private static final Set<String> NEGOTIABLE_QUOTE_STATUSES = Set.of(
+            QuoteStatusCode.SUBMITTED,
+            QuoteStatusCode.NEGOTIATING,
+            QuoteStatusCode.SAMPLE_REQUESTED
+    );
 
     private final NegotiationRepository negotiationRepository;
     private final NegotiationRequestRepository negotiationRequestRepository;
@@ -218,6 +227,14 @@ public class NegotiationService {
                         ? lastRequest.getRevisedQuote()
                         : quote)
                 .orElse(quote);
+
+        // 이미 채택(APPROVED)된 견적은 재협의를 받을 수 없다. 재협의가 진행되어 셀러가
+        // 새 버전으로 응답하면 QuoteService가 원본을 SUPERSEDED로 바꿔버리는데, 그러면
+        // 계약서 작성 조건(quote.status == APPROVED)이 깨져서 계약서를 영영 못 만들게 된다.
+        // REJECTED/EXPIRED/NOT_SELECTED/SUPERSEDED 등 이미 종료된 상태도 마찬가지로 막는다.
+        if (!NEGOTIABLE_QUOTE_STATUSES.contains(currentQuote.getStatus())) {
+            throw new BusinessException(ErrorCode.QUOTE_NOT_NEGOTIABLE);
+        }
 
         negotiationRequestRepository.save(
                 new NegotiationRequest(

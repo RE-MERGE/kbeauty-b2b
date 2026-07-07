@@ -5,10 +5,12 @@ import kr.remerge.stylehub.domain.quote.constant.QuoteStatusCode;
 import kr.remerge.stylehub.domain.quote.dto.QuoteCreateRequest;
 import kr.remerge.stylehub.domain.quote.dto.QuoteCreateResponse;
 import kr.remerge.stylehub.domain.quote.dto.QuoteDetailResponse;
+import kr.remerge.stylehub.domain.quote.dto.QuoteReviseItem;
 import kr.remerge.stylehub.domain.quote.entity.Quote;
 import kr.remerge.stylehub.domain.quote.entity.QuoteItem;
 import kr.remerge.stylehub.domain.quote.repository.QuoteItemRepository;
 import kr.remerge.stylehub.domain.quote.repository.QuoteRepository;
+import kr.remerge.stylehub.domain.quote.pdf.QuotePdfGenerator;
 import kr.remerge.stylehub.domain.sourcing.entity.SourcingRequest;
 import kr.remerge.stylehub.domain.sourcing.entity.SourcingSupplier;
 import kr.remerge.stylehub.domain.sourcing.enumtype.SourcingStatus;
@@ -40,6 +42,7 @@ public class QuoteService {
     private final UserReader userReader;
     private final SourcingRequestRepository sourcingRequestRepository;
     private final SourcingSupplierRepository sourcingSupplierRepository;
+    private final QuotePdfGenerator quotePdfGenerator;
 
     @Transactional
     public QuoteCreateResponse createQuote(
@@ -57,6 +60,8 @@ public class QuoteService {
                 findAssignedSupplier(sourcingRequest.getSourcingRequestId(),
                         company.getCompanyId()
                 );
+
+        validateQuoteSubmission(supplier);
 
         QuoteAmounts amounts =
                 validateAndCalculateAmounts(request);
@@ -93,10 +98,98 @@ public class QuoteService {
 
     }
 
+    // 협의(재견적 요청)에 대한 셀러 응답으로 새 버전의 견적을 만든다.
+    // sourcingRequest/buyer/seller/company 등 바뀌지 않는 식별 정보는 원본에서 그대로 물려받고,
+    // 조건(리드타임/배송비/유효기간/셀러메모/품목)만 새로 반영해 parentQuote/version을 연결한다.
+    @Transactional
+    public Quote createRevisedQuote(
+            Quote original,
+            Integer leadTimeDays,
+            Long shippingFee,
+            LocalDateTime validUntil,
+            String sellerMemo,
+            List<QuoteReviseItem> items
+    ) {
+
+        LocalDateTime now = LocalDateTime.now();
+
+        long subtotalAmount = items.stream()
+                .mapToLong(item -> item.unitPrice() * item.quantity())
+                .sum();
+
+        long totalAmount = subtotalAmount + shippingFee;
+
+        Quote revisedQuote = quoteRepository.save(
+                Quote.builder()
+                        .quoteNo(createQuoteNo(now))
+                        .sourcingRequest(original.getSourcingRequest())
+                        .buyer(original.getBuyer())
+                        .seller(original.getSeller())
+                        .company(original.getCompany())
+                        .companyName(original.getCompanyName())
+                        .buyerName(original.getBuyerName())
+                        .sellerName(original.getSellerName())
+                        .parentQuote(original)
+                        .version(original.getVersion() + 1)
+                        .brandName(original.getBrandName())
+                        .productName(original.getProductName())
+                        .categoryName(original.getCategoryName())
+                        .material(original.getMaterial())
+                        .leadTimeDays(leadTimeDays)
+                        .deliveryCompany(original.getDeliveryCompany())
+                        .shippingFee(shippingFee)
+                        .validUntil(validUntil)
+                        .sampleAvailable(original.getSampleAvailable())
+                        .sellerMemo(sellerMemo)
+                        .subtotalAmount(subtotalAmount)
+                        .totalAmount(totalAmount)
+                        .status(QuoteStatusCode.SUBMITTED)
+                        .createdAt(now)
+                        .submittedAt(now)
+                        .build()
+        );
+
+        List<QuoteItem> revisedItems = items.stream()
+                .map(item -> QuoteItem.builder()
+                        .quote(revisedQuote)
+                        .optionSummary(item.optionSummary())
+                        .quantity(item.quantity())
+                        .unitPrice(item.unitPrice())
+                        .totalPrice(item.unitPrice() * item.quantity())
+                        .isSample(item.sample())
+                        .createdAt(now)
+                        .build()
+                )
+                .toList();
+
+        quoteItemRepository.saveAll(revisedItems);
+
+        // 원본은 새 버전으로 대체되어 더 이상 별도 행으로 노출되거나 채택/거절 등의 액션
+        // 대상이 되면 안 되므로 SUPERSEDED로 전환한다. (목록 조회 시 체인의 최신 버전만 보여주는
+        // 필터링과 짝을 이루는 처리 — QuoteBuyerService/QuoteSellerService의 getQuoteList 참고)
+        original.changeStatus(QuoteStatusCode.SUPERSEDED);
+
+        return revisedQuote;
+    }
+
+    private void validateQuoteSubmission(SourcingSupplier supplier) {
+        if (supplier.getStatus() == SourcingSupplierStatus.QUOTED) {
+            throw new BusinessException(ErrorCode.QUOTE_ALREADY_SUBMITTED);
+        }
+
+        boolean canSubmit =
+                supplier.getStatus() == SourcingSupplierStatus.SUGGESTED
+                        || supplier.getStatus() == SourcingSupplierStatus.RECOMMENDED;
+
+        if (!canSubmit) {
+            throw new BusinessException(ErrorCode.INVALID_QUOTE_STATUS);
+        }
+    }
+
+    @Transactional
     public QuoteDetailResponse getQuoteDetail(
             Integer userId,
-            Integer quoteId,
-            Integer companyId
+            Integer quoteId
     ) {
         User user = userReader.getUserWithCompany(userId);
 
@@ -105,11 +198,33 @@ public class QuoteService {
 
         validateQuoteAccess(user, quote);
 
+        if (Objects.equals(
+                quote.getBuyer().getUserId(),
+                user.getUserId()
+        )) {
+            quote.markViewed();
+        }
+
         List<QuoteItem> items
                 = quoteItemRepository.findByQuote_QuoteId(quoteId);
 
-        // canManage 계산을 위해 userId, role 추가 전달
-        return QuoteDetailResponse.from(quote, items, companyId, userId, user.getRole().name());
+        Integer companyId = user.getCompany() == null
+                ? null
+                : user.getCompany().getCompanyId();
+
+        return QuoteDetailResponse.from(
+                quote,
+                items,
+                companyId,
+                userId,
+                user.getRole().name()
+        );
+    }
+
+    @Transactional
+    public byte[] generateQuotePdf(Integer userId, Integer quoteId) {
+        QuoteDetailResponse quote = getQuoteDetail(userId, quoteId);
+        return quotePdfGenerator.generate(quote);
     }
 
     private void validateQuoteAccess(User user, Quote quote) {

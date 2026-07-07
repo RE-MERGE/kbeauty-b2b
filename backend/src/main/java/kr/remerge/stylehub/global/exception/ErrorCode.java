@@ -84,6 +84,7 @@ public enum ErrorCode {
     ORDER_ITEMS_NOT_READY(HttpStatus.CONFLICT, "ORDER_004", "모든 주문 상품의 출고 준비가 완료되지 않았습니다."),
     INVALID_RECEIVER_INFO(HttpStatus.BAD_REQUEST, "ORDER_005","수령인 이름과 연락처를 확인해 주세요."),
     SAMPLE_ORDER_ALREADY_EXISTS(HttpStatus.CONFLICT,"ORDER_006","이미 진행 중인 샘플 주문이 있습니다."),
+    CONTRACT_ORDER_ALREADY_EXISTS(HttpStatus.CONFLICT,"ORDER_007","이미 진행 중인 계약 주문이 있습니다."),
 
     // ───────────────────────────────────────────
     // 견적 (QUOTE)
@@ -93,6 +94,7 @@ public enum ErrorCode {
     INVALID_QUOTE_STATUS(HttpStatus.BAD_REQUEST, "QUOTE_003", "변경할 수 없는 견적 상태입니다."),
     QUOTE_SAMPLE_NOT_AVAILABLE(HttpStatus.BAD_REQUEST,"QUOTE_004","샘플 제공이 불가능한 견적서입니다."),
     QUOTE_SAMPLE_ITEM_NOT_FOUND(HttpStatus.BAD_REQUEST,"QUOTE_005","결제할 샘플 품목이 없습니다."),
+    QUOTE_ALREADY_SUBMITTED(HttpStatus.CONFLICT,"QUOTE_006","이미 해당 소싱 요청에 견적서를 제출했습니다."),
 
     // ───────────────────────────────────────────
     // 계약 (CONTRACT)
@@ -101,6 +103,17 @@ public enum ErrorCode {
     CONTRACT_ALREADY_SIGNED(HttpStatus.BAD_REQUEST, "CONTRACT_002", "이미 서명된 계약서입니다."),
     CONTRACT_ALREADY_EXISTS(HttpStatus.CONFLICT, "CONTRACT_003", "이미 생성된 계약서가 있습니다."),
     INVALID_CONTRACT_STATUS(HttpStatus.BAD_REQUEST, "CONTRACT_004", "현재 상태에서는 계약서를 처리할 수 없습니다."),
+    CONTRACT_SIGNATURE_NOT_FOUND(HttpStatus.NOT_FOUND, "CONTRACT_005", "계약서 서명 정보를 찾을 수 없습니다."),
+    CONTRACT_CONTENT_CHANGED(HttpStatus.CONFLICT,"CONTRACT_006","서명 이후 계약 내용이 변경되어 진행할 수 없습니다."),
+    CONTRACT_ITEM_NOT_FOUND(HttpStatus.BAD_REQUEST,"CONTRACT_007","계약할 일반 상품이 없습니다."),
+
+    // ───────────────────────────────────────────
+    // 협의 (NEGOTIATION)
+    // ───────────────────────────────────────────
+    NEGOTIATION_NOT_FOUND(HttpStatus.NOT_FOUND, "NEGOTIATION_001", "협의를 찾을 수 없습니다."),
+    NEGOTIATION_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, "NEGOTIATION_002", "협의 요청을 찾을 수 없습니다."),
+    INVALID_NEGOTIATION_STATUS(HttpStatus.BAD_REQUEST, "NEGOTIATION_003", "현재 상태에서는 처리할 수 없는 협의 요청입니다."),
+
     // ───────────────────────────────────────────
     // 소싱 (SOURCING)
     // ───────────────────────────────────────────
@@ -114,6 +127,12 @@ public enum ErrorCode {
     PAYMENT_AMOUNT_MISMATCH(HttpStatus.BAD_REQUEST,"PAYMENT_002","결제 요청 금액과 실제 주문 금액이 일치하지 않습니다."),
     PAYMENT_CONFIRM_RESULT_MISMATCH(HttpStatus.INTERNAL_SERVER_ERROR,"PAYMENT_003","결제 승인 결과가 주문 정보와 일치하지 않습니다."),
     PAYMENT_ORDER_STATE_MISMATCH(HttpStatus.CONFLICT,"PAYMENT_004","함께 결제한 주문들의 상태가 일치하지 않습니다."),
+
+    // ───────────────────────────────────────────
+    // 배송 (DELIVERY)
+    // ───────────────────────────────────────────
+    UNSUPPORTED_DELIVERY_CARRIER(HttpStatus.BAD_REQUEST,"DELIVERY_001","지원하지 않는 택배사입니다."),
+    DELIVERY_INFO_NOT_REGISTERED(HttpStatus.CONFLICT,"DELIVERY_002","출고 정보가 등록되지 않았습니다."),
 
     // ───────────────────────────────────────────
     // 카테고리 (CATEGORY)
@@ -132,6 +151,19 @@ public enum ErrorCode {
     // 배송 (Delivery)
     // ───────────────────────────────────────────
     DELIVERY_NOT_FOUND(HttpStatus.NOT_FOUND, "DELIVERY_001", "배송 정보를 찾을 수 없습니다."),
+
+    // ───────────────────────────────────────────
+    //  이의제기 (Dispute)
+    // ───────────────────────────────────────────
+    DISPUTE_ALREADY_EXISTS(HttpStatus.CONFLICT,"DISPUTE_001","이미 처리 중인 이의제기가 있습니다."),
+    DISPUTE_ITEM_REQUIRED(HttpStatus.BAD_REQUEST,"DISPUTE_002","이의제기할 주문 상품을 선택해 주세요."),
+    DISPUTE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND,"DISPUTE_003","이의제기할 주문 상품을 찾을 수 없습니다."),
+    INVALID_DISPUTE_QUANTITY(HttpStatus.BAD_REQUEST,"DISPUTE_004","문제 수량이 주문 수량보다 많습니다."),
+    DISPUTE_NOT_FOUND(HttpStatus.NOT_FOUND,"DISPUTE_005","이의제기를 찾을 수 없습니다."),
+    INVALID_DISPUTE_STATUS(HttpStatus.CONFLICT,"DISPUTE_006","현재 이의제기 상태에서는 답변할 수 없습니다."),
+    DISPUTE_ALREADY_RESOLVED(HttpStatus.CONFLICT,"DISPUTE_007","이미 처리 완료된 이의제기입니다."),
+    DISPUTE_RESOLVE_NOT_ALLOWED(HttpStatus.CONFLICT,"DISPUTE_008","현재 상태에서는 처리 완료할 수 없습니다."),
+    DISPUTE_RESPONSE_NOT_FOUND(HttpStatus.NOT_FOUND,"DISPUTE_009","이의제기 답변을 찾을 수 없습니다."),
 
     // ───────────────────────────────────────────
     // 공통 (COMMON)

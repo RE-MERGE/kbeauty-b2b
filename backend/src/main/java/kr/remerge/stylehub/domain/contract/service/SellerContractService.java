@@ -6,9 +6,15 @@ import kr.remerge.stylehub.domain.contract.entity.ContractItem;
 import kr.remerge.stylehub.domain.contract.entity.ContractSignature;
 import kr.remerge.stylehub.domain.contract.enumtype.ContractStatus;
 import kr.remerge.stylehub.domain.contract.enumtype.SignerRole;
+import kr.remerge.stylehub.domain.contract.pdf.ContractPdfGenerator;
 import kr.remerge.stylehub.domain.contract.repository.ContractItemRepository;
 import kr.remerge.stylehub.domain.contract.repository.ContractRepository;
 import kr.remerge.stylehub.domain.contract.repository.ContractSignatureRepository;
+import kr.remerge.stylehub.domain.contract.support.ContractHashGenerator;
+import kr.remerge.stylehub.domain.order.entity.OrderLog;
+import kr.remerge.stylehub.domain.order.enumtype.OrderProcessStep;
+import kr.remerge.stylehub.domain.order.repository.OrderLogRepository;
+import kr.remerge.stylehub.domain.order.repository.OrderRepository;
 import kr.remerge.stylehub.domain.quote.constant.QuoteStatusCode;
 import kr.remerge.stylehub.domain.quote.entity.Quote;
 import kr.remerge.stylehub.domain.quote.repository.QuoteRepository;
@@ -34,6 +40,11 @@ public class SellerContractService {
     private final UserReader userReader;
     private final QuoteRepository quoteRepository;
     private final ContractService contractService;
+    private final ContractHashGenerator contractHashGenerator;
+    private final ContractPdfGenerator contractPdfGenerator;
+    private final OrderRepository orderRepository;
+    private final OrderLogRepository orderLogRepository;
+
 
     public SellerContractDetailResponse getContractByQuote(
             Integer userId,
@@ -50,6 +61,74 @@ public class SellerContractService {
                         );
 
         return SellerContractDetailResponse.from(contract, items);
+    }
+
+    public byte[] getContractPreview(
+            Integer userId,
+            Integer contractId
+    ) {
+
+        User seller = userReader.getCompanyUser(userId);
+
+        Contract contract = contractRepository.findById(contractId)
+                .orElseThrow(() ->
+                        new BusinessException(
+                                ErrorCode.CONTRACT_NOT_FOUND
+                        )
+                );
+
+        validateSellerCompany(seller, contract);
+
+        validateDraftStatus(contract);
+
+        List<ContractItem> contractItems =
+                contractItemRepository
+                        .findByContract_ContractIdOrderByContractItemIdAsc(
+                                contractId
+                        );
+
+        return contractPdfGenerator.generatePreview(
+                contract,
+                contractItems,
+                null,
+                null
+        );
+    }
+
+    public byte[] getContractPreview(
+            Integer userId,
+            Integer contractId,
+            SellerContractPreviewRequest request
+    ) {
+
+        User seller = userReader.getCompanyUser(userId);
+
+        Contract contract = contractRepository.findById(contractId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.CONTRACT_NOT_FOUND)
+                );
+
+        validateSellerCompany(seller, contract);
+        validateDraftStatus(contract);
+
+        List<ContractItem> contractItems =
+                contractItemRepository
+                        .findByContract_ContractIdOrderByContractItemIdAsc(
+                                contractId
+                        );
+
+        String signatureText =
+                request.hasSignature() ? request.signatureText() : null;
+
+        String signatureImageUrl =
+                request.hasSignature() ? request.signatureImageUrl() : null;
+
+        return contractPdfGenerator.generatePreview(
+                contract,
+                contractItems,
+                signatureText,
+                signatureImageUrl
+        );
     }
 
     @Transactional
@@ -83,19 +162,49 @@ public class SellerContractService {
             );
         }
 
+        List<ContractItem> contractItems =
+                contractItemRepository
+                        .findByContract_ContractIdOrderByContractItemIdAsc(
+                                contractId
+                        );
+
+        String contractHash =
+                contractHashGenerator.generateHash(
+                        contract,
+                        contractItems
+                );
+
+        contract.updateContractHash(contractHash);
+
         ContractSignature signature = new ContractSignature(
                 contract,
                 seller,
                 SignerRole.SELLER,
                 request.signatureText(),
-                null,
-                null,
+                request.signatureImageUrl(),
+                contractHash,
                 signedIp,
                 userAgent
         );
 
         contractSignatureRepository.save(signature);
         contract.sellerSign();
+
+        orderRepository.findByQuote_QuoteIdInAndBuyer_UserIdAndIsSampleTrueOrderByCreatedAtDesc(
+                List.of(contract.getQuote().getQuoteId()),
+                contract.getQuote().getBuyer().getUserId()
+        ).stream().findFirst().ifPresent(sampleOrder ->
+                orderLogRepository.save(
+                        OrderLog.createProcessLog(
+                                sampleOrder,
+                                OrderProcessStep.CONTRACT_SIGNING,
+                                seller,
+                                "계약서 서명이 진행 중입니다."
+                        )
+                )
+        );
+
+
     }
 
     @Transactional
@@ -106,11 +215,26 @@ public class SellerContractService {
     ) {
         User seller = userReader.getCompanyUser(userId);
 
-//        contractRepository.fi
+        Contract contract = contractRepository.findById(contractId)
+                .orElseThrow(() ->
+                        new BusinessException(ErrorCode.CONTRACT_NOT_FOUND)
+                );
+
+        validateSellerCompany(seller, contract);
+        validateDraftStatus(contract);
+
+        contract.updateDraft(
+                request.contractName(),
+                request.deliveryDate(),
+                request.paymentTerms(),
+                request.returnPolicy(),
+                request.specialTerms()
+        );
+
     }
 
     private Contract findContractByQuote(Integer quoteId) {
-        return contractRepository.findByQuote_QuoteId(quoteId)
+        return contractRepository.findFirstByQuote_QuoteIdOrderByVersionDesc(quoteId)
                 .orElseThrow(() ->
                         new BusinessException(ErrorCode.CONTRACT_NOT_FOUND)
                 );

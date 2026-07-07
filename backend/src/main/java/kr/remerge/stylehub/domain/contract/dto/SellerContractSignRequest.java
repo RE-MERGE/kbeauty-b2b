@@ -7,6 +7,10 @@ public record SellerContractSignRequest(
 
         @NotBlank(message = "서명자명을 입력해주세요.")
         @Size(max = 100, message = "서명자명은 100자 이하여야 합니다.")
-        String signatureText
+        String signatureText,
+
+        @NotBlank(message = "서명 이미지가 필요합니다.")
+        @Size(max = 2000)
+        String signatureImageUrl
 ) {
 }

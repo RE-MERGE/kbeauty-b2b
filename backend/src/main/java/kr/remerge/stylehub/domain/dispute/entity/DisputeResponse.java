@@ -1,6 +1,7 @@
 package kr.remerge.stylehub.domain.dispute.entity;
 
 import jakarta.persistence.*;
+import kr.remerge.stylehub.domain.dispute.enumtype.DisputeStatus;
 import kr.remerge.stylehub.domain.dispute.enumtype.ResponderRole;
 import kr.remerge.stylehub.domain.user.entity.User;
 import lombok.AccessLevel;
@@ -14,8 +15,14 @@ import java.time.LocalDateTime;
 @Table(
         name = "dispute_responses",
         indexes = {
-                @Index(name = "idx_dispute_created", columnList = "dispute_id, created_at"),
-                @Index(name = "idx_responder", columnList = "responder_id")
+                @Index(
+                        name = "idx_dispute_created",
+                        columnList = "dispute_id, created_at"
+                ),
+                @Index(
+                        name = "idx_responder",
+                        columnList = "responder_id"
+                )
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -38,8 +45,9 @@ public class DisputeResponse {
     @Column(name = "responder_role", nullable = false)
     private ResponderRole responderRole;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
-    private String status;
+    private DisputeStatus status;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
@@ -51,7 +59,7 @@ public class DisputeResponse {
             Dispute dispute,
             User responder,
             ResponderRole responderRole,
-            String status,
+            DisputeStatus status,
             String content
     ) {
         this.dispute = dispute;

@@ -67,6 +67,7 @@ public class SettlementDashboard {
         private Long platformFee;
         private Long finalAmount;
         private String status;
+        private String receiverName;
     }
 
 }

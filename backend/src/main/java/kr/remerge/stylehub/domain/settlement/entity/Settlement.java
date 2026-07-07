@@ -41,6 +41,9 @@ public class Settlement {
     @JoinColumn(name = "admin_id", nullable = false)
     private User admin;
 
+    @Column(name = "receiver_name", nullable = false)
+    private String receiverName;
+
     @Column(name = "total_amount", nullable = false)
     private Long totalAmount;
 
@@ -60,4 +63,5 @@ public class Settlement {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
 }

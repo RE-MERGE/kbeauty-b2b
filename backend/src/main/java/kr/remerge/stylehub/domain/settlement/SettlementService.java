@@ -132,6 +132,7 @@ public class SettlementService {
                     row.setPlatformFee(order.getPlatformFee());
                     row.setFinalAmount(order.getTotalAmount() - order.getPlatformFee());
                     row.setStatus(order.getStatus() != null ? order.getStatus().name() : null);
+                    row.setReceiverName(order.getReceiverName());
                     return row;
                 })
                 .toList();

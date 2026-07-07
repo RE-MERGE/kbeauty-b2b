@@ -26,10 +26,12 @@ interface SettlementRow {
   createdAt: string;
   buyerId: string;
   sellerId: string;
+  sellerCompanyName: string;
   totalAmount: number;
   platformFee: number;
   finalAmount: number;
   status: string;
+  receiverName: string;
 }
 
 interface MonthlyStat {
@@ -244,11 +246,11 @@ export default function Settlements() {
           {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : '-'}
         </span>
                         </td>
-                        <td className="p-4 font-medium">ID: {row.buyerId}</td>
-                        <td className="p-4 text-muted-foreground">ID: {row.sellerId}</td>
+                        <td className="p-4 font-medium">{row.receiverName}</td>
+                        <td className="p-4 text font-medium">{row.sellerCompanyName}</td>
                         <td className="p-4 text-right font-medium">{row.totalAmount?.toLocaleString()}원</td>
-                        <td className="p-4 text-right text-slate-500">{row.platformFee?.toLocaleString()}원</td>
-                        <td className="p-4 text-right font-semibold text-primary">{row.finalAmount?.toLocaleString()}원</td>
+                        <td className="p-4 text-right text-slate-500">{(row.totalAmount/10)?.toLocaleString()}원</td>
+                        <td className="p-4 text-right font-semibold text-primary">{(row.totalAmount*0.9)?.toLocaleString()}원</td>
                         <td className="p-4 text-center">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${
                           row.status === 'COMPLETED' ? 'bg-green-50 text-green-700' :
@@ -258,7 +260,7 @@ export default function Settlements() {
                         {row.status === 'COMPLETED' && <CheckCircle2 size={12} />}
                         {row.status === 'PENDING' && <Clock size={12} />}
                         {row.status === 'REFUNDED' && <AlertCircle size={12} />}
-                        정산 {row.status}
+                        정산 완료
                       </span>
                         </td>
                         <td className="p-4 text-center">

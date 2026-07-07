@@ -11,17 +11,21 @@ import {
 } from 'lucide-react';
 import {Inquiry} from "@/pages/support/Inquiry";
 
+interface CancelRequestRow {
+  cancelId: number;       // 취소 요청 고유 ID
+  orderNo: string;        // 주문 번호
+  createdAt: string;      // 취소 요청 일시
+  buyerId: string;        // 구매자 ID
+  sellerCompanyName: string; // 판매 회사명
+  cancelAmount: number;   // 환불/취소 금액
+  reason: string;         // 취소 사유
+  status: 'PENDING' | 'APPROVED' | 'REJECTED'; // 상태 (대기, 승인, 거절)
+}
 
 export default function SupportManagement() {
   const [activeMenu, setActiveMenu] = useState('inquiry'); // inquiry: 1:1문의, notice: 공지사항, faq: FAQ
   const [searchTerm, setSearchTerm] = useState('');
-
-  // 1:1 문의 가상 데이터
-  const [inquiries, setInquiries] = useState([
-    { id: 'IQ-102', user: '(주)에이비씨 (바이어)', title: '포트원 결제 중 에러가 발생합니다.', date: '2026.06.10', status: '대기' },
-    { id: 'IQ-101', user: '김파트너 (공급사)', title: '정산 계좌 정보를 변경하고 싶습니다.', date: '2026.06.09', status: '완료' },
-    { id: 'IQ-100', user: '하이픈무역 (바이어)', title: '소싱 요청서 수정이 안 됩니다.', date: '2026.06.08', status: '대기' },
-  ]);
+  const [cancelRows, setCancelRows] = useState<CancelRequestRow[]>([]);
 
   return (
     // 💡 핵심: h-screen과 flex flex-col을 주어 전체 화면 높이를 완벽히 제어합니다.
@@ -59,6 +63,13 @@ export default function SupportManagement() {
             <HelpCircle size={18} />
             자주 묻는 질문 (FAQ)
           </button>
+          <button
+              onClick={() => setActiveMenu('paymentcancel')}
+              className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors ${activeMenu === 'paymentcancel' ? 'bg-blue-50 text-blue-600' : 'text-slate-600 hover:bg-slate-50'}`}
+          >
+            <MessageSquare size={18} />
+            환불/취소 관리
+          </button>
         </div>
 
         {/* 우측 컨텐츠 박스 (내용이 없어도 하단 바닥까지 하얗게 꽉 찹니다) */}
@@ -91,6 +102,67 @@ export default function SupportManagement() {
               <div className="p-8 text-center text-sm text-muted-foreground">
                 💡 자주 묻는 질문 리스트 관리 화면이 노출됩니다.
               </div>
+            )}
+
+            {activeMenu === 'paymentcancel' && (
+                <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+                  <div className="p-6">
+                    <h3 className="text-lg font-semibold text-gray-900">환불 및 취소 요청 내역</h3>
+                    <p className="text-sm text-gray-500">고객 및 파트너사가 요청한 취소 건을 관리합니다.</p>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-gray-500">
+                      <thead className="bg-gray-50 text-xs uppercase text-gray-700 border-b border-gray-200">
+                      <tr>
+                        <th className="p-4 font-medium">주문 번호</th>
+                        <th className="p-4 font-medium">요청 일시</th>
+                        <th className="p-4 font-medium">구매자 ID</th>
+                        <th className="p-4 font-medium">판매 업체</th>
+                        <th className="p-4 font-medium">환불 금액</th>
+                        <th className="p-4 font-medium">취소 사유</th>
+                        <th className="p-4 font-medium">처리 상태</th>
+                      </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+
+                      {cancelRows && cancelRows.length > 0 ? (
+                          cancelRows.map((row) => (
+                              <tr key={row.cancelId} className="hover:bg-gray-50 transition-colors">
+                                <td className="p-4 font-medium text-gray-900">{row.orderNo}</td>
+                                <td className="p-4">{row.createdAt}</td>
+                                <td className="p-4">{row.buyerId}</td>
+                                <td className="p-4">{row.sellerCompanyName}</td>
+                                <td className="p-4 text-red-600 font-semibold">
+                                  -{row.cancelAmount.toLocaleString()}원
+                                </td>
+                                <td className="p-4 max-w-xs truncate" title={row.reason}>
+                                  {row.reason}
+                                </td>
+                                <td className="p-4">
+                  <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
+                      row.status === 'APPROVED' ? 'bg-green-50 text-green-700 ring-green-600/20' :
+                          row.status === 'REJECTED' ? 'bg-red-50 text-red-700 ring-red-600/20' :
+                              'bg-yellow-50 text-yellow-800 ring-yellow-600/20'
+                  }`}>
+                    {row.status === 'APPROVED' && '승인 완료'}
+                    {row.status === 'REJECTED' && '요청 거절'}
+                    {row.status === 'PENDING' && '승인 대기'}
+                  </span>
+                                </td>
+                              </tr>
+                          ))
+                      ) : (
+                          <tr>
+                            <td colSpan={7} className="p-8 text-center text-gray-400">
+                              조회된 환불 및 취소 요청 내역이 없습니다.
+                            </td>
+                          </tr>
+                      )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
             )}
           </div>
 

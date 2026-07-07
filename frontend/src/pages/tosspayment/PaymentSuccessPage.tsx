@@ -115,7 +115,7 @@ export default function PaymentSuccessPage() {
                 </p>
 
                 <button
-                    onClick={() => navigate('/mypage/orders', { replace: true })}
+                    onClick={() => navigate('/buyer/orders', { replace: true })}
                     className="mt-6 w-full py-3 bg-slate-900 text-white rounded-lg text-sm font-medium"
                 >
                     주문 내역으로 이동

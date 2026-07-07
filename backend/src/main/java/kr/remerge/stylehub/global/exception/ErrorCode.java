@@ -122,6 +122,11 @@ public enum ErrorCode {
     SAMPLE_OPTION_NOT_CONFIGURED(HttpStatus.BAD_REQUEST, "SOURCING_001", "선택한 옵션은 현재 샘플 주문을 이용할 수 없습니다."),
     SOURCING_NOT_FOUND(HttpStatus.NOT_FOUND, "SOURCING_002", "소싱 요청을 찾을 수 없습니다."),
     INVALID_OPTION_QUANTITY(HttpStatus.BAD_REQUEST, "SOURCING_003", "옵션 수량은 1개 이상이어야 합니다."),
+    SOURCING_WITHDRAW_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "SOURCING_004", "취소할 수 없는 상태의 소싱 요청입니다."),
+    SOURCING_SUPPLIER_NOT_FOUND(HttpStatus.NOT_FOUND, "SOURCING_005", "공급사 배정 정보를 찾을 수 없습니다."),
+    INVALID_SOURCING_SUPPLIER_STATUS(HttpStatus.CONFLICT, "SOURCING_006", "처리할 수 없는 공급사 배정 상태입니다."),
+    SOURCING_SELF_COMPANY_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "SOURCING_007", "요청한 바이어 회사는 공급사로 배정할 수 없습니다."),
+    SOURCING_SUPPLIER_ALREADY_ASSIGNED(HttpStatus.CONFLICT, "SOURCING_008", "이미 배정된 공급사입니다."),
     // ───────────────────────────────────────────
     // 결제 (PAYMENT)
     // ───────────────────────────────────────────

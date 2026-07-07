@@ -307,14 +307,21 @@ function DeclineModal({ req, onClose, onConfirm }: {
   const [feedback, setFeedback] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleConfirm = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       await onConfirm(req.sourcingSupplierId, feedback.trim());
       setDone(true);
     } catch (e) {
-      console.error(e);
+      // 다른 탭/바이어의 요청 철회 등으로 이미 상태가 바뀐 경우(백엔드 상태 가드에 의해 거부됨) 등
+      setError(
+          e instanceof Error
+              ? e.message
+              : "거절 처리에 실패했습니다. 이미 처리되었거나 상태가 변경된 요청일 수 있습니다."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -361,6 +368,11 @@ function DeclineModal({ req, onClose, onConfirm }: {
                   />
                   <p className="text-[11px] text-muted-foreground mt-1">거절 사유는 관리자에게 전달됩니다.</p>
                 </div>
+                {error && (
+                    <div className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      {error}
+                    </div>
+                )}
                 <div className="flex gap-2">
                   <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors font-medium">취소</button>
                   <button

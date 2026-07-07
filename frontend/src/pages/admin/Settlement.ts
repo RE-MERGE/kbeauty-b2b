@@ -1,5 +1,7 @@
 import axios from 'axios';
 
+export type SettlementStatusValue = 'PENDING' | 'COMPLETED' | 'REFUNDED';
+
 // 백엔드와 주고받을 정산 데이터 타입 정의
 export interface Summary {
   totalGMV: number;
@@ -48,21 +50,21 @@ export interface SettlementResponse {
   final_amount: number;
   settled_at: Date;
   created_at: Date;
-  status: 'CANCELED'|'COMPLETED'|'CONFIRMED'|'DELIVERED'|'DISPUTE'|'PENDING'|'PREPARING'|'REFUNDED'|'SHIPPED'; // 백엔드 코드값에 맞춰 매핑
+  status: SettlementStatusValue;
 }
 
 const API_BASE_URL = 'http://localhost:5173/api/settlements';
 
 export const settlementApi = {
   // 1. 정산 데이터 목록 조회
-    getSettlements: async () => {
-      const response = await axios.get('/api/settlements');
-      return response.data; // { summary: {...}, rows: [...] } 형태로 반환됨
-    },
+  getSettlements: async () => {
+    const response = await axios.get('/api/settlements');
+    return response.data; // { summary: {...}, rows: [...] } 형태로 반환됨
+  },
 
   // 2. 정산 상태 변경 (승인 또는 환불 등)
-  // 백엔드 구현에 따라 PATCH /api/settlements/{id}/status 형태를 주로 사용합니다.
-  updateSettlementStatus: async (id: string, status: string): Promise<void> => {
-    await axios.patch(`${API_BASE_URL}/${id}/status`, { status });
+  // 반드시 SettlementStatusValue('PENDING'|'COMPLETED'|'REFUNDED')만 전달할 것 — 한글 문자열 금지
+  updateSettlementStatus: async (id: string, status: SettlementStatusValue): Promise<void> => {
+    await axios.patch(`/api/settlements/${id}/status`, { status });
   }
 };

@@ -92,7 +92,8 @@ export default function Settlements() {
   const handleApprove = async (settlement_id: number) => {
     if (window.confirm('해당 건의 정산 지급을 승인하시겠습니까?')) {
       try {
-        await settlementApi.updateSettlementStatus(settlement_id.toString(), '완료');
+        // 백엔드 SettlementStatus enum과 반드시 동일한 문자열이어야 함 (한글 금지)
+        await settlementApi.updateSettlementStatus(settlement_id.toString(), 'COMPLETED');
         alert('정산 승인이 완료되었습니다.');
         loadSettlementData();
       } catch (error) {
@@ -104,7 +105,8 @@ export default function Settlements() {
   const handleRefund = async (settlement_id: number) => {
     if (window.confirm('포트원을 통해 결제 취소(환불)를 진행하시겠습니까?')) {
       try {
-        await settlementApi.updateSettlementStatus(settlement_id.toString(), '환불완료');
+        // 백엔드 SettlementStatus enum과 반드시 동일한 문자열이어야 함 (한글 금지)
+        await settlementApi.updateSettlementStatus(settlement_id.toString(), 'REFUNDED');
         alert('환불 처리가 완료되었습니다.');
         loadSettlementData();
       } catch (error) {
@@ -260,7 +262,9 @@ export default function Settlements() {
                         {row.status === 'COMPLETED' && <CheckCircle2 size={12} />}
                         {row.status === 'PENDING' && <Clock size={12} />}
                         {row.status === 'REFUNDED' && <AlertCircle size={12} />}
-                        정산 완료
+                        {row.status === 'COMPLETED' && '정산 완료'}
+                        {row.status === 'PENDING' && '정산 대기'}
+                        {row.status === 'REFUNDED' && '환불 요청'}
                       </span>
                         </td>
                         <td className="p-4 text-center">

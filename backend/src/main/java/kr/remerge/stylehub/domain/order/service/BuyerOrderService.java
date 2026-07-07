@@ -1,4 +1,3 @@
-
 package kr.remerge.stylehub.domain.order.service;
 
 import kr.remerge.stylehub.domain.address.Address;
@@ -25,6 +24,7 @@ import kr.remerge.stylehub.domain.order.repository.OrderRepository;
 import kr.remerge.stylehub.domain.order.validation.CartOrderValidator;
 import kr.remerge.stylehub.domain.product.entity.Product;
 import kr.remerge.stylehub.domain.product.entity.ProductOption;
+import kr.remerge.stylehub.domain.settlement.SettlementService;
 import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.support.UserReader;
 import kr.remerge.stylehub.global.exception.BusinessException;
@@ -55,6 +55,7 @@ public class BuyerOrderService {
     private final AddressRepository addressRepository;
     private final OrderLogRepository orderLogRepository;
     private final CartOrderValidator cartOrderValidator;
+    private final SettlementService settlementService;
 
     @Transactional
     public void confirmOrder(Integer userId, Integer orderId) {
@@ -72,6 +73,9 @@ public class BuyerOrderService {
         OrderStatus previousStatus = order.getStatus();
 
         order.agree();
+
+        // 💡 신규 추가: 거래 확정(COMPLETED) 시점에 정산 건을 자동 생성
+        settlementService.createSettlementForOrder(order);
 
         orderLogRepository.save(
                 OrderLog.createStatusLog(

@@ -1,12 +1,16 @@
 package kr.remerge.stylehub.domain.settlement;
 
+import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.order.entity.Order; // 💡 프로젝트의 실제 Order 엔티티 경로에 맞게 자동 임포트 확인
 import kr.remerge.stylehub.domain.order.enumtype.OrderStatus;
 import kr.remerge.stylehub.domain.order.repository.OrderRepository;
 import kr.remerge.stylehub.domain.settlement.dto.SettlementDashboard;
 import kr.remerge.stylehub.domain.settlement.dto.SettlementDto;
 import kr.remerge.stylehub.domain.settlement.entity.Settlement;
+import kr.remerge.stylehub.domain.settlement.enums.SettlementStatus;
 import kr.remerge.stylehub.domain.user.entity.User;
+import kr.remerge.stylehub.domain.user.enumtype.UserRole;
+import kr.remerge.stylehub.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +26,7 @@ public class SettlementService {
 
     private final SettlementRepository settlementRepository;
     private final OrderRepository orderRepository;
+    private final UserRepository userRepository;
     private final EntityManager em;
 
     public SettlementDashboard getSettlementDashboard() {
@@ -47,10 +52,10 @@ public class SettlementService {
         Long totalFee = settlementRepository.sumPlatformFee();
         summary.setTotalFee(totalFee != null ? totalFee : 0L);
 
-        Long pendingAmount = settlementRepository.sumTotalAmountByStatus("PENDING");
+        Long pendingAmount = settlementRepository.sumTotalAmountByStatus(SettlementStatus.PENDING);
         summary.setPendingAmount(pendingAmount != null ? pendingAmount : 0L);
 
-        Long refundAmount = settlementRepository.sumTotalAmountByStatus("REFUNDED");
+        Long refundAmount = settlementRepository.sumTotalAmountByStatus(SettlementStatus.REFUNDED);
         summary.setRefundRequestAmount(refundAmount != null ? refundAmount : 0L);
 
         // 💡 오타 수정: 기존 코드가 response로 되어 있던 부분을 상단에 선언된 dashboard로 일치시켰습니다.
@@ -114,30 +119,70 @@ public class SettlementService {
         dashboard.setUserStats(userStats);
 
         // ==========================================================
-        // 4. 하단 메인 테이블 데이터 세팅 (기존 유지)
+        // 4. 하단 메인 테이블 데이터 세팅
         // ==========================================================
-        List<SettlementDashboard.RecentPayment> rows = allOrders.stream()
-                .filter(order -> order != null && OrderStatus.CONFIRMED == order.getStatus())
-                .sorted((o1, o2) -> o2.getCreatedAt().compareTo(o1.getCreatedAt()))
+        // 💡 변경: Order가 아니라 Settlement 기준으로 조회해야 실제 정산 상태
+        //    (PENDING/COMPLETED/REFUNDED)가 테이블에 반영됩니다.
+        List<SettlementDashboard.RecentPayment> rows = settlementRepository.findAllByOrderByCreatedAtDesc().stream()
                 .limit(10)
-                .map(order -> {
+                .map(settlement -> {
                     SettlementDashboard.RecentPayment row = new SettlementDashboard.RecentPayment();
-                    row.setSettlementId(order.getOrderId());
-                    row.setOrderNo(order.getOrderNo());
-                    row.setCreatedAt(order.getCreatedAt() != null ? order.getCreatedAt().toString() : null);
-                    row.setBuyerId(order.getBuyer() != null ? order.getBuyer().getUserId() : null); // 💡 User PK 필드명 확인
-                    row.setSellerId(order.getSellerCompany() != null ? order.getSellerCompany().getCompanyId() : null); // 💡 Company PK 필드명 확인
-                    row.setSellerCompanyName(order.getSellerCompanyName());
-                    row.setTotalAmount(order.getTotalAmount());
-                    row.setPlatformFee(order.getPlatformFee());
-                    row.setFinalAmount(order.getTotalAmount() - order.getPlatformFee());
-                    row.setStatus(order.getStatus() != null ? order.getStatus().name() : null);
-                    row.setReceiverName(order.getReceiverName());
+                    row.setSettlementId(settlement.getSettlementId());
+                    row.setOrderNo(settlement.getOrder() != null ? settlement.getOrder().getOrderNo() : null);
+                    row.setCreatedAt(settlement.getCreatedAt() != null ? settlement.getCreatedAt().toString() : null);
+                    row.setBuyerId(settlement.getBuyer() != null ? settlement.getBuyer().getUserId() : null);
+                    // sellerId는 sellerCompany의 PK이므로 User -> Company를 거쳐서 조회
+                    row.setSellerId(settlement.getSeller() != null && settlement.getSeller().getCompany() != null
+                            ? settlement.getSeller().getCompany().getCompanyId()
+                            : null);
+                    row.setSellerCompanyName(settlement.getSeller() != null && settlement.getSeller().getCompany() != null
+                            ? settlement.getSeller().getCompany().getName()
+                            : null);
+                    row.setTotalAmount(settlement.getTotalAmount());
+                    row.setPlatformFee(settlement.getPlatformFee());
+                    row.setFinalAmount(settlement.getFinalAmount());
+                    row.setStatus(settlement.getStatus() != null ? settlement.getStatus().name() : null);
+                    row.setReceiverName(settlement.getReceiverName());
                     return row;
                 })
                 .toList();
         dashboard.setRows(rows);
         return dashboard;
+    }
+
+    /**
+     * 주문이 COMPLETED(바이어 거래 확정) 상태가 될 때 호출되어 정산 건을 자동 생성한다.
+     * BuyerOrderService.confirmOrder()에서 order.agree() 직후 호출됨.
+     */
+    @Transactional
+    public void createSettlementForOrder(Order order) {
+        User seller = findCompanyPresident(order.getSellerCompany());
+
+        Settlement settlement = Settlement.builder()
+                .order(order)
+                .seller(seller)
+                .buyer(order.getBuyer())
+                .receiverName(order.getReceiverName())
+                .totalAmount(order.getTotalAmount())
+                .platformFee(order.getPlatformFee())
+                .finalAmount(order.getTotalAmount() - order.getPlatformFee())
+                .status(SettlementStatus.PENDING)
+                .build();
+
+        settlementRepository.save(settlement);
+    }
+
+    // 셀러 회사의 대표(PRESIDENT) User를 조회. 여러 명일 경우 첫 번째를 사용.
+    private User findCompanyPresident(Company sellerCompany) {
+        return userRepository.findByCompany_CompanyIdAndRole(
+                        sellerCompany.getCompanyId(),
+                        UserRole.PRESIDENT
+                )
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "회사(companyId=" + sellerCompany.getCompanyId() + ")의 대표(PRESIDENT) 계정을 찾을 수 없습니다."
+                ));
     }
 
     @Transactional

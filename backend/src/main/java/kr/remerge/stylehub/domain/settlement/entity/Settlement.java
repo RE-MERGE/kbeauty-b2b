@@ -2,6 +2,7 @@ package kr.remerge.stylehub.domain.settlement.entity;
 
 import jakarta.persistence.*;
 import kr.remerge.stylehub.domain.order.entity.Order;
+import kr.remerge.stylehub.domain.settlement.enums.SettlementStatus;
 import kr.remerge.stylehub.domain.user.entity.User;
 import lombok.*;
 
@@ -55,13 +56,37 @@ public class Settlement {
     @Column(name = "final_amount", nullable = false)
     private Long finalAmount = 0L;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
-    private String status;
+    @Builder.Default
+    private SettlementStatus status = SettlementStatus.PENDING;
 
-    @Column(name = "settled_at", nullable = false)
+    @Column(name = "settled_at")
     private LocalDateTime settledAt;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+    }
+
+    // 상태 전이를 세터 없이 의미 있는 메서드로 캡슐화 (TossPayments, BankTransferPayment와 동일한 패턴)
+    public void markAsCompleted(User admin) {
+        this.status = SettlementStatus.COMPLETED;
+        this.admin = admin;
+        this.settledAt = LocalDateTime.now();
+    }
+
+    public void markAsRefunded(User admin) {
+        this.status = SettlementStatus.REFUNDED;
+        this.admin = admin;
+        this.settledAt = LocalDateTime.now();
+    }
+
+    public boolean isPending() {
+        return this.status == SettlementStatus.PENDING;
+    }
 
 }

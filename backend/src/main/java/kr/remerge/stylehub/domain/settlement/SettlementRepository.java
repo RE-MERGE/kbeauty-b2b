@@ -1,6 +1,7 @@
 package kr.remerge.stylehub.domain.settlement;
 
 import kr.remerge.stylehub.domain.settlement.entity.Settlement;
+import kr.remerge.stylehub.domain.settlement.enums.SettlementStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,7 +16,7 @@ public interface SettlementRepository extends JpaRepository<Settlement, Long> {
     Long sumPlatformFee();
 
     @Query("SELECT SUM(s.totalAmount) FROM Settlement s WHERE s.status = :status")
-    Long sumTotalAmountByStatus(@Param("status") String status);
+    Long sumTotalAmountByStatus(@Param("status") SettlementStatus status);
 
     List<Settlement> findAllByOrderByCreatedAtDesc();
 }

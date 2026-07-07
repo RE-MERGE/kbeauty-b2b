@@ -28,21 +28,28 @@ type QuoteInitItem = {
 
 type QuoteInitData = {
   sourcingNo: string;
+  requestType: "READY" | "CUSTOM";
   productName: string;
   brandName: string | null;
   material: string | null;
   deliveryDate: string | null;
   needSample: "Y" | "N";
+  // 바이어가 소싱 요청 시 입력한 참고용 가격 — READY는 희망 단가, CUSTOM은 전체 예산.
+  unitPrice: number | null;
+  totalBudget: number | null;
   items: QuoteInitItem[];
 };
 
 type SourcingDetailResponse = {
   sourcing_no: string;
+  type: "READY" | "CUSTOM";
   product_name: string;
   brand_name: string | null;
   main_material: string | null;
   delivery_date: string | null;
   need_sample: "Y" | "N";
+  unit_price: number | null;
+  total_budget: number | null;
   items: {
     option_summary: string | null;
     quantity: number;
@@ -111,23 +118,53 @@ function buildInitialForm(data: QuoteInitData): QuoteForm {
   };
 }
 
+// 바이어가 제시한 희망 단가(READY) 또는 전체 예산(CUSTOM)을 참고해 견적 단가의
+// 시작값을 추정한다. CUSTOM은 총 예산 ÷ 총 요청 수량으로 단가를 역산한다.
+// 셀러가 실제 제출 전 자유롭게 수정할 수 있는 "제안값"일 뿐이다.
+function getSuggestedUnitPrice(data: QuoteInitData): number | null {
+  if (data.requestType === "READY") {
+    return data.unitPrice ?? null;
+  }
+
+  const totalQuantity = data.items.reduce(
+    (sum, item) => sum + item.quantity,
+    0
+  );
+
+  if (data.totalBudget && totalQuantity > 0) {
+    return Math.round(data.totalBudget / totalQuantity);
+  }
+
+  return null;
+}
+
 function buildInitialQuoteItems(data: QuoteInitData): QuoteItemRow[] {
-  if (data.items.length === 0) return [makeDefaultQuoteItem()];
+  const suggestedUnitPrice = getSuggestedUnitPrice(data);
+  const suggestedUnitPriceText =
+    suggestedUnitPrice !== null ? String(suggestedUnitPrice) : "";
+
+  if (data.items.length === 0) {
+    return [{ ...makeDefaultQuoteItem(), unitPrice: suggestedUnitPriceText }];
+  }
 
   return data.items.map((item) => ({
     optionValues: parseOptionSummary(item.optionSummary),
     quantity: item.quantity ? String(item.quantity) : "",
-    unitPrice: "",
+    unitPrice: suggestedUnitPriceText,
   }));
 }
 
 function buildInitialSampleItems(data: QuoteInitData): SampleItemRow[] {
   if (data.needSample !== "Y") return [makeDefaultSampleItem()];
 
+  const suggestedUnitPrice = getSuggestedUnitPrice(data);
+  const suggestedUnitPriceText =
+    suggestedUnitPrice !== null ? String(suggestedUnitPrice) : "";
+
   return data.items.map((item) => ({
     sampleName: item.optionSummary || data.productName,
     quantity: item.sampleQuantity ? String(item.sampleQuantity) : "1",
-    unitPrice: "",
+    unitPrice: suggestedUnitPriceText,
     memo: "",
   }));
 }
@@ -380,11 +417,14 @@ export function SellerQuoteWrite() {
 
         const quoteInitData: QuoteInitData = {
           sourcingNo: response.sourcing_no,
+          requestType: response.type,
           productName: response.product_name,
           brandName: response.brand_name,
           material: response.main_material,
           deliveryDate: response.delivery_date,
           needSample: response.need_sample,
+          unitPrice: response.unit_price,
+          totalBudget: response.total_budget,
           items: response.items.map((item) => ({
             optionSummary: item.option_summary,
             quantity: item.quantity,
@@ -472,6 +512,9 @@ export function SellerQuoteWrite() {
   };
 
   // ── 계산 ─────────────────────────────────────────────────────────────────
+  const hasSuggestedUnitPrice =
+      initData !== null && getSuggestedUnitPrice(initData) !== null;
+
   const quoteItemSnapshots = useMemo(
       () =>
           quoteItems.map((item) => {
@@ -656,13 +699,25 @@ export function SellerQuoteWrite() {
                   </div>
                 </div>
 
-                <div className="mt-6 grid grid-cols-2 gap-3 border-t border-blue-200 pt-5 md:grid-cols-4">
+                <div className="mt-6 grid grid-cols-2 gap-3 border-t border-blue-200 pt-5 md:grid-cols-5">
                   <RequestMetric
                     label="총 요청 수량"
                     value={
                       initData && initData.items.length > 0
                         ? `${initData.items.reduce((sum, item) => sum + item.quantity, 0).toLocaleString()}벌`
                         : "-"
+                    }
+                  />
+                  <RequestMetric
+                    label={initData?.requestType === "CUSTOM" ? "전체 예산" : "희망 단가"}
+                    value={
+                      initData?.requestType === "CUSTOM"
+                        ? initData?.totalBudget
+                          ? formatPrice(initData.totalBudget)
+                          : "-"
+                        : initData?.unitPrice
+                          ? formatPrice(initData.unitPrice)
+                          : "-"
                     }
                   />
                   <RequestMetric
@@ -896,7 +951,14 @@ export function SellerQuoteWrite() {
                               />
                             </div>
                             <div>
-                              <FieldLabel required>단가</FieldLabel>
+                              <FieldLabel required>
+                                단가
+                                {hasSuggestedUnitPrice && (
+                                  <span className="ml-1.5 font-normal text-slate-400">
+                                    (바이어 희망가 기준 자동입력 · 수정 가능)
+                                  </span>
+                                )}
+                              </FieldLabel>
                               <input
                                   type="number"
                                   value={item.unitPrice}
@@ -1113,7 +1175,14 @@ export function SellerQuoteWrite() {
                                   />
                                 </div>
                                 <div>
-                                  <FieldLabel>단가</FieldLabel>
+                                  <FieldLabel>
+                                    단가
+                                    {hasSuggestedUnitPrice && (
+                                      <span className="ml-1.5 font-normal text-slate-400">
+                                        (참고가 자동입력)
+                                      </span>
+                                    )}
+                                  </FieldLabel>
                                   <input
                                       type="number"
                                       value={sample.unitPrice}
@@ -1225,67 +1294,4 @@ export function SellerQuoteWrite() {
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="text-slate-500">배송비</dt>
-                    <dd className="font-bold text-slate-900">{formatPrice(shippingFee)}</dd>
-                  </div>
-                  <div className="flex items-end justify-between gap-3 border-t border-slate-200 pt-4">
-                    <dt className="font-black text-slate-900">합계</dt>
-                    <dd className="text-lg font-black text-blue-700">
-                      {formatPrice(totalAmount)}
-                    </dd>
-                  </div>
-                </dl>
-
-                {submitErrors.length > 0 && (
-                  <div
-                    role="alert"
-                    className="mt-5 rounded-lg border border-rose-200 bg-rose-50 p-4"
-                  >
-                    <div className="flex gap-3 text-sm leading-5 text-rose-700">
-                      <AlertCircle size={17} className="mt-0.5 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="font-black">제출할 수 없는 항목이 있습니다.</p>
-                        <ul className="mt-2 space-y-1.5 text-xs">
-                          {submitErrors.map((error) => (
-                            <li key={error} className="flex gap-1.5">
-                              <span aria-hidden="true">•</span>
-                              <span>{error}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Send size={16} />
-                  {submitting ? "제출 중..." : "견적서 제출"}
-                </button>
-              </section>
-
-              <div className="flex gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4">
-                <Info size={17} className="mt-0.5 shrink-0 text-blue-700" />
-                <p className="text-xs leading-5 text-slate-700">
-                  제출 전 옵션별 단가와 배송비를 확인하세요. 플랫폼 이용
-                  수수료는 결제 단계에서 별도로 계산됩니다.
-                </p>
-              </div>
-
-              <Link
-                to="/seller/sourcing-requests"
-                className="inline-flex h-11 w-full items-center justify-center rounded-md border border-slate-200 bg-white text-sm font-bold text-slate-600 hover:bg-slate-50"
-              >
-                작성 취소
-              </Link>
-            </aside>
-          </div>
-        </div>
-      </div>
-  );
-}
+                    <dt className="

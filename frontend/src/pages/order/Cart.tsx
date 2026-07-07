@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import api from "@/api/axios";
 import {
@@ -260,6 +260,21 @@ export function Cart() {
     await updateQtyTo(id, Math.max(1, item.quantity + delta), type);
   };
 
+  // 수량 입력창에 직접 타이핑하는 동안(blur 전) 서버 반영 없이 화면(주문 요약 포함)만
+  // 즉시 갱신한다. 실제 API 커밋은 여전히 onBlur/Enter 시점에 updateQtyTo가 담당한다 —
+  // 키 입력마다 API를 호출하면 요청이 과도하게 쌓이기 때문에, 입력 중엔 로컬 상태만 바꾼다.
+  const updateQtyDraft = (id: number, nextQuantity: number) => {
+    if (!Number.isFinite(nextQuantity) || nextQuantity < 1) return;
+
+    setItems((prev) =>
+      prev.map((cartItem) =>
+        cartItem.cartItemId === id
+          ? { ...cartItem, quantity: nextQuantity, totalPrice: cartItem.unitPrice * nextQuantity }
+          : cartItem
+      )
+    );
+  };
+
   const removeItemFromState = (id: number) => {
     setItems((prev) => prev.filter((item) => item.cartItemId !== id));
     setSelected((prev) => prev.filter((selectedId) => selectedId !== id));
@@ -498,7 +513,8 @@ export function Cart() {
                               </span>
                             </div>
                             <p className="mt-1 pl-11 text-xs text-slate-500">
-                              같은 출고처 상품 · 배송비 함께 계산 · 선택 합계 <strong className="font-bold text-slate-800">{formatPrice(sellerSubtotal)}</strong>
+                              {group.items.length > 1 && "같은 출고처 상품 · 배송비 함께 계산 · "}
+                              선택 합계 <strong className="font-bold text-slate-800">{formatPrice(sellerSubtotal)}</strong>
                             </p>
                           </div>
                           <div
@@ -529,6 +545,7 @@ export function Cart() {
                             onToggle={() => toggleSelect(item.cartItemId, "BULK")}
                             onRemove={() => removeItem(item.cartItemId)}
                             onQtyChange={(delta) => updateQty(item.cartItemId, delta, "bulk")}
+                            onQuantityDraft={(quantity) => updateQtyDraft(item.cartItemId, quantity)}
                             onQuantityInput={(quantity) => updateQtyTo(item.cartItemId, quantity, "bulk")}
                             onAddSample={() => handleAddSample(item)}
                             sampleAdded={sampleOptionIds.has(item.productOptionId)}
@@ -554,6 +571,7 @@ export function Cart() {
                 onToggle={(id) => toggleSelect(id, "SAMPLE")}
                 onRemove={(id) => removeItem(id)}
                 onQtyChange={(id, delta) => updateQty(id, delta, "sample")}
+                onQuantityDraft={(id, quantity) => updateQtyDraft(id, quantity)}
                 onQuantityChange={(id, quantity) => updateQtyTo(id, quantity, "sample")}
                 updatingQuantityIds={updatingQuantityIds}
               />
@@ -670,6 +688,7 @@ function CartProductCard({
   onToggle,
   onRemove,
   onQtyChange,
+  onQuantityDraft,
   onQuantityInput,
   onAddSample,
   sampleAdded = false,
@@ -683,6 +702,7 @@ function CartProductCard({
   onToggle: () => void;
   onRemove: () => void;
   onQtyChange: (delta: number) => void;
+  onQuantityDraft?: (quantity: number) => void;
   onQuantityInput: (quantity: number) => void;
   onAddSample?: () => void;
   sampleAdded?: boolean;
@@ -790,6 +810,7 @@ function CartProductCard({
                 stepLabel={isSample ? `최대 ${sampleMaxQuantity.toLocaleString()}개` : "10벌 단위"}
                 onMinus={() => onQtyChange(isSample ? -1 : -10)}
                 onPlus={() => onQtyChange(isSample ? 1 : 10)}
+                onDraftChange={onQuantityDraft}
                 onValueCommit={onQuantityInput}
                 min={minimumQuantity}
                 minusDisabled={isUpdatingQuantity || quantity <= minimumQuantity}
@@ -841,6 +862,7 @@ function QuantityControl({
   stepLabel,
   onMinus,
   onPlus,
+  onDraftChange,
   onValueCommit,
   min,
   max,
@@ -852,6 +874,7 @@ function QuantityControl({
   stepLabel: string;
   onMinus: () => void;
   onPlus: () => void;
+  onDraftChange?: (value: number) => void;
   onValueCommit: (value: number) => void;
   min: number;
   max?: number;
@@ -859,6 +882,11 @@ function QuantityControl({
   plusDisabled?: boolean;
 }) {
   const [draftValue, setDraftValue] = useState(String(value));
+
+  // 타이핑 중에는 화면 반영을 위해 value prop 자체가 (draft 반영으로) 계속 바뀌므로,
+  // "서버에 실제로 반영된 마지막 값"을 별도로 기억해둬야 blur 시 진짜 변경 여부를
+  // 판단할 수 있다. 포커스가 들어온 시점의 value를 기준값으로 스냅샷해둔다.
+  const lastCommittedRef = useRef(value);
 
   useEffect(() => {
     setDraftValue(String(value));
@@ -877,7 +905,8 @@ function QuantityControl({
 
     setDraftValue(String(clampedValue));
 
-    if (clampedValue !== value) {
+    if (clampedValue !== lastCommittedRef.current) {
+      lastCommittedRef.current = clampedValue;
       onValueCommit(clampedValue);
     }
   };
@@ -897,7 +926,22 @@ function QuantityControl({
         value={draftValue}
         min={min}
         max={max}
-        onChange={(event) => setDraftValue(event.target.value)}
+        onFocus={() => {
+          // 타이핑 시작 전 시점의 값을 "마지막 커밋값" 기준으로 스냅샷.
+          lastCommittedRef.current = value;
+        }}
+        onChange={(event) => {
+          const nextDraft = event.target.value;
+          setDraftValue(nextDraft);
+
+          // blur 전이라도 유효한 값이면 주문 요약 등 화면에는 바로 반영한다.
+          // (실제 서버 반영 여부 판단은 여전히 blur/Enter의 commitValue가
+          // lastCommittedRef와 비교해서 처리한다)
+          const parsed = Number(nextDraft);
+          if (Number.isFinite(parsed) && nextDraft.trim() !== "") {
+            onDraftChange?.(Math.max(min, Math.floor(parsed)));
+          }
+        }}
         onBlur={commitValue}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
@@ -932,6 +976,7 @@ function SampleCart({
   onToggle,
   onRemove,
   onQtyChange,
+  onQuantityDraft,
   onQuantityChange,
   updatingQuantityIds,
 }: {
@@ -945,6 +990,7 @@ function SampleCart({
   onToggle: (id: number) => void;
   onRemove: (id: number) => void;
   onQtyChange: (id: number, delta: number) => void;
+  onQuantityDraft?: (id: number, quantity: number) => void;
   onQuantityChange: (id: number, quantity: number) => void;
   updatingQuantityIds: Set<number>;
 }) {
@@ -988,6 +1034,7 @@ function SampleCart({
         onToggle={() => onToggle(item.cartItemId)}
         onRemove={() => onRemove(item.cartItemId)}
         onQtyChange={(delta) => onQtyChange(item.cartItemId, delta)}
+        onQuantityDraft={(quantity) => onQuantityDraft?.(item.cartItemId, quantity)}
         onQuantityInput={(quantity) => onQuantityChange(item.cartItemId, quantity)}
         isUpdatingQuantity={updatingQuantityIds.has(item.cartItemId)}
       />
@@ -1036,69 +1083,4 @@ function OrderSummary({
 
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-amber-800">
-                <Truck size={14} />
-                배송비
-              </div>
-              {shipping > 0 && (
-                <span className="text-sm font-black text-amber-900">{shippingText}</span>
-              )}
-            </div>
-            <p className="mt-1 text-xs leading-5 text-amber-700">{shippingDescription}</p>
-          </div>
-        </div>
-
-        <div className="flex items-end justify-between border-b border-slate-100 py-5">
-          <div>
-                <h2 className="text-sm font-bold text-slate-950">
-                    결제 예정 금액
-                </h2>
-          </div>
-          <p className="whitespace-nowrap text-right text-xl font-black leading-none text-blue-600 md:text-2xl">
-            {formatPrice(total)}
-          </p>
-        </div>
-
-        <div className="my-4 rounded-lg border border-blue-400/15 bg-blue-50/60 px-3 py-2.5 text-xs leading-5 text-slate-700">
-          플랫폼 이용 수수료는 결제 단계에서 별도 계산됩니다.
-        </div>
-
-        {count === 0 ? (
-          <button
-            type="button"
-            disabled
-            className="inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-slate-100 px-4 py-3 text-sm font-bold text-slate-400"
-          >
-            주문하기
-            <ArrowRight size={16} />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onCheckout}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-600"
-          >
-            {isSample ? "샘플 주문하기" : "주문하기"}
-            <ArrowRight size={16} />
-          </button>
-        )}
-
-        <Link
-          to="/products"
-          className="mt-2 inline-flex w-full items-center justify-center rounded-lg border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:border-blue-400 hover:text-blue-600"
-        >
-          쇼핑 계속하기
-        </Link>
-      </div>
-    </aside>
-  );
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-slate-500">{label}</span>
-      <span className="font-semibold text-slate-900">{value}</span>
-    </div>
-  );
-}
+              <div className="flex items-center gap-2 text-xs font-bold 

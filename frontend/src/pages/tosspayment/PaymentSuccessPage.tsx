@@ -72,7 +72,12 @@ export default function PaymentSuccessPage() {
                 // 카드결제 등 즉시 완료된 경우 기존 흐름 그대로
                 console.log('결제 성공, 이동 시도:', result);
                 sessionStorage.removeItem("pending_order_ids");
-                navigate('/payment/ordersuccess', { replace: true });
+                // 완료 페이지에서 간단한 주문 요약을 보여줄 수 있도록 방금 결제된
+                // 주문번호(orderNo) 목록을 그대로 넘겨준다 (다건결제 시 여러 건일 수 있음).
+                navigate('/payment/ordersuccess', {
+                    replace: true,
+                    state: { orderNumbers: orderIds },
+                });
             })
             .catch((error) => {
                 console.error('결제 승인 실패:', error);
@@ -127,14 +132,4 @@ export default function PaymentSuccessPage() {
         return (
             <div className="max-w-md mx-auto p-8 text-center">
                 <h2 className="text-xl font-bold text-red-600 mb-2">결제 승인 실패</h2>
-                <p className="text-slate-500">{confirmError}</p>
-            </div>
-        );
-    }
-    return (
-      <div className="p-8 text-center">
-        <h2 className="text-xl font-bold text-slate-900">결제가 진행 중입니다...</h2>
-        <p className="text-slate-500 mt-2">잠시만 기다려주세요.</p>
-      </div>
-  );
-}
+                <p className=

@@ -852,7 +852,7 @@ export default function BuyerQuoteList() {
                                 </p>
                                 {quote.parentQuoteId !== null && (
                                   <span className="mt-1 inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-0.5 text-[11px] font-bold text-violet-700">
-                                    재견적 v{quote.version}
+                                    {quote.version}차 견적
                                   </span>
                                 )}
                                 <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-emerald-700">
@@ -1221,3 +1221,4 @@ export default function BuyerQuoteList() {
     </div>
   );
 }
+ 

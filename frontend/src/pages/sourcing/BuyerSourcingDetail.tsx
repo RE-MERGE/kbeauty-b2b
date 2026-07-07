@@ -62,6 +62,13 @@ export interface BidDetail {
   quoteId?: number;
   quoteStatus?: QuoteStatus;
   totalAmount?: number;
+  unitPrice?: number;
+  leadTimeDays?: number;
+  availableDate?: string;
+  // 백엔드가 "AVAILABLE" 문자열로 내려줌 (Quote 엔티티의 sampleAvailable 원본 값)
+  sampleAvailable?: string;
+  sellerMemo?: string;
+  validUntil?: string;
   canManage?: boolean;
 }
 
@@ -413,6 +420,110 @@ function SupplierCard({
   );
 }
 
+// ── 견적 비교표 ───────────────────────────────────────────────────────────────
+// 접수된 견적이 2건 이상일 때, 가격/납기/샘플 여부를 나란히 비교할 수 있도록 보여준다.
+// 회사명은 SupplierCard와 동일하게 승인 전까지 익명(공급사 N) 처리한다.
+function QuoteComparisonTable({
+                                bids,
+                                getLabel,
+                                onViewDetail,
+                              }: {
+  bids: BidDetail[];
+  getLabel: (bid: BidDetail) => string;
+  onViewDetail: (quoteId: number) => void;
+}) {
+  const amounts = bids
+      .map((bid) => bid.totalAmount)
+      .filter((value): value is number => value != null);
+  const leadTimes = bids
+      .map((bid) => bid.leadTimeDays)
+      .filter((value): value is number => value != null);
+  const lowestAmount = amounts.length > 0 ? Math.min(...amounts) : null;
+  const shortestLeadTime = leadTimes.length > 0 ? Math.min(...leadTimes) : null;
+
+  return (
+      <div className="mb-4 overflow-x-auto bg-white border border-border rounded-xl">
+        <table className="w-full min-w-[720px] text-left">
+          <thead className="border-b border-border bg-secondary/40 text-xs font-semibold text-muted-foreground">
+            <tr>
+              <th className="px-4 py-3">공급사</th>
+              <th className="px-4 py-3 text-right">총 견적 금액</th>
+              <th className="px-4 py-3">납기</th>
+              <th className="px-4 py-3">샘플</th>
+              <th className="px-4 py-3">유효기간</th>
+              <th className="px-4 py-3 text-right"> </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {bids.map((bid) => {
+              const isLowest = lowestAmount !== null && bid.totalAmount === lowestAmount;
+              const isFastest = shortestLeadTime !== null && bid.leadTimeDays === shortestLeadTime;
+              const sampleAvailable = bid.sampleAvailable === "AVAILABLE";
+
+              return (
+                  <tr
+                      key={bid.sourcingSupplierId}
+                      role={bid.quoteId ? "link" : undefined}
+                      tabIndex={bid.quoteId ? 0 : undefined}
+                      onClick={() => bid.quoteId && onViewDetail(bid.quoteId)}
+                      onKeyDown={(event) => {
+                        if (bid.quoteId && (event.key === "Enter" || event.key === " ")) {
+                          event.preventDefault();
+                          onViewDetail(bid.quoteId);
+                        }
+                      }}
+                      className={`align-middle transition-colors ${bid.quoteId ? "cursor-pointer hover:bg-secondary/40" : ""}`}
+                  >
+                    <td className="px-4 py-3">
+                      <span className="font-semibold text-foreground">{getLabel(bid)}</span>
+                      <div className="mt-1">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${BID_STATUS_STYLE[bid.status]}`}>
+                          {BID_STATUS_LABEL[bid.status]}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <p className="font-bold text-foreground">
+                        {bid.totalAmount != null ? `${bid.totalAmount.toLocaleString()}원` : "—"}
+                      </p>
+                      {isLowest && bids.length > 1 && (
+                          <span className="mt-1 inline-flex rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-bold text-green-700">
+                            최저가
+                          </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-semibold text-foreground">
+                        {bid.leadTimeDays != null ? `${bid.leadTimeDays}일` : "—"}
+                      </p>
+                      {isFastest && bids.length > 1 && (
+                          <span className="mt-1 inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                            최단 납기
+                          </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs font-semibold ${sampleAvailable ? "text-green-600" : "text-muted-foreground"}`}>
+                        {sampleAvailable ? "가능" : "불가"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                      {bid.validUntil ? bid.validUntil.slice(0, 10) : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {bid.quoteId != null && (
+                          <span className="text-xs font-semibold text-primary">상세보기 →</span>
+                      )}
+                    </td>
+                  </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+  );
+}
+
 // ── 메인 페이지 ───────────────────────────────────────────────────────────────
 export function BuyerSourcingDetail() {
   const navigate = useNavigate();
@@ -511,6 +622,13 @@ export function BuyerSourcingDetail() {
   const allBids = request.bids ?? [];
   const quotedBids = allBids.filter((b) => b.quoteId != null);
   const pendingBidsCount = allBids.length - quotedBids.length;
+
+  // 카드 목록과 동일한 "공급사 N" 번호를 비교표에서도 그대로 사용해 혼동을 줄인다.
+  const supplierLabelById = new Map(
+      allBids.map((bid, index) => [bid.sourcingSupplierId, `공급사 ${index + 1}`])
+  );
+  const getSupplierLabel = (bid: BidDetail) =>
+      bid.companyName ?? supplierLabelById.get(bid.sourcingSupplierId) ?? "공급사";
 
   const renderSupplierCard = (bid: BidDetail, index: number) => (
       <SupplierCard
@@ -639,120 +757,4 @@ export function BuyerSourcingDetail() {
             {(request.files ?? []).length > 0 && (
                 <div className={request.detail || request.refUrl ? "" : "sm:col-span-2"}>
                   <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                    첨부 파일 ({request.files.length}건)
-                  </div>
-                  <div className="space-y-1.5">
-                    {request.files.map((f) => (
-                        <a key={f.sourcingRequestFileId} href={f.fileUrl} target="_blank" rel="noopener noreferrer"
-                           className="flex items-center gap-3 border border-border rounded px-3 py-2 bg-secondary hover:border-primary transition-colors group/file">
-                          <FileText size={13} className="text-primary flex-shrink-0" />
-                          <span className="text-xs text-foreground flex-1 truncate">{f.fileName}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {f.fileType === "WORK_FILE" ? "작업지시서" : "참고이미지"}
-                          </span>
-                          <span className="text-xs text-primary opacity-0 group-hover/file:opacity-100 transition-opacity">다운로드</span>
-                        </a>
-                    ))}
-                  </div>
-                </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── 견적 목록 ── */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <h2 className="font-bold text-foreground">접수된 견적</h2>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-mono font-bold ${quotedBids.length > 0 ? "bg-primary text-white" : "bg-secondary text-muted-foreground"}`}>
-                {quotedBids.length}건
-              </span>
-              {pendingBidsCount > 0 && request.status !== "WITHDRAWN" && (
-                  <span className="text-xs text-muted-foreground">
-                    배정 {allBids.length}개사 중 {pendingBidsCount}개사 준비중
-                  </span>
-              )}
-            </div>
-          </div>
-
-          {actionError && (
-              <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                {actionError}
-              </div>
-          )}
-
-          {request.status === "TRADING" && (
-              <div className="flex items-center justify-between gap-3 mb-4 bg-blue-50 border border-blue-200 rounded-xl px-5 py-4">
-                <div className="flex items-center gap-2 text-sm text-blue-700">
-                  <BadgeCheck size={16} className="flex-shrink-0" />
-                  <span>거래가 진행중입니다. 자세한 내용은 견적관리에서 확인해 주세요.</span>
-                </div>
-                <button
-                    onClick={() => navigate("/buyer/quotes?status=APPROVED")}
-                    className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors"
-                >
-                  견적관리로 이동 <ChevronRight size={12} />
-                </button>
-              </div>
-          )}
-
-          {request.status === "WITHDRAWN" && quotedBids.length > 0 ? (
-              <div className="bg-white border border-border rounded-xl overflow-hidden">
-                <button
-                    onClick={() => setShowWithdrawnBids((prev) => !prev)}
-                    className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-secondary/50 transition-colors"
-                >
-                  <div className="flex items-center gap-2 text-sm">
-                    <Ban size={14} className="text-muted-foreground flex-shrink-0" />
-                    <span className="text-foreground">
-                      취소 시점에 접수된 견적 <strong>{quotedBids.length}건</strong> (모두 미채택 처리됨)
-                    </span>
-                  </div>
-                  <ChevronDown
-                      size={16}
-                      className={`text-muted-foreground flex-shrink-0 transition-transform ${showWithdrawnBids ? "rotate-180" : ""}`}
-                  />
-                </button>
-                {showWithdrawnBids && (
-                    <div className="border-t border-border px-5 py-4 space-y-3 bg-secondary/30">
-                      {quotedBids.map((bid, index) => renderSupplierCard(bid, index))}
-                    </div>
-                )}
-              </div>
-          ) : allBids.length === 0 ? (
-              <div className="text-center py-16 text-muted-foreground bg-white border border-border rounded-xl">
-                <div className="text-4xl mb-3">📭</div>
-                <div className="font-medium mb-1">아직 배정된 공급사가 없습니다</div>
-                <div className="text-sm">공급사가 배정되면 이곳에 표시됩니다.</div>
-                {request.status === "PENDING" && (
-                    <div className="mt-4 inline-flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5">
-                      <AlertTriangle size={11} /> 공급사 배정까지 시간이 걸릴 수 있습니다
-                    </div>
-                )}
-              </div>
-          ) : (
-              <div className="space-y-3">
-                {allBids.map((bid, index) => renderSupplierCard(bid, index))}
-              </div>
-          )}
-        </div>
-
-        {showWithdraw && (
-            <WithdrawConfirmModal
-                onClose={() => setShowWithdraw(false)}
-                onConfirm={handleWithdraw}
-                isLoading={withdrawing}
-            />
-        )}
-
-        {pendingAction && (
-            <QuoteActionConfirmModal
-                action={pendingAction}
-                onClose={() => setPendingAction(null)}
-                onConfirm={() => executeQuoteAction(pendingAction.quoteId, pendingAction.status)}
-                isLoading={actionQuoteId === pendingAction.quoteId}
-            />
-        )}
-      </div>
-  );
-}
+      

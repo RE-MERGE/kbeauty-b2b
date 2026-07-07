@@ -2,6 +2,7 @@ package kr.remerge.stylehub.domain.negotiation.entity;
 
 import jakarta.persistence.*;
 import kr.remerge.stylehub.domain.contract.entity.Contract;
+import kr.remerge.stylehub.domain.negotiation.dto.NegotiationCreateRequest;
 import kr.remerge.stylehub.domain.quote.entity.Quote;
 import kr.remerge.stylehub.domain.user.entity.User;
 import lombok.AccessLevel;
@@ -83,6 +84,10 @@ public class Negotiation {
         this.openedAt = LocalDateTime.now();
     }
 
+    public static Negotiation from(NegotiationCreateRequest request) {
+        return null;
+    }
+
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();
@@ -103,6 +108,10 @@ public class Negotiation {
         this.admin = admin;
     }
 
+    public void markRequested() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
     public void agree() {
         this.status = "AGREED";
         this.agreedAt = LocalDateTime.now();
@@ -111,5 +120,12 @@ public class Negotiation {
     public void close() {
         this.status = "CLOSED";
         this.closedAt = LocalDateTime.now();
+    }
+
+    // 같은 상대와의 협의를 한 행으로 계속 관리하기 위해, 이미 AGREED/CLOSED로 끝났던
+    // 협의에 새로운 라운드(NegotiationRequest)가 추가될 때 다시 OPEN 상태로 되돌린다.
+    // agreedAt/closedAt은 지난 라운드가 실제로 언제 합의/종료됐는지 이력이므로 그대로 남겨둔다.
+    public void reopen() {
+        this.status = "OPEN";
     }
 }

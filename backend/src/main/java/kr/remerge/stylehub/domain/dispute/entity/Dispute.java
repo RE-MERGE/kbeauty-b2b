@@ -1,6 +1,7 @@
 package kr.remerge.stylehub.domain.dispute.entity;
 
 import jakarta.persistence.*;
+import kr.remerge.stylehub.domain.company.entity.Company;
 import kr.remerge.stylehub.domain.dispute.enumtype.DisputeStatus;
 import kr.remerge.stylehub.domain.dispute.enumtype.DisputeType;
 import kr.remerge.stylehub.domain.dispute.enumtype.RequestedAction;
@@ -21,8 +22,7 @@ import java.time.LocalDateTime;
         indexes = {
                 @Index(name = "idx_dispute_order", columnList = "order_id"),
                 @Index(name = "idx_dispute_buyer_status", columnList = "buyer_id, status"),
-                @Index(name = "idx_dispute_seller_status", columnList = "seller_id, status"),
-                @Index(name = "idx_dispute_admin_status", columnList = "admin_id, status"),
+                @Index(name = "idx_dispute_seller_company_status",columnList = "seller_company_id, status"),                @Index(name = "idx_dispute_admin_status", columnList = "admin_id, status"),
                 @Index(name = "idx_dispute_type_status", columnList = "dispute_type, status")
         }
 )
@@ -43,8 +43,8 @@ public class Dispute extends BaseEntity {
     private User buyer;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "seller_id", nullable = false)
-    private User seller;
+    @JoinColumn(name = "seller_company_id", nullable = false)
+    private Company sellerCompany;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "admin_id")
@@ -87,7 +87,7 @@ public class Dispute extends BaseEntity {
     public Dispute(
             Order order,
             User buyer,
-            User seller,
+            Company sellerCompany,
             DisputeType disputeType,
             String title,
             String buyerClaim,
@@ -95,7 +95,7 @@ public class Dispute extends BaseEntity {
     ) {
         this.order = order;
         this.buyer = buyer;
-        this.seller = seller;
+        this.sellerCompany = sellerCompany;
         this.disputeType = disputeType;
         this.title = title;
         this.buyerClaim = buyerClaim;
@@ -108,7 +108,8 @@ public class Dispute extends BaseEntity {
         this.admin = admin;
     }
 
-    public void changeStatus(DisputeStatus status) {
+    public void
+    changeStatus(DisputeStatus status) {
         this.status = status;
     }
 

@@ -19,6 +19,7 @@ import {
     Truck,
 } from "lucide-react";
 import {useState} from "react";
+import {LiveDisputePanel} from "@/pages/trade/DashboardDisputePanel";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -326,7 +327,7 @@ function StatCards() {
         {
             label: "이의제기", count: COUNTS.disputes,
             icon: <Scale size={16} />,
-            href: "/disputes",
+            href: "/seller/disputes",
             urgent: DISPUTES.filter((d) => d.status === "PENDING_ANSWER").length,
             urgentLabel: "처리 필요",
         },
@@ -623,7 +624,7 @@ function DisputePanel() {
           </span>
                 </div>
                 <Link
-                    to="/disputes"
+                    to="/seller/disputes"
                     className="flex items-center gap-1 text-xs text-red-600 hover:text-red-800 transition-colors"
                 >
                     전체 보기 <ChevronRight size={12} />
@@ -846,7 +847,7 @@ export function SellerDashboard() {
             {/* ── 출고대기 + 이의제기 + 정산 현황 ── */}
             <div className="grid grid-cols-3 gap-4 mb-4">
                 <ShipmentPanel />
-                <DisputePanel />
+                <LiveDisputePanel role="seller" />
                 <SettlementPanel />
             </div>
         </div>

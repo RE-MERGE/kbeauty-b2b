@@ -72,4 +72,20 @@ public class OrderLog extends BaseEntity {
                 .memo(memo.getMessage())
                 .build();
     }
+
+    public static OrderLog createProcessLog(
+            Order order,
+            OrderProcessStep processStep,
+            User actor,
+            String memo
+    ) {
+        return OrderLog.builder()
+                .order(order)
+                .logType(OrderLogType.PROCESS)
+                .processStep(processStep)
+                .actorUser(actor)
+                .memo(memo)
+                .build();
+    }
+
 }

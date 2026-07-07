@@ -337,10 +337,12 @@ function StatCards() {
       urgent: 0, urgentLabel: "",
     },
     {
-      label: "이의 제기", count: COUNTS.payments,
+      label: "이의 제기",
+      count: COUNTS.disputes,
       icon: <Scale size={16} />,
-      href: "/disputes",
-      urgent: 0, urgentLabel: "",
+      href: "/buyer/orders/disputes",
+      urgent: 0,
+      urgentLabel: "",
     },
     {
       label: "주문 관리", count: COUNTS.receipts,
@@ -686,7 +688,7 @@ function DisputePanel() {
           </span>
           </div>
           <Link
-              to="/buyer/disputes"
+              to="/buyer/orders/disputes"
               className="flex items-center gap-1 text-xs text-red-600 hover:text-red-800 transition-colors"
           >
             전체 보기 <ChevronRight size={12} />
@@ -696,7 +698,7 @@ function DisputePanel() {
           {DISPUTES.map((d) => (
               <Link
                   key={d.id}
-                  to={`/buyer/disputes/${d.id}`}
+                  to={`/buyer/orders/disputes/${d.id}`}
                   className="flex items-center gap-3 px-4 py-3.5 hover:bg-red-50/30 transition-colors group"
               >
                 <AlertCircle size={14} className="text-red-400 shrink-0" />

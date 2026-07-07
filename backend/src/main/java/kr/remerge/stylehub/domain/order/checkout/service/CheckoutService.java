@@ -14,6 +14,7 @@ import kr.remerge.stylehub.domain.order.entity.OrderItem;
 import kr.remerge.stylehub.domain.order.enumtype.OrderStatus;
 import kr.remerge.stylehub.domain.order.repository.OrderItemRepository;
 import kr.remerge.stylehub.domain.order.repository.OrderRepository;
+import kr.remerge.stylehub.domain.order.validation.CartOrderValidator;
 import kr.remerge.stylehub.domain.product.entity.Product;
 import kr.remerge.stylehub.domain.product.entity.ProductOption;
 import kr.remerge.stylehub.domain.user.entity.User;
@@ -40,7 +41,7 @@ public class CheckoutService {
     private final AddressRepository addressRepository;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
-
+    private final CartOrderValidator cartOrderValidator;
 
     public CartCheckoutResponse getCartCheckout(Integer userId, CartCheckoutRequest cartCheckoutRequest) {
 
@@ -58,17 +59,7 @@ public class CheckoutService {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
 
-        List<CheckoutInvalidItemResponse> invalidItems = new ArrayList<>();
-
-        for (CartItem cartItem : cartItems) {
-            invalidItems.addAll(validateCartItem(cartItem));
-        }
-
-        if (!invalidItems.isEmpty()) {
-            throw new CheckoutValidationException(
-                    new CheckoutValidationErrorResponse(invalidItems)
-            );
-        }
+        cartOrderValidator.validate(cartItems);
 
         List<CartResponse> items = cartItems.stream()
                 .map(CartResponse::from)
@@ -91,96 +82,6 @@ public class CheckoutService {
 
     }
 
-    private List<CheckoutInvalidItemResponse> validateCartItem(CartItem cartItem) {
-
-        List<CheckoutInvalidItemResponse> invalidItems = new ArrayList<>();
-
-        ProductOption option = cartItem.getProductOption();
-        Product product = option.getProduct();
-
-        int quantity = cartItem.getQuantity();
-
-        if (Boolean.FALSE.equals(option.getIsActive())) {
-            invalidItems.add(toInvalidItem(
-                    cartItem,
-                    ErrorCode.OPTION_INACTIVE,
-                    quantity,
-                    0
-            ));
-        }
-
-        if (quantity > option.getStockQuantity()) {
-            invalidItems.add(toInvalidItem(
-                    cartItem,
-                    ErrorCode.OUT_OF_STOCK,
-                    quantity,
-                    option.getStockQuantity()
-            ));
-        }
-
-        if (cartItem.getCartType() == CartType.NORMAL
-                && quantity < product.getMoq()) {
-            invalidItems.add(toInvalidItem(
-                    cartItem,
-                    ErrorCode.MOQ_NOT_MET,
-                    quantity,
-                    product.getMoq()
-            ));
-        }
-
-        if (cartItem.getCartType() == CartType.SAMPLE) {
-            if (!product.getSampleAvailable()) {
-                invalidItems.add(toInvalidItem(
-                        cartItem,
-                        ErrorCode.SAMPLE_NOT_AVAILABLE,
-                        quantity,
-                        0
-                ));
-            }
-
-            if (option.getSamplePrice() == null
-                    || option.getSampleMaxQuantity() == null) {
-                invalidItems.add(toInvalidItem(
-                        cartItem,
-                        ErrorCode.SAMPLE_OPTION_NOT_CONFIGURED,
-                        quantity,
-                        0
-                ));
-            }
-
-            if (option.getSampleMaxQuantity() != null
-                    && quantity > option.getSampleMaxQuantity()) {
-                invalidItems.add(toInvalidItem(
-                        cartItem,
-                        ErrorCode.SAMPLE_LIMIT_EXCEEDED,
-                        quantity,
-                        option.getSampleMaxQuantity()
-                ));
-            }
-        }
-
-        return invalidItems;
-    }
-
-    private CheckoutInvalidItemResponse toInvalidItem(
-            CartItem cartItem,
-            ErrorCode errorCode,
-            Integer requestedQuantity,
-            Integer availableQuantity
-    ) {
-        ProductOption option = cartItem.getProductOption();
-        Product product = option.getProduct();
-
-        return new CheckoutInvalidItemResponse(
-                cartItem.getCartItemId(),
-                product.getProductName(),
-                option.getOptionLabel(),
-                errorCode.name(),
-                errorCode.getMessage(),
-                requestedQuantity,
-                availableQuantity
-        );
-    }
 
     private long calculateShippingFee(List<CartResponse> items) {
 

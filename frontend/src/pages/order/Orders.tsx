@@ -97,6 +97,7 @@ type StepKey =
   | "DELIVERED";
 
 type OrderItem = {
+  orderItemId?: number;
   name: string;
   quantity: number;
   unit: string;
@@ -297,7 +298,7 @@ const statusConfig: Record<
     group: "done",
   },
   CANCELED: {
-    label: "취소",
+    label: "취소된 주문",
     tone: "border-slate-300 bg-slate-100 text-slate-600",
     icon: <XCircle size={13} />,
     group: "issue",
@@ -419,13 +420,14 @@ function applyOrderOverview(order: Order, overview: BuyerOrderOverviewResponse):
 
   return {
     ...order,
-    items: overview.items.map((item) => ({
-      name: item.productName,
-      quantity: item.quantity,
-      unit: "개",
-      price: item.unitPrice + item.additionalPrice,
-      material: item.optionSummary ?? "-",
-    })),
+items: overview.items.map((item) => ({
+  orderItemId: item.orderItemId,
+  name: item.productName,
+  quantity: item.quantity,
+  unit: "개",
+  price: item.unitPrice + item.additionalPrice,
+  material: item.optionSummary ?? "-",
+})),
     itemCount: overview.items.length,
     totalQuantity: overview.items.reduce((total, item) => total + item.quantity, 0),
     status: overview.orderStatus,
@@ -554,7 +556,7 @@ function getPassiveNotice(order: Order) {
     case "COMPLETED":
       return "거래 완료";
     case "CANCELED":
-      return "주문 취소";
+      return "취소 처리된 주문입니다";
     case "REFUNDED":
       return "환불 완료";
     default:
@@ -598,10 +600,61 @@ export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
   const [search, setSearch] = useState("");
   const [confirmTarget, setConfirmTarget] = useState<Order | null>(null);
   const [disputeTarget, setDisputeTarget] = useState<Order | null>(null);
+  const [disputeType, setDisputeType] = useState("PRODUCT_DEFECT");
+  const [requestedAction, setRequestedAction] = useState("EXCHANGE");
+  const [disputeClaim, setDisputeClaim] = useState("");
+  const [disputeItemId, setDisputeItemId] = useState<number | null>(null);
+  const [claimQuantity, setClaimQuantity] = useState(1);
+  const [claimReason, setClaimReason] = useState("");
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
+  const [disputeError, setDisputeError] = useState("");
   const [cancelTarget, setCancelTarget] = useState<Order | null>(null);
   const [renegotiateTarget, setRenegotiateTarget] = useState<Order | null>(null);
   const [renegotiateText, setRenegotiateText] = useState("");
   const [selectedPaymentOrderIds, setSelectedPaymentOrderIds] = useState<number[]>([]);
+  const [cancelReason, setCancelReason] = useState("");
+  const [isCanceling, setIsCanceling] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+
+const handleCancelOrder = async () => {
+  if (!cancelTarget?.orderId || !cancelReason.trim() || isCanceling) {
+    return;
+  }
+
+  try {
+    setIsCanceling(true);
+    setCancelError("");
+
+    await api.post(`/buyer/orders/${cancelTarget.orderId}/cancel`, {
+      reason: cancelReason.trim(),
+    });
+
+    setOrders((previous) =>
+      previous.map((order) =>
+        order.orderId === cancelTarget.orderId
+          ? {
+              ...order,
+              status: "CANCELED",
+              issueMemo: cancelReason.trim(),
+            }
+          : order
+      )
+    );
+
+    setSelectedPaymentOrderIds((previous) =>
+      previous.filter((orderId) => orderId !== cancelTarget.orderId)
+    );
+
+    setActiveFilter("ISSUE");
+    setCancelTarget(null);
+    setCancelReason("");
+  } catch (error) {
+    console.error("주문 취소 실패", error);
+    setCancelError("주문을 취소하지 못했습니다.");
+  } finally {
+    setIsCanceling(false);
+  }
+};
 
   useEffect(() => {
     const loadOrders = async () => {
@@ -663,6 +716,52 @@ export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
       setLoadingOverviewId(null);
     }
   };
+
+const handleOpenDispute = async (order: Order) => {
+  if (!order.orderId || order.isExample) {
+    return;
+  }
+
+  try {
+    setLoadingOverviewId(order.id);
+    setOverviewError(null);
+
+    const overview =
+      await api.get<BuyerOrderOverviewResponse>(
+        `/buyer/orders/${order.orderId}`
+      );
+
+    const detailedOrder =
+      applyOrderOverview(order, overview);
+
+    // 목록에도 상세 상품 정보를 반영한다.
+    setOrders((previous) =>
+      previous.map((current) =>
+        current.id === order.id
+          ? detailedOrder
+          : current
+      )
+    );
+
+    const firstOrderItem = detailedOrder.items.find(
+      (item) => item.orderItemId !== undefined
+    );
+
+    setDisputeItemId(firstOrderItem?.orderItemId ?? null);
+    setClaimQuantity(1);
+    setClaimReason("");
+    setDisputeClaim("");
+    setDisputeError("");
+    setDisputeTarget(detailedOrder);
+  } catch (error) {
+    console.error("이의제기 주문 상품 조회 실패", error);
+    setOverviewError(
+      "이의제기할 주문 상품을 불러오지 못했습니다."
+    );
+  } finally {
+    setLoadingOverviewId(null);
+  }
+};
 
   const filteredOrders = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -737,9 +836,84 @@ export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
     alert("거래가 확정되었습니다. 셀러 정산이 진행됩니다.");
   };
 
-  const handleSubmitDispute = () => {
+  const disputeRequiresItem = [
+    "PRODUCT_DEFECT",
+    "WRONG_ITEM",
+    "MISSING_ITEM",
+  ].includes(disputeType);
+
+  const closeDisputeModal = () => {
     setDisputeTarget(null);
-    alert("이의 제기가 접수되었습니다. 관리자가 검토 후 안내드립니다.");
+    setDisputeClaim("");
+    setClaimReason("");
+    setDisputeItemId(null);
+    setClaimQuantity(1);
+    setDisputeError("");
+  };
+
+  const handleSubmitDispute = async () => {
+    if (
+      !disputeTarget?.orderId
+      || !disputeClaim.trim()
+      || isSubmittingDispute
+    ) {
+      return;
+    }
+
+    if (
+      disputeRequiresItem
+      && (
+        !disputeItemId
+        || claimQuantity <= 0
+        || !claimReason.trim()
+      )
+    ) {
+      setDisputeError("문제가 발생한 상품과 수량, 사유를 입력해 주세요.");
+      return;
+    }
+
+    try {
+      setIsSubmittingDispute(true);
+      setDisputeError("");
+
+      await api.post(
+        `/buyer/orders/${disputeTarget.orderId}/disputes`,
+        {
+          disputeType,
+          buyerClaim: disputeClaim.trim(),
+          requestedAction,
+          items: disputeRequiresItem
+            ? [
+                {
+                  orderItemId: disputeItemId,
+                  claimQuantity,
+                  claimReason: claimReason.trim(),
+                },
+              ]
+            : [],
+        }
+      );
+
+      setOrders((previous) =>
+        previous.map((order) =>
+          order.orderId === disputeTarget.orderId
+            ? {
+                ...order,
+                status: "DISPUTE",
+                issueMemo: disputeClaim.trim(),
+              }
+            : order
+        )
+      );
+
+      setActiveFilter("ISSUE");
+      closeDisputeModal();
+    } catch (error) {
+      console.error("이의제기 접수 실패", error);
+      setDisputeError("이의제기를 접수하지 못했습니다.");
+    } finally {
+      setIsSubmittingDispute(false);
+    }
   };
 
   const handleRenegotiate = () => {
@@ -869,7 +1043,7 @@ export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
               overviewError={expandedId === order.id ? overviewError : null}
               onToggle={() => handleToggleOrder(order)}
               onConfirm={setConfirmTarget}
-              onDispute={setDisputeTarget}
+              onDispute={handleOpenDispute}
               onCancel={setCancelTarget}
               onRenegotiate={setRenegotiateTarget}
               paymentSelected={order.orderId !== undefined && selectedPaymentOrderIds.includes(order.orderId)}
@@ -945,46 +1119,189 @@ export function Orders({ role = "BUYER" }: { role?: "BUYER" | "SELLER" }) {
         )}
 
         {disputeTarget && (
-          <BaseModal onClose={() => setDisputeTarget(null)} icon={<AlertCircle size={26} />} tone="red" title="이의 제기 접수">
+          <BaseModal onClose={closeDisputeModal} icon={<AlertCircle size={26} />} tone="red" title="이의 제기 접수">
             <p className="mb-4 text-sm leading-6 text-slate-500">
-              수량 부족, 불량, 오배송 등 문제가 있는 경우 증빙과 함께 이의 제기를 접수합니다.
+              주문에서 발생한 문제와 원하는 처리 방법을 입력해 주세요.
             </p>
+            <OrderMiniSummary order={disputeTarget} />
             <div className="space-y-3">
               <div>
                 <label className="mb-1.5 block text-xs font-bold text-slate-500">이의 유형</label>
-                <select className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary">
-                  <option>수량 부족</option>
-                  <option>불량</option>
-                  <option>오배송</option>
-                  <option>배송 문제</option>
-                  <option>기타</option>
+                <select
+                  value={disputeType}
+                  onChange={(event) => setDisputeType(event.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"
+                >
+                  <option value="PRODUCT_DEFECT">상품 불량</option>
+                  <option value="WRONG_ITEM">오배송</option>
+                  <option value="MISSING_ITEM">상품 누락</option>
+                  <option value="DELIVERY_DELAY">배송 지연</option>
+                  <option value="PAYMENT">결제 문제</option>
+                  <option value="ETC">기타</option>
                 </select>
               </div>
-              <div className="rounded-lg border-2 border-dashed border-slate-200 p-4 text-center text-xs font-medium text-slate-500">
-                증빙 파일 첨부
+
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-slate-500">요청 처리 방법</label>
+                <select
+                  value={requestedAction}
+                  onChange={(event) => setRequestedAction(event.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"
+                >
+                  <option value="REFUND">환불</option>
+                  <option value="EXCHANGE">교환</option>
+                  <option value="PARTIAL_REFUND">부분 환불</option>
+                  <option value="RE_DELIVERY">재배송</option>
+                  <option value="ETC">기타 요청</option>
+                </select>
               </div>
+
+              {disputeRequiresItem && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <label className="mb-1.5 block text-xs font-bold text-slate-500">문제 상품</label>
+                  <select
+                    value={disputeItemId ?? ""}
+                    onChange={(event) => setDisputeItemId(Number(event.target.value))}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"
+                  >
+                    {disputeTarget.items
+                      .filter((item) => item.orderItemId !== undefined)
+                      .map((item) => (
+                        <option key={item.orderItemId} value={item.orderItemId}>
+                          {item.name} · {item.material}
+                        </option>
+                      ))}
+                  </select>
+
+                  <label className="mb-1.5 mt-3 block text-xs font-bold text-slate-500">문제 수량</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={
+                      disputeTarget.items.find(
+                        (item) => item.orderItemId === disputeItemId
+                      )?.quantity ?? 1
+                    }
+                    value={claimQuantity}
+                    onChange={(event) =>
+                      setClaimQuantity(Math.max(1, Number(event.target.value) || 1))
+                    }
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"
+                  />
+
+                  <label className="mb-1.5 mt-3 block text-xs font-bold text-slate-500">상품별 문제 사유</label>
+                  <textarea
+                    rows={3}
+                    value={claimReason}
+                    onChange={(event) => setClaimReason(event.target.value)}
+                    maxLength={1000}
+                    placeholder="선택한 상품에서 확인한 문제를 작성해 주세요."
+                    className="w-full resize-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary"
+                  />
+                </div>
+              )}
+
+              <label className="block text-xs font-bold text-slate-500">전체 이의제기 내용</label>
               <textarea
                 rows={4}
-                placeholder="문제 상황을 자세히 작성해 주세요."
+                value={disputeClaim}
+                onChange={(event) => setDisputeClaim(event.target.value)}
+                maxLength={2000}
+                placeholder="문제 상황과 요청 사항을 자세히 작성해 주세요."
                 className="w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary"
               />
+
+              {disputeError && (
+                <p className="text-xs font-semibold text-red-600">
+                  {disputeError}
+                </p>
+              )}
             </div>
             <div className="mt-5 flex gap-2">
-              <ModalButton variant="ghost" onClick={() => setDisputeTarget(null)}>취소</ModalButton>
-              <ModalButton tone="red" onClick={handleSubmitDispute}>접수하기</ModalButton>
+              <ModalButton variant="ghost" onClick={closeDisputeModal}>취소</ModalButton>
+              <ModalButton
+                tone="red"
+                disabled={!disputeClaim.trim() || isSubmittingDispute}
+                onClick={handleSubmitDispute}
+              >
+                {isSubmittingDispute ? "접수 중..." : "접수하기"}
+              </ModalButton>
             </div>
           </BaseModal>
         )}
 
         {cancelTarget && (
-          <BaseModal onClose={() => setCancelTarget(null)} icon={<XCircle size={26} />} tone="red" title="주문 취소 정보">
+          <BaseModal
+            onClose={() => {
+              setCancelTarget(null);
+              setCancelReason("");
+              setCancelError("");
+            }}
+            icon={<XCircle size={26} />}
+            tone="red"
+            title={
+              cancelTarget.status === "PENDING"
+                ? "주문을 취소하시겠습니까?"
+                : "주문 취소 정보"
+            }
+          >
             <OrderMiniSummary order={cancelTarget} />
-            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-700">
-              {cancelTarget.issueMemo ?? "취소 사유가 등록되지 않았습니다."}
-            </div>
-            <div className="mt-5">
-              <ModalButton onClick={() => setCancelTarget(null)}>확인</ModalButton>
-            </div>
+
+            {cancelTarget.status === "PENDING" ? (
+              <>
+                <textarea
+                  rows={4}
+                  value={cancelReason}
+                  onChange={(event) => setCancelReason(event.target.value)}
+                  placeholder="주문 취소 사유를 입력해 주세요."
+                  maxLength={500}
+                  className="mt-4 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-primary"
+                />
+
+                <div className="mt-1 text-right text-xs text-slate-400">
+                  {cancelReason.length}/500
+                </div>
+
+                {cancelError && (
+                  <p className="mt-2 text-xs font-semibold text-red-600">
+                    {cancelError}
+                  </p>
+                )}
+
+                <div className="mt-5 flex gap-2">
+                  <ModalButton
+                    variant="ghost"
+                    onClick={() => {
+                      setCancelTarget(null);
+                      setCancelReason("");
+                      setCancelError("");
+                    }}
+                  >
+                    닫기
+                  </ModalButton>
+
+                  <ModalButton
+                    tone="red"
+                    disabled={!cancelReason.trim() || isCanceling}
+                    onClick={handleCancelOrder}
+                  >
+                    {isCanceling ? "취소 처리 중..." : "주문 취소"}
+                  </ModalButton>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-700">
+                  {cancelTarget.issueMemo ?? "취소 사유가 등록되지 않았습니다."}
+                </div>
+
+                <div className="mt-5">
+                  <ModalButton onClick={() => setCancelTarget(null)}>
+                    확인
+                  </ModalButton>
+                </div>
+              </>
+            )}
           </BaseModal>
         )}
       </div>
@@ -1229,7 +1546,7 @@ function OrderActions({
           ) : (
               <ActionButton tone="ghost" icon={<Clock size={13}/>} onClick={() => undefined}>결제 대기</ActionButton>
           )}
-          <ActionButton tone="ghost" icon={<XCircle size={13} />} onClick={() => onCancel(order)}>주문 취소</ActionButton>
+          <ActionButton tone="red" icon={<XCircle size={13} />} onClick={() => onCancel(order)}>주문 취소</ActionButton>
         </>
       )}
 

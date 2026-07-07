@@ -44,6 +44,14 @@ public record QuoteDetailResponse(
         // (BUYER 관점 + 본인 작성 or 대표 + 액션 가능한 상태일 때만 true. QuoteStatusService.validateStatusChangeAuthority와 동일 기준)
         Boolean canManage,
 
+        // 협의(재견적)로 생성된 버전인지, 이전 버전과 비교할 수 있도록 이전 조건을 함께 내려준다.
+        Integer version,
+        Integer parentQuoteId,
+        Long previousTotalAmount,
+        Long previousSubtotalAmount,
+        Integer previousLeadTimeDays,
+        Long previousShippingFee,
+
         List<QuoteItemResponse> items
 ) {
 
@@ -81,6 +89,8 @@ public record QuoteDetailResponse(
                 && (isBuyerWriter || isPresident)
                 && isActionableStatus;
 
+        Quote parentQuote = quote.getParentQuote();
+
         return new QuoteDetailResponse(
                 quote.getQuoteId(),
                 quote.getQuoteNo(),
@@ -112,6 +122,13 @@ public record QuoteDetailResponse(
                 perspective,
 
                 canManage,
+
+                quote.getVersion(),
+                parentQuote == null ? null : parentQuote.getQuoteId(),
+                parentQuote == null ? null : parentQuote.getTotalAmount(),
+                parentQuote == null ? null : parentQuote.getSubtotalAmount(),
+                parentQuote == null ? null : parentQuote.getLeadTimeDays(),
+                parentQuote == null ? null : parentQuote.getShippingFee(),
 
                 items.stream()
                         .map(QuoteItemResponse::from)

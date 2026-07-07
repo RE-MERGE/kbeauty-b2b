@@ -307,7 +307,6 @@ function DeclineModal({ req, onClose, onConfirm }: {
   const [feedback, setFeedback] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const canConfirm = feedback.trim().length > 0;
 
   const handleConfirm = async () => {
     setIsLoading(true);
@@ -350,7 +349,7 @@ function DeclineModal({ req, onClose, onConfirm }: {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
-                    거절 사유 <span className="text-primary">*</span>
+                    거절 사유 <span className="text-muted-foreground font-normal text-xs">(선택)</span>
                   </label>
                   <textarea
                       value={feedback}
@@ -366,8 +365,8 @@ function DeclineModal({ req, onClose, onConfirm }: {
                   <button onClick={onClose} className="flex-1 py-2.5 border border-border rounded text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors font-medium">취소</button>
                   <button
                       onClick={handleConfirm}
-                      disabled={!canConfirm || isLoading}
-                      className={`flex-1 py-2.5 rounded font-bold text-sm transition-colors flex items-center justify-center gap-2 ${canConfirm && !isLoading ? "bg-red-500 hover:bg-red-600 text-white" : "bg-muted text-muted-foreground cursor-not-allowed"}`}
+                      disabled={isLoading}
+                      className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 disabled:opacity-50 text-white rounded font-bold text-sm transition-colors flex items-center justify-center gap-2"
                   >
                     <XCircle size={14} /> {isLoading ? "처리 중..." : "거절하기"}
                   </button>

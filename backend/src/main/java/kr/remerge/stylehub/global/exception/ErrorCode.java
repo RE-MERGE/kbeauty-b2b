@@ -119,7 +119,7 @@ public enum ErrorCode {
     // ───────────────────────────────────────────
     SAMPLE_OPTION_NOT_CONFIGURED(HttpStatus.BAD_REQUEST, "SOURCING_001", "선택한 옵션은 현재 샘플 주문을 이용할 수 없습니다."),
     SOURCING_NOT_FOUND(HttpStatus.NOT_FOUND, "SOURCING_002", "소싱 요청을 찾을 수 없습니다."),
-
+    INVALID_OPTION_QUANTITY(HttpStatus.BAD_REQUEST, "SOURCING_003", "옵션 수량은 1개 이상이어야 합니다."),
     // ───────────────────────────────────────────
     // 결제 (PAYMENT)
     // ───────────────────────────────────────────

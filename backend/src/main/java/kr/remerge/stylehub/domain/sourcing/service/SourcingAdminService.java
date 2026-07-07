@@ -48,6 +48,7 @@ public class SourcingAdminService {
             List.of(SourcingStatus.COMPLETED);
     private static final List<SourcingStatus> CLOSED_STATUSES =
             List.of(SourcingStatus.CANCELLED, SourcingStatus.WITHDRAWN, SourcingStatus.EXPIRED);
+    private final SourcingAutoCancelService sourcingAutoCancelService;
 
     // ───────────────────────────────────────────
     // 전체 소싱 요청 현황 (회사 무관)
@@ -206,7 +207,11 @@ public class SourcingAdminService {
                 .orElseThrow(() -> new IllegalArgumentException("해당 관리자 없음: " + adminId));
 
         supplier.reject(admin, reason);
+
+        Integer sourcingRequestId = supplier.getSourcingRequest().getSourcingRequestId();
+        sourcingAutoCancelService.checkAndAutoCancel(sourcingRequestId);
     }
+
 
     @Transactional(readOnly = true)
     public List<SourcingSupplierResponse> getUnassignedRequests() {

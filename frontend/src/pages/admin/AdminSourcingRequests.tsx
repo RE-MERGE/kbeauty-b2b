@@ -53,8 +53,8 @@ const STAT_CARDS: Array<{ value: SourcingGroupFilter; label: string; color: stri
   { value: "CLOSED",    label: "거래중단", color: "bg-muted border border-border",         countKey: "closed" },
 ];
 
-// 후보 업체 검토가 더 이상 의미 없는 상태 (거래가 완료됐거나 성사되지 않고 끝난 경우)
-const REQUEST_DONE_STATUSES: SourcingStatus[] = ["COMPLETED", "CANCELLED", "WITHDRAWN", "EXPIRED"];
+// 후보 업체 검토가 더 이상 의미 없는 상태 (거래가 성사되어 진행중이거나, 완료됐거나, 성사되지 않고 끝난 경우)
+const REQUEST_DONE_STATUSES: SourcingStatus[] = ["TRADING", "COMPLETED", "CANCELLED", "WITHDRAWN", "EXPIRED"];
 function isRequestDone(status: SourcingStatus): boolean {
   return REQUEST_DONE_STATUSES.includes(status);
 }
@@ -540,16 +540,12 @@ export function AdminSourcingRequests() {
                                   </div>
                               )}
 
-                              <div className="pt-3 border-t border-border">
-                                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                                  <Send size={12} />
-                                  후보 업체 검토
-                                </h4>
-                                {done ? (
-                                    <div className="text-center py-4 text-xs text-muted-foreground">
-                                      {STATUS_LABEL[req.status]} 상태의 요청은 후보 업체 검토가 필요하지 않습니다.
-                                    </div>
-                                ) : (
+                              {!done && (
+                                  <div className="pt-3 border-t border-border">
+                                    <h4 className="text-xs font-semibold text-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                                      <Send size={12} />
+                                      후보 업체 검토
+                                    </h4>
                                     <SupplierReviewPanel
                                         request={req}
                                         suppliers={suppliersByRequest[req.sourcingRequestId]}
@@ -557,8 +553,8 @@ export function AdminSourcingRequests() {
                                         onBulkApprove={(ids) => handleBulkApprove(req.sourcingRequestId, ids)}
                                         onReject={(id, reason) => handleReject(req.sourcingRequestId, id, reason)}
                                     />
-                                )}
-                              </div>
+                                  </div>
+                              )}
                             </div>
                         )}
                       </div>

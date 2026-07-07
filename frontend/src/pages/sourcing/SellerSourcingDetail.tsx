@@ -400,8 +400,7 @@ export function SellerSourcingDetail() {
                             <XCircle size={14} /> 거절
                         </button>
                         <button
-                            // TODO: 실제 견적 작성 페이지 경로 확인 필요
-                            onClick={() => navigate(`/seller/quotes/new/${request.sourcing_request_id}`)}
+                            onClick={() => navigate(`/seller/sourcing/${request.sourcing_request_id}/quote`)}
                             className="flex-1 py-2.5 bg-primary hover:bg-primary/90 text-white rounded font-semibold text-sm transition-colors flex items-center justify-center gap-1.5"
                         >
                             <Send size={14} /> 견적 제출

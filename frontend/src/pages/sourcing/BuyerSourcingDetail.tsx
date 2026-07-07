@@ -2,10 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router";
 import api from "@/api/axios";
 import {
-  ArrowLeft, Package, FileText, FlaskConical, Clock,
-  XCircle, CreditCard,
-  ChevronRight, ChevronDown, BadgeCheck,
-  CircleDot, AlertTriangle, Loader2, Ban,
+  ArrowLeft, Package, FileText, FlaskConical,
+  CreditCard, ChevronRight, Loader2, Ban, XCircle,
 } from "lucide-react";
 import { SourcingStatusStepper } from "./SourcingStatusStepper";
 
@@ -13,8 +11,9 @@ const SOURCING_LIST_PATH = "/buyer/my-sourcing";
 const QUOTE_MANAGEMENT_PATH = "/buyer/quotes";
 
 // ── 타입 ────────────────────────────────────────────────────────────────────
+// 견적 승인/거절/협의/샘플결제 등 견적 관련 조회·액션은 전부 견적관리(/buyer/quotes)에서 처리하므로
+// 이 페이지는 소싱 요청 자체의 정보(품목, 옵션, 첨부파일, 취소)만 다룬다.
 type RequestStatus = "PENDING" | "QUOTED" | "TRADING" | "NEGOTIATING" | "CANCELLED" | "COMPLETED" | "WITHDRAWN" | "EXPIRED";
-type BidStatus = "SUGGESTED" | "RECOMMENDED" | "QUOTED" | "DECLINED" | "EXPIRED";
 
 export interface SourcingOptionDetail {
   sourcingRequestItemId: number;
@@ -28,39 +27,6 @@ export interface SourcingFileDetail {
   fileType: "REF_IMAGE" | "WORK_FILE";
   fileName: string;
   fileUrl: string;
-}
-
-// 견적 상태 - 실제 승인/거절/협의/샘플결제 액션은 견적관리(/buyer/quotes)에서만 처리하므로
-// 이 페이지에서는 표시(라벨링) 용도로만 사용
-type QuoteStatus =
-    | "SUBMITTED"
-    | "NEGOTIATING"
-    | "SAMPLE_REQUESTED"
-    | "APPROVED"
-    | "REJECTED"
-    | "NOT_SELECTED"
-    | "EXPIRED";
-
-const QUOTE_STATUS_LABEL: Partial<Record<QuoteStatus, string>> = {
-  SUBMITTED:        "검토 대기",
-  NEGOTIATING:      "협의중",
-  SAMPLE_REQUESTED: "샘플 결제 대기",
-  APPROVED:         "승인 완료",
-  REJECTED:         "거절됨",
-  NOT_SELECTED:     "미채택",
-  EXPIRED:          "기간 만료",
-};
-
-export interface BidDetail {
-  sourcingSupplierId: number;
-  sellerCompanyId: number;
-  companyName?: string;
-  status: BidStatus;
-  submittedAt?: string;
-  quoteId?: number;
-  quoteStatus?: QuoteStatus;
-  totalAmount?: number;
-  canManage?: boolean;
 }
 
 export interface SourcingRequestDetail {
@@ -82,7 +48,6 @@ export interface SourcingRequestDetail {
   createdAt: string;
   items: SourcingOptionDetail[];
   files: SourcingFileDetail[];
-  bids: BidDetail[];
   canWithdraw: boolean;
 }
 
@@ -107,30 +72,6 @@ const REQUEST_STATUS_STYLE: Record<RequestStatus, string> = {
   COMPLETED:   "bg-green-50 text-green-600 border-green-200",
   WITHDRAWN:   "bg-secondary text-muted-foreground border-border",
   EXPIRED:     "bg-secondary text-muted-foreground border-border",
-};
-
-const BID_STATUS_LABEL: Record<BidStatus, string> = {
-  SUGGESTED:   "검토중",
-  RECOMMENDED: "검토중",
-  QUOTED:      "견적제출",
-  DECLINED:    "거절",
-  EXPIRED:     "만료",
-};
-
-const BID_STATUS_STYLE: Record<BidStatus, string> = {
-  SUGGESTED:   "bg-secondary text-muted-foreground border-border",
-  RECOMMENDED: "bg-blue-50 text-blue-600 border-blue-200",
-  QUOTED:      "bg-green-50 text-green-600 border-green-200",
-  DECLINED:    "bg-red-50 text-red-500 border-red-200",
-  EXPIRED:     "bg-secondary text-muted-foreground border-border",
-};
-
-const BID_STATUS_ICON: Partial<Record<BidStatus, React.ReactNode>> = {
-  SUGGESTED:   <CircleDot size={11} />,
-  RECOMMENDED: <CircleDot size={11} />,
-  QUOTED:      <BadgeCheck size={11} />,
-  DECLINED:    <XCircle size={11} />,
-  EXPIRED:     <Clock size={11} />,
 };
 
 // 취소는 PENDING/QUOTED 단계에서만 가능 - 협의(NEGOTIATING) 시작 이후엔
@@ -195,90 +136,6 @@ function WithdrawConfirmModal({ onClose, onConfirm, isLoading }: {
   );
 }
 
-// ── 공급사 카드 (읽기 전용 - 실제 액션은 견적관리 페이지에서 처리) ────────────
-function SupplierCard({
-                        bid,
-                        anonymousLabel,
-                        request,
-                        onGoToQuoteManagement,
-                      }: {
-  bid: BidDetail;
-  anonymousLabel: string;
-  request: SourcingRequestDetail;
-  onGoToQuoteManagement: () => void;
-}) {
-  const budgetDiff = request.totalBudget && bid.totalAmount != null
-      ? request.totalBudget - bid.totalAmount
-      : null;
-  const displayName = bid.companyName ?? anonymousLabel;
-
-  // 아직 견적서가 없는 배정 공급사
-  if (bid.quoteId == null) {
-    const noQuoteInfo: Record<BidStatus, { label: string; icon: React.ReactNode; tone: string; desc: string }> = {
-      SUGGESTED:   { label: "견적 준비중", icon: <Clock size={11} />,   tone: "bg-secondary text-muted-foreground border-border", desc: "아직 견적서가 도착하지 않았습니다" },
-      RECOMMENDED: { label: "견적 준비중", icon: <Clock size={11} />,   tone: "bg-secondary text-muted-foreground border-border", desc: "아직 견적서가 도착하지 않았습니다" },
-      QUOTED:      { label: "견적 준비중", icon: <Clock size={11} />,   tone: "bg-secondary text-muted-foreground border-border", desc: "아직 견적서가 도착하지 않았습니다" },
-      DECLINED:    { label: "거절함",     icon: <XCircle size={11} />, tone: "bg-red-50 text-red-500 border-red-200",             desc: "공급사가 요청을 거절했습니다" },
-      EXPIRED:     { label: "기간 만료",  icon: <Clock size={11} />,   tone: "bg-secondary text-muted-foreground border-border", desc: "응답 기간이 만료되었습니다" },
-    };
-    const info = noQuoteInfo[bid.status];
-
-    return (
-        <div className="bg-secondary/40 border border-dashed border-border rounded-xl overflow-hidden">
-          <div className="px-5 py-4 flex items-center gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <span className="font-semibold text-muted-foreground">{displayName}</span>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium flex items-center gap-1 ${info.tone}`}>
-                  {info.icon} {info.label}
-                </span>
-              </div>
-              <div className="text-xs text-muted-foreground">{info.desc}</div>
-            </div>
-          </div>
-        </div>
-    );
-  }
-
-  return (
-      <div className="bg-white border border-border rounded-xl overflow-hidden">
-        <div className="px-5 py-4 flex items-center gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="font-bold text-foreground">{displayName}</span>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium flex items-center gap-1 ${BID_STATUS_STYLE[bid.status]}`}>
-                {BID_STATUS_ICON[bid.status]} {BID_STATUS_LABEL[bid.status]}
-              </span>
-              {bid.quoteStatus && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-muted-foreground font-medium">
-                    {QUOTE_STATUS_LABEL[bid.quoteStatus] ?? bid.quoteStatus}
-                  </span>
-              )}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {bid.totalAmount != null && `${(bid.totalAmount / 10000).toLocaleString()}만원`}
-              {budgetDiff !== null && (
-                  <span className={`ml-1.5 font-semibold ${budgetDiff >= 0 ? "text-green-600" : "text-red-500"}`}>
-                    ({budgetDiff >= 0
-                      ? `▼ ${(budgetDiff / 10000).toLocaleString()}만`
-                      : `▲ ${(Math.abs(budgetDiff) / 10000).toLocaleString()}만`})
-                  </span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-                onClick={onGoToQuoteManagement}
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-border text-muted-foreground hover:border-primary hover:text-primary rounded-lg text-xs font-semibold transition-colors"
-            >
-              견적 관리에서 확인 <ChevronRight size={12} />
-            </button>
-          </div>
-        </div>
-      </div>
-  );
-}
-
 // ── 메인 페이지 ───────────────────────────────────────────────────────────────
 export function BuyerSourcingDetail() {
   const navigate = useNavigate();
@@ -289,7 +146,6 @@ export function BuyerSourcingDetail() {
   const [error, setError] = useState<string | null>(null);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
-  const [showWithdrawnBids, setShowWithdrawnBids] = useState(false);
 
   useEffect(() => {
     if (!requestId) return;
@@ -340,23 +196,10 @@ export function BuyerSourcingDetail() {
   }
 
   const totalQty = (request.items ?? []).reduce((sum, o) => sum + o.quantity, 0);
-  const allBids = request.bids ?? [];
-  const quotedBids = allBids.filter((b) => b.quoteId != null);
-  const pendingBidsCount = allBids.length - quotedBids.length;
 
-  const goToQuoteManagement = (quoteId?: number) => {
-    navigate(quoteId ? `${QUOTE_MANAGEMENT_PATH}?quoteId=${quoteId}` : QUOTE_MANAGEMENT_PATH);
+  const goToQuoteManagement = () => {
+    navigate(`${QUOTE_MANAGEMENT_PATH}?sourcingRequestId=${request.sourcingRequestId}`);
   };
-
-  const renderSupplierCard = (bid: BidDetail, index: number) => (
-      <SupplierCard
-          key={bid.sourcingSupplierId}
-          bid={bid}
-          anonymousLabel={`공급사 ${index + 1}`}
-          request={request}
-          onGoToQuoteManagement={() => goToQuoteManagement(bid.quoteId)}
-      />
-  );
 
   return (
       <div className="max-w-[860px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
@@ -384,20 +227,28 @@ export function BuyerSourcingDetail() {
                 <h1 className="text-xl font-bold text-foreground mb-1">{request.productName}</h1>
                 <div className="text-xs text-muted-foreground">{request.createdAt.slice(0, 10)} 등록</div>
               </div>
-              {request.canWithdraw ? (
-                  <button
-                      onClick={() => setShowWithdraw(true)}
-                      className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-500 hover:bg-red-50 rounded-lg text-xs font-medium transition-colors"
-                  >
-                    <Ban size={12} /> 취소
-                  </button>
-              ) : (
-                  getWithdrawUnavailableReason(request.status) && (
-                      <span className="flex-shrink-0 text-[11px] text-muted-foreground text-right max-w-[160px] leading-snug">
-                        {getWithdrawUnavailableReason(request.status)}
-                      </span>
-                  )
-              )}
+              <div className="flex-shrink-0 flex items-center gap-2">
+                <button
+                    onClick={goToQuoteManagement}
+                    className="flex items-center gap-1 px-3 py-2 border border-border text-muted-foreground hover:border-primary hover:text-primary rounded-lg text-xs font-medium transition-colors"
+                >
+                  견적 보기 <ChevronRight size={12} />
+                </button>
+                {request.canWithdraw ? (
+                    <button
+                        onClick={() => setShowWithdraw(true)}
+                        className="flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-500 hover:bg-red-50 rounded-lg text-xs font-medium transition-colors"
+                    >
+                      <Ban size={12} /> 취소
+                    </button>
+                ) : (
+                    getWithdrawUnavailableReason(request.status) && (
+                        <span className="text-[11px] text-muted-foreground text-right max-w-[160px] leading-snug">
+                          {getWithdrawUnavailableReason(request.status)}
+                        </span>
+                    )
+                )}
+              </div>
             </div>
           </div>
 
@@ -487,86 +338,6 @@ export function BuyerSourcingDetail() {
                 </div>
             )}
           </div>
-        </div>
-
-        {/* ── 견적 목록 ── */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <h2 className="font-bold text-foreground">접수된 견적</h2>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-mono font-bold ${quotedBids.length > 0 ? "bg-primary text-white" : "bg-secondary text-muted-foreground"}`}>
-                {quotedBids.length}건
-              </span>
-              {pendingBidsCount > 0 && request.status !== "WITHDRAWN" && (
-                  <span className="text-xs text-muted-foreground">
-                    배정 {allBids.length}개사 중 {pendingBidsCount}개사 준비중
-                  </span>
-              )}
-            </div>
-            {quotedBids.length > 0 && (
-                <button
-                    onClick={() => goToQuoteManagement()}
-                    className="flex items-center gap-1 px-3 py-1.5 border border-border text-muted-foreground hover:border-primary hover:text-primary rounded-lg text-xs font-semibold transition-colors"
-                >
-                  견적관리로 이동 <ChevronRight size={12} />
-                </button>
-            )}
-          </div>
-
-          {request.status === "TRADING" && (
-              <div className="flex items-center justify-between gap-3 mb-4 bg-blue-50 border border-blue-200 rounded-xl px-5 py-4">
-                <div className="flex items-center gap-2 text-sm text-blue-700">
-                  <BadgeCheck size={16} className="flex-shrink-0" />
-                  <span>거래가 진행중입니다. 자세한 내용은 견적관리에서 확인해 주세요.</span>
-                </div>
-                <button
-                    onClick={() => navigate(`${QUOTE_MANAGEMENT_PATH}?status=APPROVED`)}
-                    className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition-colors"
-                >
-                  견적관리로 이동 <ChevronRight size={12} />
-                </button>
-              </div>
-          )}
-
-          {request.status === "WITHDRAWN" && quotedBids.length > 0 ? (
-              <div className="bg-white border border-border rounded-xl overflow-hidden">
-                <button
-                    onClick={() => setShowWithdrawnBids((prev) => !prev)}
-                    className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-secondary/50 transition-colors"
-                >
-                  <div className="flex items-center gap-2 text-sm">
-                    <Ban size={14} className="text-muted-foreground flex-shrink-0" />
-                    <span className="text-foreground">
-                      취소 시점에 접수된 견적 <strong>{quotedBids.length}건</strong> (모두 미채택 처리됨)
-                    </span>
-                  </div>
-                  <ChevronDown
-                      size={16}
-                      className={`text-muted-foreground flex-shrink-0 transition-transform ${showWithdrawnBids ? "rotate-180" : ""}`}
-                  />
-                </button>
-                {showWithdrawnBids && (
-                    <div className="border-t border-border px-5 py-4 space-y-3 bg-secondary/30">
-                      {quotedBids.map((bid, index) => renderSupplierCard(bid, index))}
-                    </div>
-                )}
-              </div>
-          ) : allBids.length === 0 ? (
-              <div className="text-center py-16 text-muted-foreground bg-white border border-border rounded-xl">
-                <div className="text-4xl mb-3">📭</div>
-                <div className="font-medium mb-1">아직 배정된 공급사가 없습니다</div>
-                <div className="text-sm">공급사가 배정되면 이곳에 표시됩니다.</div>
-                {request.status === "PENDING" && (
-                    <div className="mt-4 inline-flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5">
-                      <AlertTriangle size={11} /> 공급사 배정까지 시간이 걸릴 수 있습니다
-                    </div>
-                )}
-              </div>
-          ) : (
-              <div className="space-y-3">
-                {allBids.map((bid, index) => renderSupplierCard(bid, index))}
-              </div>
-          )}
         </div>
 
         {showWithdraw && (

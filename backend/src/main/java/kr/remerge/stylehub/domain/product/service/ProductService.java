@@ -209,12 +209,49 @@ public class ProductService {
     }
 
     // [READ] 인기 상품 (7일 내 조회수 높은 순 5개)
+    // [수정] 인기 상품 (조회수 대신 실제 판매수량 기준으로 변경)
     public List<ProductDto.SummaryResponse> getPopularProducts() {
-        LocalDateTime since = LocalDateTime.now().minusDays(7);
-        return productRepository.findTop5ByViewCountSince(since, PageRequest.of(0, 5))
-                .stream()
+        List<Integer> topProductIds = jdbcTemplate.query(
+                "SELECT p.product_id AS pid, COALESCE(SUM(oi.quantity), 0) AS total_qty " +
+                        "FROM products p " +
+                        "LEFT JOIN product_options po ON po.product_id = p.product_id " +
+                        "LEFT JOIN order_items oi ON oi.product_option_id = po.product_option_id " +
+                        "GROUP BY p.product_id " +
+                        "ORDER BY total_qty DESC " +
+                        "LIMIT 5",
+                (rs, rowNum) -> rs.getInt("pid")
+        );
+        if (topProductIds.isEmpty()) return List.of();
+
+        Map<Integer, Product> productsById = productRepository.findAllById(topProductIds).stream()
+                .collect(Collectors.toMap(Product::getProductId, p -> p));
+
+        // 판매량 순위(topProductIds) 순서 그대로 유지해서 응답
+        return topProductIds.stream()
+                .map(productsById::get)
+                .filter(java.util.Objects::nonNull)
                 .map(ProductDto.SummaryResponse::from)
                 .toList();
+    }
+
+    // [추가] 인기 브랜드 (실제 판매수량 기준 상위 5개)
+    public List<ProductDto.BrandRankResponse> getPopularBrands() {
+        return jdbcTemplate.query(
+                "SELECT b.brand_id AS brand_id, b.brand_name AS brand_name, b.brand_logo_url AS brand_logo_url, " +
+                        "COALESCE(SUM(oi.quantity), 0) AS total_qty " +
+                        "FROM brands b " +
+                        "LEFT JOIN products p ON p.brand_id = b.brand_id " +
+                        "LEFT JOIN product_options po ON po.product_id = p.product_id " +
+                        "LEFT JOIN order_items oi ON oi.product_option_id = po.product_option_id " +
+                        "GROUP BY b.brand_id, b.brand_name, b.brand_logo_url " +
+                        "ORDER BY total_qty DESC " +
+                        "LIMIT 5",
+                (rs, rowNum) -> new ProductDto.BrandRankResponse(
+                        rs.getInt("brand_id"),
+                        rs.getString("brand_name"),
+                        rs.getString("brand_logo_url")
+                )
+        );
     }
 
     // [UPDATE] 상품 수정 (카테고리/브랜드/옵션/이미지/인증서 전체 교체 지원)

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "react-router";
 import api from "../api/axios";
+import { AlertModal } from "../components/common/Modal";
 import {
   ChevronRight,
   ArrowRight,
@@ -31,14 +32,6 @@ const heroSlides = [
   { image: "/images/banner4.png", label: "스트리트 무드" },
 ];
 
-const popularBrands = [
-  { name: "동대문패션(주)", logo: "/images/brands/ddm.png" },
-  { name: "트렌드하우스", logo: "/images/brands/trend.png" },
-  { name: "프리미엄어패럴", logo: "/images/brands/premium.png" },
-  { name: "액티브웨어코리아", logo: "/images/brands/active.png" },
-  { name: "패션액세서리몰", logo: "/images/brands/acc.png" },
-];
-
 interface ProductSummary {
   productId: number;
   productName: string;
@@ -54,18 +47,31 @@ interface ProductSummary {
   createdAt: string;
 }
 
-type Folder = { id: string; name: string; productIds: number[] };
-
-function loadFolderData(): Folder[] {
-  try {
-    const raw = localStorage.getItem("wishlistFolders");
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return [{ id: "default", name: "전체 찜", productIds: [] }];
+// [추가] 백엔드 ProductDto.BrandRankResponse 매핑 (판매수량 기준 인기 브랜드)
+interface BrandRank {
+  brandId: number;
+  brandName: string;
+  brandLogoUrl: string | null;
 }
 
-function saveFolderData(folders: Folder[]) {
-  localStorage.setItem("wishlistFolders", JSON.stringify(folders));
+// [수정] 백엔드 WishlistDto.FolderResponse 그대로 매핑
+interface BackendFolder {
+  wishlistFolderId: number;
+  folderName: string;
+  isDefault: boolean;
+  sortOrder: number;
+  itemCount: number;
+}
+
+// [수정] 백엔드 WishlistDto.ItemResponse 그대로 매핑
+interface BackendItem {
+  wishlistId: number;
+  productId: number;
+  productName: string;
+  thumbnailUrl: string | null;
+  price: number;
+  brandName: string | null;
+  folderName: string;
 }
 
 export function Home() {
@@ -73,15 +79,19 @@ export function Home() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [newProducts, setNewProducts] = useState<ProductSummary[]>([]);
   const [popularProducts, setPopularProducts] = useState<ProductSummary[]>([]);
+  const [popularBrands, setPopularBrands] = useState<BrandRank[]>([]); // [추가] 판매수량 기준 인기 브랜드
 
-  const [folders, setFolders] = useState<Folder[]>(loadFolderData);
+  // [수정] localStorage 대신 서버 상태로 관리
+  const [folders, setFolders] = useState<BackendFolder[]>([]);
+  const [wishItems, setWishItems] = useState<BackendItem[]>([]);
   const [folderModalProductId, setFolderModalProductId] = useState<number | null>(null);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const newFolderInputRef = useRef<HTMLInputElement>(null);
 
-  const favorites = [...new Set(folders.flatMap(f => f.productIds))];
   const allKnownProducts = [...newProducts, ...popularProducts];
+  const favorites = [...new Set(wishItems.map((it) => it.productId))];
 
   const prevSlide = useCallback(() => {
     setCurrentSlide((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
@@ -98,6 +108,8 @@ export function Home() {
   useEffect(() => {
     api.get("/products/new").then(res => setNewProducts(res)).catch(() => {});
     api.get("/products/popular").then(res => setPopularProducts(res)).catch(() => {});
+    api.get("/products/popular-brands").then(res => setPopularBrands(res)).catch(() => {});
+    fetchWishlistData();
   }, []);
 
   useEffect(() => {
@@ -106,51 +118,76 @@ export function Home() {
     }
   }, [creatingFolder]);
 
-  const handleHeartClick = (productId: number) => {
+  // [추가] 폴더 목록 + 내 찜 전체를 서버에서 불러오기
+  const fetchWishlistData = async () => {
+    try {
+      const [folderData, itemData] = await Promise.all([
+        api.get<BackendFolder[]>("/wishlist/folders"),
+        api.get<BackendItem[]>("/wishlist"),
+      ]);
+      setFolders(folderData);
+      setWishItems(itemData);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // [수정] 하트 클릭: 이미 찜한 상품이면 모든 폴더에서 제거, 아니면 폴더 선택 모달 열기
+  const handleHeartClick = async (productId: number) => {
     if (favorites.includes(productId)) {
-      const next = folders.map(f => ({ ...f, productIds: f.productIds.filter(id => id !== productId) }));
-      setFolders(next);
-      saveFolderData(next);
+      const targetIds = wishItems.filter((it) => it.productId === productId).map((it) => it.wishlistId);
+      try {
+        await Promise.all(targetIds.map((id) => api.delete(`/wishlist/${id}`)));
+        await fetchWishlistData();
+      } catch (err: any) {
+        console.error(err);
+        setAlertMessage(err?.message || "찜 삭제 중 오류가 발생했습니다.");
+      }
     } else {
       setFolderModalProductId(productId);
     }
   };
 
-  const addToFolder = (folderId: string) => {
+  // [수정] 폴더에 찜 추가 - 서버에 요청
+  const addToFolder = async (folderId: number) => {
     const productId = folderModalProductId;
     if (productId === null) return;
-    const next = folders.map(f =>
-        f.id === folderId && !f.productIds.includes(productId)
-            ? { ...f, productIds: [...f.productIds, productId] }
-            : f
-    );
-    setFolders(next);
-    saveFolderData(next);
-    setFolderModalProductId(null);
+    try {
+      await api.post("/wishlist", { productId, wishlistFolderId: folderId });
+      await fetchWishlistData();
+      setFolderModalProductId(null);
+    } catch (err: any) {
+      console.error(err);
+      setAlertMessage(err?.message || "찜 추가 중 오류가 발생했습니다.");
+    }
   };
 
-  const addFolder = () => {
+  // [수정] 폴더 생성 - 서버에 요청
+  const addFolder = async () => {
     const trimmed = newFolderName.trim();
     if (!trimmed) {
       setCreatingFolder(false);
       return;
     }
-    const newFolder: Folder = {
-      id: `folder_${Date.now()}`,
-      name: trimmed,
-      productIds: [],
-    };
-    const next = [...folders, newFolder];
-    setFolders(next);
-    saveFolderData(next);
-    setNewFolderName("");
-    setCreatingFolder(false);
+    try {
+      await api.post("/wishlist/folders", { folderName: trimmed });
+      setNewFolderName("");
+      setCreatingFolder(false);
+      await fetchWishlistData();
+    } catch (err: any) {
+      console.error(err);
+      setAlertMessage(err?.message || "폴더 생성 중 오류가 발생했습니다.");
+    }
   };
 
   const formatPrice = (price: number) => `₩${price.toLocaleString()}`;
 
   return (
       <div className="max-w-[1280px] mx-auto px-4 py-5">
+
+        {alertMessage && (
+            <AlertModal message={alertMessage} onClose={() => setAlertMessage(null)} />
+        )}
 
         {/* 폴더 선택 모달 */}
         {folderModalProductId !== null && (
@@ -167,15 +204,14 @@ export function Home() {
                 </div>
                 <div className="grid grid-cols-3 gap-3 max-h-72 overflow-y-auto mb-5">
                   {folders.map(folder => {
-                    const isAdded = folder.productIds.includes(folderModalProductId);
-                    const allFavIds = [...new Set(folders.flatMap(f => f.productIds))];
-                    const ids = folder.id === "default" ? allFavIds : folder.productIds;
-                    const needed = ids.length === 0 ? 0 : ids.length === 1 ? 1 : ids.length < 4 ? 2 : 4;
-                    const thumbImgs = ids.slice(0, needed).map(id => allKnownProducts.find(p => p.productId === id)?.mainImageUrl ?? null);
+                    const idsInFolder = wishItems.filter((it) => it.folderName === folder.folderName).map((it) => it.productId);
+                    const isAdded = idsInFolder.includes(folderModalProductId);
+                    const needed = idsInFolder.length === 0 ? 0 : idsInFolder.length === 1 ? 1 : idsInFolder.length < 4 ? 2 : 4;
+                    const thumbImgs = idsInFolder.slice(0, needed).map(id => allKnownProducts.find(p => p.productId === id)?.mainImageUrl ?? null);
                     return (
                         <button
-                            key={folder.id}
-                            onClick={() => !isAdded && addToFolder(folder.id)}
+                            key={folder.wishlistFolderId}
+                            onClick={() => !isAdded && addToFolder(folder.wishlistFolderId)}
                             className={`flex flex-col rounded-xl border-2 overflow-hidden transition-all text-left ${isAdded ? "border-primary" : "border-border hover:border-primary"} ${isAdded ? "cursor-default" : "cursor-pointer"}`}
                         >
                           {/* 썸네일 */}
@@ -209,8 +245,8 @@ export function Home() {
                           </div>
                           {/* 폴더명 */}
                           <div className="px-2 py-1.5">
-                            <p className={`text-xs font-medium truncate ${isAdded ? "text-primary" : "text-foreground"}`}>{folder.name}</p>
-                            <p className="text-[10px] text-muted-foreground">{ids.length}개</p>
+                            <p className={`text-xs font-medium truncate ${isAdded ? "text-primary" : "text-foreground"}`}>{folder.folderName}</p>
+                            <p className="text-[10px] text-muted-foreground">{folder.itemCount}개</p>
                           </div>
                         </button>
                     );
@@ -229,6 +265,7 @@ export function Home() {
                               value={newFolderName}
                               onChange={(e) => setNewFolderName(e.target.value)}
                               onKeyDown={(e) => {
+                                if (e.nativeEvent.isComposing) return;
                                 if (e.key === "Enter") { e.preventDefault(); addFolder(); }
                                 if (e.key === "Escape") { setCreatingFolder(false); setNewFolderName(""); }
                               }}
@@ -319,15 +356,19 @@ export function Home() {
                 <span>🏆 이번주 인기 브랜드</span>
                 <Link to="/suppliers" className="text-muted-foreground hover:text-primary font-normal text-[11px]"></Link>
               </div>
-              {popularBrands.map((brand, i) => (
-                  <div key={brand.name} className="flex items-center gap-2 py-1 border-b border-primary/20 last:border-0">
+              {popularBrands.length > 0 ? popularBrands.map((brand, i) => (
+                  <div key={brand.brandId} className="flex items-center gap-2 py-1 border-b border-primary/20 last:border-0">
                     <span className={`font-mono text-[11px] font-bold w-4 flex-shrink-0 ${i < 3 ? "text-primary" : "text-muted-foreground"}`}>{i + 1}</span>
                     <div className="w-7 h-7 rounded bg-white border border-border flex items-center justify-center flex-shrink-0 overflow-hidden">
-                      <img src={brand.logo} alt={brand.name} className="w-full h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      {brand.brandLogoUrl && (
+                          <img src={brand.brandLogoUrl} alt={brand.brandName} className="w-full h-full object-contain" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                      )}
                     </div>
-                    <span className="text-xs text-foreground truncate">{brand.name}</span>
+                    <span className="text-xs text-foreground truncate">{brand.brandName}</span>
                   </div>
-              ))}
+              )) : (
+                  <p className="text-xs text-muted-foreground text-center py-4">인기 브랜드가 없습니다</p>
+              )}
             </div>
           </div>
         </div>

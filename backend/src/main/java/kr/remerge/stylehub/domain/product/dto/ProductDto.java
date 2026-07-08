@@ -421,4 +421,11 @@ public class ProductDto {
             );
         }
     }
+
+    // [추가] 인기 브랜드 응답 (판매수량 기준 랭킹용)
+    public record BrandRankResponse(
+            Integer brandId,
+            String brandName,
+            String brandLogoUrl
+    ) {}
 }

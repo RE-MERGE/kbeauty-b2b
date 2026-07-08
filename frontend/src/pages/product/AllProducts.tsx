@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router";
 import api from "../../api/axios";
+import { AlertModal } from "../../components/common/Modal";
 import { Search, Heart, ShoppingCart, Grid3x3, List, ChevronDown, X, FolderOpen, Check, Plus } from "lucide-react";
 
 interface ProductSummary {
@@ -19,6 +20,26 @@ interface ProductSummary {
   sampleAvailable: boolean;
   mainImageUrl: string | null;
   createdAt: string;
+}
+
+// [수정] 백엔드 WishlistDto.FolderResponse 그대로 매핑
+interface BackendFolder {
+  wishlistFolderId: number;
+  folderName: string;
+  isDefault: boolean;
+  sortOrder: number;
+  itemCount: number;
+}
+
+// [수정] 백엔드 WishlistDto.ItemResponse 그대로 매핑
+interface BackendItem {
+  wishlistId: number;
+  productId: number;
+  productName: string;
+  thumbnailUrl: string | null;
+  price: number;
+  brandName: string | null;
+  folderName: string;
 }
 
 // 대분류 id 매핑
@@ -84,20 +105,6 @@ function getChosung(str: string): string {
   return ["ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"][Math.floor(code / (21 * 28))];
 }
 
-type Folder = { id: string; name: string; productIds: number[] };
-
-function loadFolderData(): Folder[] {
-  try {
-    const raw = localStorage.getItem("wishlistFolders");
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return [{ id: "default", name: "전체 찜", productIds: [] }];
-}
-
-function saveFolderData(folders: Folder[]) {
-  localStorage.setItem("wishlistFolders", JSON.stringify(folders));
-}
-
 const PAGE_SIZE = 20;
 
 export function AllProducts() {
@@ -118,19 +125,39 @@ export function AllProducts() {
   const [resultDropOpen, setResultDropOpen] = useState(false);
   const tabDropRef = useRef<HTMLDivElement>(null);
   const resultDropRef = useRef<HTMLDivElement>(null);
-  const [folders, setFolders] = useState<Folder[]>(loadFolderData);
+
+  // [수정] localStorage 대신 서버 상태로 관리
+  const [folders, setFolders] = useState<BackendFolder[]>([]);
+  const [wishItems, setWishItems] = useState<BackendItem[]>([]);
   const [folderModalProductId, setFolderModalProductId] = useState<number | null>(null);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
+
   const [apiProducts, setApiProducts] = useState<ProductSummary[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const newFolderInputRef = useRef<HTMLInputElement>(null);
 
-  const favorites = [...new Set(folders.flatMap(f => f.productIds))];
+  const favorites = [...new Set(wishItems.map((it) => it.productId))];
 
   useEffect(() => {
     api.get("/products").then(res => setApiProducts(res)).catch(() => {});
+    fetchWishlistData();
   }, []);
+
+  // [추가] 폴더 목록 + 내 찜 전체를 서버에서 불러오기
+  const fetchWishlistData = async () => {
+    try {
+      const [folderData, itemData] = await Promise.all([
+        api.get<BackendFolder[]>("/wishlist/folders"),
+        api.get<BackendItem[]>("/wishlist"),
+      ]);
+      setFolders(folderData);
+      setWishItems(itemData);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
     const cat = searchParams.get("category") || "all";
@@ -181,45 +208,52 @@ export function AllProducts() {
     setCurrentPage(1);
   };
 
-  const handleHeartClick = (productId: number) => {
+  // [수정] 하트 클릭: 이미 찜한 상품이면 모든 폴더에서 제거, 아니면 폴더 선택 모달 열기
+  const handleHeartClick = async (productId: number) => {
     if (favorites.includes(productId)) {
-      const next = folders.map(f => ({ ...f, productIds: f.productIds.filter(id => id !== productId) }));
-      setFolders(next);
-      saveFolderData(next);
+      const targetIds = wishItems.filter((it) => it.productId === productId).map((it) => it.wishlistId);
+      try {
+        await Promise.all(targetIds.map((id) => api.delete(`/wishlist/${id}`)));
+        await fetchWishlistData();
+      } catch (err: any) {
+        console.error(err);
+        setAlertMessage(err?.message || "찜 삭제 중 오류가 발생했습니다.");
+      }
     } else {
       setFolderModalProductId(productId);
     }
   };
 
-  const addToFolder = (folderId: string) => {
+  // [수정] 폴더에 찜 추가 - 서버에 요청
+  const addToFolder = async (folderId: number) => {
     const productId = folderModalProductId;
     if (productId === null) return;
-    const next = folders.map(f =>
-        f.id === folderId && !f.productIds.includes(productId)
-            ? { ...f, productIds: [...f.productIds, productId] }
-            : f
-    );
-    setFolders(next);
-    saveFolderData(next);
-    setFolderModalProductId(null);
+    try {
+      await api.post("/wishlist", { productId, wishlistFolderId: folderId });
+      await fetchWishlistData();
+      setFolderModalProductId(null);
+    } catch (err: any) {
+      console.error(err);
+      setAlertMessage(err?.message || "찜 추가 중 오류가 발생했습니다.");
+    }
   };
 
-  const addFolder = () => {
+  // [수정] 폴더 생성 - 서버에 요청
+  const addFolder = async () => {
     const trimmed = newFolderName.trim();
     if (!trimmed) {
       setCreatingFolder(false);
       return;
     }
-    const newFolder: Folder = {
-      id: `folder_${Date.now()}`,
-      name: trimmed,
-      productIds: [],
-    };
-    const next = [...folders, newFolder];
-    setFolders(next);
-    saveFolderData(next);
-    setNewFolderName("");
-    setCreatingFolder(false);
+    try {
+      await api.post("/wishlist/folders", { folderName: trimmed });
+      setNewFolderName("");
+      setCreatingFolder(false);
+      await fetchWishlistData();
+    } catch (err: any) {
+      console.error(err);
+      setAlertMessage(err?.message || "폴더 생성 중 오류가 발생했습니다.");
+    }
   };
 
   const filteredProducts = apiProducts
@@ -315,6 +349,10 @@ export function AllProducts() {
   return (
       <div className="max-w-[1480px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
 
+        {alertMessage && (
+            <AlertModal message={alertMessage} onClose={() => setAlertMessage(null)} />
+        )}
+
         {/* 폴더 선택 모달 */}
         {folderModalProductId !== null && (
             <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => { setFolderModalProductId(null); setCreatingFolder(false); setNewFolderName(""); }}>
@@ -330,15 +368,14 @@ export function AllProducts() {
                 </div>
                 <div className="grid grid-cols-3 gap-3 max-h-72 overflow-y-auto mb-5">
                   {folders.map(folder => {
-                    const isAdded = folder.productIds.includes(folderModalProductId);
-                    const allFavIds = [...new Set(folders.flatMap(f => f.productIds))];
-                    const ids = folder.id === "default" ? allFavIds : folder.productIds;
-                    const needed = ids.length === 0 ? 0 : ids.length === 1 ? 1 : ids.length < 4 ? 2 : 4;
-                    const thumbImgs = ids.slice(0, needed).map(id => apiProducts.find(p => p.productId === id)?.mainImageUrl ?? null);
+                    const idsInFolder = wishItems.filter((it) => it.folderName === folder.folderName).map((it) => it.productId);
+                    const isAdded = idsInFolder.includes(folderModalProductId);
+                    const needed = idsInFolder.length === 0 ? 0 : idsInFolder.length === 1 ? 1 : idsInFolder.length < 4 ? 2 : 4;
+                    const thumbImgs = idsInFolder.slice(0, needed).map(id => apiProducts.find(p => p.productId === id)?.mainImageUrl ?? null);
                     return (
                         <button
-                            key={folder.id}
-                            onClick={() => !isAdded && addToFolder(folder.id)}
+                            key={folder.wishlistFolderId}
+                            onClick={() => !isAdded && addToFolder(folder.wishlistFolderId)}
                             className={`flex flex-col rounded-xl border-2 overflow-hidden transition-all text-left ${isAdded ? "border-primary" : "border-border hover:border-primary"} ${isAdded ? "cursor-default" : "cursor-pointer"}`}
                         >
                           {/* 썸네일 */}
@@ -372,8 +409,8 @@ export function AllProducts() {
                           </div>
                           {/* 폴더명 */}
                           <div className="px-2 py-1.5">
-                            <p className={`text-xs font-medium truncate ${isAdded ? "text-primary" : "text-foreground"}`}>{folder.name}</p>
-                            <p className="text-[10px] text-muted-foreground">{ids.length}개</p>
+                            <p className={`text-xs font-medium truncate ${isAdded ? "text-primary" : "text-foreground"}`}>{folder.folderName}</p>
+                            <p className="text-[10px] text-muted-foreground">{folder.itemCount}개</p>
                           </div>
                         </button>
                     );
@@ -392,6 +429,7 @@ export function AllProducts() {
                               value={newFolderName}
                               onChange={(e) => setNewFolderName(e.target.value)}
                               onKeyDown={(e) => {
+                                if (e.nativeEvent.isComposing) return;
                                 if (e.key === "Enter") { e.preventDefault(); addFolder(); }
                                 if (e.key === "Escape") { setCreatingFolder(false); setNewFolderName(""); }
                               }}

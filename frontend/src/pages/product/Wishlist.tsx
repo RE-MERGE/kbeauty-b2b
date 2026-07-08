@@ -4,7 +4,7 @@ import api from "../../api/axios";
 import { AlertModal } from "../../components/common/Modal";
 import {
   Heart, ShoppingCart, Search, Grid3x3, List,
-  FolderOpen, FolderPlus, ChevronLeft
+  FolderOpen, FolderPlus, ChevronLeft, Trash2
 } from "lucide-react";
 
 interface ProductSummary {
@@ -169,6 +169,24 @@ export function Wishlist() {
     }
   };
 
+  const deleteFolder = async (folderId: number) => {
+    if (!window.confirm("이 폴더를 삭제하시겠습니까?")) return;
+
+    try {
+      await api.delete(`/wishlist/folders/${folderId}`);
+      await fetchWishlistData();
+
+      // 삭제한 폴더가 현재 열려있었다면 목록으로 이동
+      if (openFolderId === folderId) {
+        setOpenFolderId(null);
+        setViewType("folder");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setAlertMessage(err?.message || "폴더 삭제 중 오류가 발생했습니다.");
+    }
+  };
+
   const getFolderImages = (folder: BackendFolder) => {
     const idsInFolder = enrichedItems.filter((it) => it.folderName === folder.folderName);
     const count = idsInFolder.length;
@@ -213,13 +231,24 @@ export function Wishlist() {
                       {folder.itemCount}개
                     </span>
                   </button>
-                  <div className="px-3 py-2.5 flex items-center gap-1.5">
+                  <div className="px-3 py-2.5 flex items-center gap-2">
                     <span
                         onClick={() => { setOpenFolderId(folder.wishlistFolderId); setViewType("grid"); }}
                         className="flex-1 text-sm font-medium text-foreground truncate cursor-pointer hover:text-primary transition-colors"
                     >
                       {folder.folderName}
                     </span>
+
+                    <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteFolder(folder.wishlistFolderId);
+                        }}
+                        className="p-1 rounded hover:bg-red-50 text-red-500 transition-colors"
+                        title="폴더 삭제"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                     {/* 폴더 이름변경/삭제는 백엔드에 아직 해당 API가 없어서 뺐어요 */}
                   </div>
                 </div>

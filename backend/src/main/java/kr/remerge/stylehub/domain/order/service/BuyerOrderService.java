@@ -1,3 +1,4 @@
+
 package kr.remerge.stylehub.domain.order.service;
 
 import kr.remerge.stylehub.domain.address.Address;
@@ -18,13 +19,13 @@ import kr.remerge.stylehub.domain.order.enumtype.OrderLogMemo;
 import kr.remerge.stylehub.domain.order.enumtype.OrderStatus;
 import kr.remerge.stylehub.domain.order.enumtype.OrderType;
 import kr.remerge.stylehub.domain.order.enumtype.PaymentMethod;
+import kr.remerge.stylehub.domain.order.pdf.OrderPdfGenerator;
 import kr.remerge.stylehub.domain.order.repository.OrderItemRepository;
 import kr.remerge.stylehub.domain.order.repository.OrderLogRepository;
 import kr.remerge.stylehub.domain.order.repository.OrderRepository;
 import kr.remerge.stylehub.domain.order.validation.CartOrderValidator;
 import kr.remerge.stylehub.domain.product.entity.Product;
 import kr.remerge.stylehub.domain.product.entity.ProductOption;
-import kr.remerge.stylehub.domain.settlement.SettlementService;
 import kr.remerge.stylehub.domain.user.entity.User;
 import kr.remerge.stylehub.domain.user.support.UserReader;
 import kr.remerge.stylehub.global.exception.BusinessException;
@@ -55,7 +56,7 @@ public class BuyerOrderService {
     private final AddressRepository addressRepository;
     private final OrderLogRepository orderLogRepository;
     private final CartOrderValidator cartOrderValidator;
-    private final SettlementService settlementService;
+    private final OrderPdfGenerator orderPdfGenerator;
 
     @Transactional
     public void confirmOrder(Integer userId, Integer orderId) {
@@ -73,9 +74,6 @@ public class BuyerOrderService {
         OrderStatus previousStatus = order.getStatus();
 
         order.agree();
-
-
-
 
         orderLogRepository.save(
                 OrderLog.createStatusLog(
@@ -241,6 +239,10 @@ public class BuyerOrderService {
                 .receiverZipcode(address.getZipcode())
                 .receiverAddress(address.getAddress())
                 .receiverAddressDetail(address.getAddressDetail())
+                .senderName(sellerCompany.getName())
+                .senderPhone(sellerCompany.getRepresentativePhone())
+                .senderAddress(sellerCompany.getAddress())
+                .senderAddressDetail(sellerCompany.getAddressDetail())
                 .build();
     }
 
@@ -369,6 +371,13 @@ public class BuyerOrderService {
 
         return BuyerOrderDetailResponse.from(order, sellerCompanyName, orderDetailItemResponseList, orderLogResponseList);
 
+    }
+
+    // 간단한 주문 내역서(구매 확인용 요약본) PDF. 계약서 PDF와 달리 서명/해시 검증이나
+    // 별도 저장 없이 요청 시점의 주문 데이터로 그때그때 생성해서 바로 내려준다.
+    public byte[] generateReceiptPdf(Integer userId, Integer orderId) {
+        BuyerOrderDetailResponse orderDetail = getOrderDetail(userId, orderId);
+        return orderPdfGenerator.generate(orderDetail);
     }
 
     // 셀러(공급사) 회사명은 1:1 직거래 우회 방지를 위해 원칙적으로 노출하지 않는다.

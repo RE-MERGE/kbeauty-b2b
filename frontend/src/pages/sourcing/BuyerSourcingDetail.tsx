@@ -122,6 +122,9 @@ function WithdrawConfirmModal({ onClose, onConfirm, isLoading }: {
             <p className="text-sm text-foreground">
               소싱 요청을 취소하면 배정된 공급사에게 더 이상 요청이 노출되지 않습니다.
             </p>
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              취소는 견적을 받은 후에는 불가능합니다. 지금 취소하지 않으면 이후 견적이 접수될 경우 더 이상 취소할 수 없습니다.
+            </p>
             <p className="text-xs text-muted-foreground">취소 후에는 되돌릴 수 없습니다.</p>
             <div className="flex gap-2 pt-1">
               <button onClick={onClose}
@@ -230,23 +233,30 @@ export function BuyerSourcingDetail() {
                 <h1 className="text-xl font-bold text-foreground mb-1">{request.productName}</h1>
                 <div className="text-xs text-muted-foreground">{request.createdAt.slice(0, 10)} 등록</div>
               </div>
-              <div className="flex-shrink-0 flex items-center gap-2">
-                <button
-                    onClick={goToQuoteManagement}
-                    className="flex items-center gap-1 px-3 py-2 border border-border text-muted-foreground hover:border-primary hover:text-primary rounded-lg text-xs font-medium transition-colors"
-                >
-                  견적 보기 <ChevronRight size={12} />
-                </button>
+              <div className="flex-shrink-0 flex flex-col items-end gap-1.5">
+                <div className="flex items-center gap-2">
+                  <button
+                      onClick={goToQuoteManagement}
+                      className="flex items-center gap-1 px-3 py-2 border border-border text-muted-foreground hover:border-primary hover:text-primary rounded-lg text-xs font-medium transition-colors"
+                  >
+                    견적 보기 <ChevronRight size={12} />
+                  </button>
+                  {request.canWithdraw && (
+                      <button
+                          onClick={() => setShowWithdraw(true)}
+                          className="flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-500 hover:bg-red-50 rounded-lg text-xs font-medium transition-colors"
+                      >
+                        <Ban size={12} /> 취소
+                      </button>
+                  )}
+                </div>
                 {request.canWithdraw ? (
-                    <button
-                        onClick={() => setShowWithdraw(true)}
-                        className="flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-500 hover:bg-red-50 rounded-lg text-xs font-medium transition-colors"
-                    >
-                      <Ban size={12} /> 취소
-                    </button>
+                    <span className="text-[11px] text-muted-foreground text-right max-w-[220px] leading-snug">
+                      취소는 견적을 받은 후에는 불가능합니다.
+                    </span>
                 ) : (
                     getWithdrawUnavailableReason(request.status) && (
-                        <span className="text-[11px] text-muted-foreground text-right max-w-[160px] leading-snug">
+                        <span className="text-[11px] text-muted-foreground text-right max-w-[220px] leading-snug">
                           {getWithdrawUnavailableReason(request.status)}
                         </span>
                     )

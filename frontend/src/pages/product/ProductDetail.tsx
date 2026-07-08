@@ -1,6 +1,7 @@
 import api from "../../api/axios";
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { AlertModal } from "../../components/common/Modal";
 import {
   ArrowLeft, ShoppingCart, Truck, Shield, CheckCircle,
   Award, MapPin, Phone, Mail, Plus, Minus, Leaf, RefreshCw,
@@ -61,18 +62,24 @@ function CertBadge({ certKey }: { certKey: CertKey }) {
   );
 }
 
-type Folder = { id: string; name: string; productIds: number[] };
-
-function loadFolderData(): Folder[] {
-  try {
-    const raw = localStorage.getItem("wishlistFolders");
-    if (raw) return JSON.parse(raw);
-  } catch {}
-  return [{ id: "default", name: "전체 찜", productIds: [] }];
+// [수정] 백엔드 WishlistDto.FolderResponse 그대로 매핑
+interface BackendFolder {
+  wishlistFolderId: number;
+  folderName: string;
+  isDefault: boolean;
+  sortOrder: number;
+  itemCount: number;
 }
 
-function saveFolderData(folders: Folder[]) {
-  localStorage.setItem("wishlistFolders", JSON.stringify(folders));
+// [수정] 백엔드 WishlistDto.ItemResponse 그대로 매핑
+interface BackendItem {
+  wishlistId: number;
+  productId: number;
+  productName: string;
+  thumbnailUrl: string | null;
+  price: number;
+  brandName: string | null;
+  folderName: string;
 }
 
 // 옵션 name/value 쌍 타입
@@ -139,17 +146,37 @@ export function ProductDetail() {
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(0);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
-  const [folders, setFolders] = useState<Folder[]>(loadFolderData);
+
+  // [수정] localStorage 대신 서버 상태로 관리
+  const [folders, setFolders] = useState<BackendFolder[]>([]);
+  const [wishItems, setWishItems] = useState<BackendItem[]>([]);
   const [folderModalOpen, setFolderModalOpen] = useState(false);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
+
   const [allProducts, setAllProducts] = useState<{productId: number; mainImageUrl: string | null}[]>([]);
   const [pdfExpanded, setPdfExpanded] = useState(false);
 
   useEffect(() => {
     api.get("/products").then(res => setAllProducts(res)).catch(() => {});
+    fetchWishlistData();
   }, []);
 
-  const favorites = [...new Set(folders.flatMap(f => f.productIds))];
+  // [추가] 폴더 목록 + 내 찜 전체를 서버에서 불러오기
+  const fetchWishlistData = async () => {
+    try {
+      const [folderData, itemData] = await Promise.all([
+        api.get<BackendFolder[]>("/wishlist/folders"),
+        api.get<BackendItem[]>("/wishlist"),
+      ]);
+      setFolders(folderData);
+      setWishItems(itemData);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const productId = product?.productId ?? null;
+  const favorites = [...new Set(wishItems.map((it) => it.productId))];
   const isFavorite = productId !== null && favorites.includes(productId);
 
   // 자동 캐러셀 useEffect는 early return보다 반드시 위에 있어야 함 (Hook 개수/순서 일관성 유지)
@@ -181,31 +208,38 @@ export function ProductDetail() {
           setSelectedOptionIdx(0);
           setSelectedImage(0);
         })
-        .catch(() => alert("상품 정보를 불러오지 못했습니다."))
+        .catch(() => setAlertMessage("상품 정보를 불러오지 못했습니다."))
         .finally(() => setLoading(false));
   }, [id]);
 
-  const handleHeartClick = () => {
+  // [수정] 하트 클릭: 이미 찜한 상품이면 모든 폴더에서 제거, 아니면 폴더 선택 모달 열기
+  const handleHeartClick = async () => {
     if (!productId) return;
     if (isFavorite) {
-      const next = folders.map(f => ({ ...f, productIds: f.productIds.filter(pid => pid !== productId) }));
-      setFolders(next);
-      saveFolderData(next);
+      const targetIds = wishItems.filter((it) => it.productId === productId).map((it) => it.wishlistId);
+      try {
+        await Promise.all(targetIds.map((wid) => api.delete(`/wishlist/${wid}`)));
+        await fetchWishlistData();
+      } catch (err: any) {
+        console.error(err);
+        setAlertMessage(err?.message || "찜 삭제 중 오류가 발생했습니다.");
+      }
     } else {
       setFolderModalOpen(true);
     }
   };
 
-  const addToFolder = (folderId: string) => {
+  // [수정] 폴더에 찜 추가 - 서버에 요청
+  const addToFolder = async (folderId: number) => {
     if (!productId) return;
-    const next = folders.map(f =>
-        f.id === folderId && !f.productIds.includes(productId)
-            ? { ...f, productIds: [...f.productIds, productId] }
-            : f
-    );
-    setFolders(next);
-    saveFolderData(next);
-    setFolderModalOpen(false);
+    try {
+      await api.post("/wishlist", { productId, wishlistFolderId: folderId });
+      await fetchWishlistData();
+      setFolderModalOpen(false);
+    } catch (err: any) {
+      console.error(err);
+      setAlertMessage(err?.message || "찜 추가 중 오류가 발생했습니다.");
+    }
   };
 
   if (loading) {
@@ -301,7 +335,7 @@ export function ProductDetail() {
       navigate("/cart");
     } catch (error) {
       console.error("장바구니 추가 실패", error);
-      window.alert("장바구니에 담지 못했습니다. 로그인 상태와 상품 옵션을 확인해주세요.");
+      setAlertMessage("장바구니에 담지 못했습니다. 로그인 상태와 상품 옵션을 확인해주세요.");
     } finally {
       setIsAddingToCart(false);
     }
@@ -309,6 +343,10 @@ export function ProductDetail() {
 
   return (
       <div className="max-w-[1280px] mx-auto px-4 py-8 font-[Inter,sans-serif]">
+
+        {alertMessage && (
+            <AlertModal message={alertMessage} onClose={() => setAlertMessage(null)} />
+        )}
 
         {/* 폴더 선택 모달 */}
         {folderModalOpen && (
@@ -325,15 +363,14 @@ export function ProductDetail() {
                 </div>
                 <div className="grid grid-cols-3 gap-3 max-h-72 overflow-y-auto mb-5">
                   {folders.map(folder => {
-                    const isAdded = productId !== null && folder.productIds.includes(productId);
-                    const allFavIds = [...new Set(folders.flatMap(f => f.productIds))];
-                    const ids = folder.id === "default" ? allFavIds : folder.productIds;
-                    const needed = ids.length === 0 ? 0 : ids.length === 1 ? 1 : ids.length < 4 ? 2 : 4;
-                    const thumbImgs = ids.slice(0, needed).map(id => allProducts.find(p => p.productId === id)?.mainImageUrl ?? null);
+                    const idsInFolder = wishItems.filter((it) => it.folderName === folder.folderName).map((it) => it.productId);
+                    const isAdded = productId !== null && idsInFolder.includes(productId);
+                    const needed = idsInFolder.length === 0 ? 0 : idsInFolder.length === 1 ? 1 : idsInFolder.length < 4 ? 2 : 4;
+                    const thumbImgs = idsInFolder.slice(0, needed).map(pid => allProducts.find(p => p.productId === pid)?.mainImageUrl ?? null);
                     return (
                         <button
-                            key={folder.id}
-                            onClick={() => !isAdded && addToFolder(folder.id)}
+                            key={folder.wishlistFolderId}
+                            onClick={() => !isAdded && addToFolder(folder.wishlistFolderId)}
                             className={`flex flex-col rounded-xl border-2 overflow-hidden transition-all text-left ${isAdded ? "border-primary" : "border-border hover:border-primary"} ${isAdded ? "cursor-default" : "cursor-pointer"}`}
                         >
                           <div className="w-full aspect-square bg-muted relative overflow-hidden">
@@ -365,8 +402,8 @@ export function ProductDetail() {
                             )}
                           </div>
                           <div className="px-2 py-1.5">
-                            <p className={`text-xs font-medium truncate ${isAdded ? "text-primary" : "text-foreground"}`}>{folder.name}</p>
-                            <p className="text-[10px] text-muted-foreground">{ids.length}개</p>
+                            <p className={`text-xs font-medium truncate ${isAdded ? "text-primary" : "text-foreground"}`}>{folder.folderName}</p>
+                            <p className="text-[10px] text-muted-foreground">{folder.itemCount}개</p>
                           </div>
                         </button>
                     );

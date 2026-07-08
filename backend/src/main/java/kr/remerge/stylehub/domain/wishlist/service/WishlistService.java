@@ -24,6 +24,7 @@ public class WishlistService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
 
+
     // 폴더 목록 조회
     @Transactional(readOnly = true)
     public List<WishlistDto.FolderResponse> getFolders(Integer userId) {
@@ -149,6 +150,29 @@ public class WishlistService {
                         .build())
                 .items(items)
                 .build();
+    }
+
+    @Transactional
+    public void deleteFolder(Integer userId, Integer folderId) {
+
+        WishlistFolder folder = wishlistFolderRepository.findById(folderId)
+                .orElseThrow(() -> new IllegalArgumentException("폴더 없음"));
+
+        // 본인 폴더인지 확인
+        if (!folder.getUser().getUserId().equals(userId)) {
+            throw new IllegalArgumentException("삭제 권한이 없습니다.");
+        }
+
+        // 기본 폴더 삭제 방지
+        if (folder.getIsDefault()) {
+            throw new IllegalArgumentException("기본 폴더는 삭제할 수 없습니다.");
+        }
+
+        // 폴더 안의 찜 삭제
+        wishlistRepository.deleteByWishlistFolder_WishlistFolderId(folderId);
+
+        // 폴더 삭제
+        wishlistFolderRepository.delete(folder);
     }
 
     // ── 내부 변환 메서드 ──

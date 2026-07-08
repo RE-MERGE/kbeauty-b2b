@@ -69,4 +69,14 @@ public class WishlistController {
     ) {
         return ResponseEntity.ok(ApiResponse.success(wishlistService.getFolderItems(folderId)));
     }
+
+    @DeleteMapping("/folders/{folderId}")
+    public ResponseEntity<ApiResponse<Void>> deleteFolder(
+            @LoginUser AuthUser userDetails,
+            @PathVariable Integer folderId
+    ) {
+        wishlistService.deleteFolder(userDetails.userId(), folderId);
+        return ResponseEntity.ok(ApiResponse.success());
+    }
+
 }

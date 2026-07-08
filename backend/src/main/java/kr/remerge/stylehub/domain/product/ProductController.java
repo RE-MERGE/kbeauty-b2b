@@ -45,6 +45,12 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success(productService.getPopularProducts()));
     }
 
+    // [추가] 인기 브랜드 (판매수량 기준)
+    @GetMapping("/popular-brands")
+    public ResponseEntity<ApiResponse<List<ProductDto.BrandRankResponse>>> getPopularBrands() {
+        return ResponseEntity.ok(ApiResponse.success(productService.getPopularBrands()));
+    }
+
     // [GET] 상품 단건 조회
     @GetMapping("/{productId}")
     public ResponseEntity<ApiResponse<ProductDto.DetailResponse>> getById(
@@ -96,4 +102,6 @@ public class ProductController {
         productService.delete(productId);
         return ResponseEntity.ok(ApiResponse.success());
     }
+
+
 }

@@ -17,4 +17,6 @@ public interface WishlistRepository extends JpaRepository<Wishlist, Integer> {
     boolean existsByUser_UserIdAndProduct_ProductId(Integer userId, Integer productId);
 
     void deleteByWishlistFolder_WishlistFolderIdAndProduct_ProductId(Integer folderId, Integer productId);
+
+    void deleteByWishlistFolder_WishlistFolderId(Integer folderId);
 }

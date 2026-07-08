@@ -1,4 +1,4 @@
-package kr.remerge.stylehub.domain.dashboard;
+package kr.remerge.stylehub.domain.dashboard.dto;
 
 import jakarta.persistence.Tuple;
 import kr.remerge.stylehub.domain.category.entity.Category;
@@ -41,14 +41,18 @@ public class DashboardService {
 
     /**
      * [바이어 1] 소싱 요청 목록 조회
+     * 대표는 회사 전체, 직원은 본인이 작성한 요청만 조회 가능
      */
-    public List<BuyerSourcingDashboardResponse> getBuyerSourcingDashboardList(Integer buyerCompanyId, String statusStr) {
+    public List<BuyerSourcingDashboardResponse> getBuyerSourcingDashboardList(
+            Integer buyerCompanyId, Integer userId, String role, String statusStr) {
         List<SourcingStatus> statuses = parseSourcingStatuses(statusStr);
+        boolean isPresident = "PRESIDENT".equals(role);
 
         List<SourcingRequest> requests = sourcingRequestRepository
-                .findByBuyerCompanyIdAndStatusInOrderByCreatedAtDesc(
-                        buyerCompanyId, statuses
-                );
+                .findByBuyerCompanyIdAndStatusInOrderByCreatedAtDesc(buyerCompanyId, statuses)
+                .stream()
+                .filter(r -> isPresident || r.getBuyer().getUserId().equals(userId))
+                .toList();
 
         if (requests.isEmpty()) return Collections.emptyList();
 
@@ -98,11 +102,17 @@ public class DashboardService {
 
     /**
      * [바이어 2] 받은 견적 내역 조회
+     * 대표는 회사 전체, 직원은 본인이 작성한 소싱 요청에 들어온 견적만 조회 가능
      */
-    public List<BuyerQuoteDashboardResponse> getBuyerReceivedQuotes(Integer buyerCompanyId, String statusStr) {
+    public List<BuyerQuoteDashboardResponse> getBuyerReceivedQuotes(
+            Integer buyerCompanyId, Integer userId, String role, String statusStr) {
+        boolean isPresident = "PRESIDENT".equals(role);
         List<SourcingStatus> activeStatuses = List.of(SourcingStatus.PENDING, SourcingStatus.QUOTED, SourcingStatus.NEGOTIATING);
         List<SourcingRequest> myRequests = sourcingRequestRepository
-                .findByBuyerCompanyIdAndTypeAndStatusInOrderByCreatedAtDesc(buyerCompanyId, "SOURCING", activeStatuses);
+                .findByBuyerCompanyIdAndTypeAndStatusInOrderByCreatedAtDesc(buyerCompanyId, "SOURCING", activeStatuses)
+                .stream()
+                .filter(r -> isPresident || r.getBuyer().getUserId().equals(userId))
+                .toList();
 
         if (myRequests.isEmpty()) return Collections.emptyList();
 
@@ -191,12 +201,15 @@ public class DashboardService {
     /**
      * [셀러 1] 신규 소싱 요청 피드 조회
      */
-    public List<SellerSourcingFeedResponse> getSellerSourcingFeedList(Integer sellerCompanyId, String statusStr) {
+    public List<SellerSourcingFeedResponse> getSellerSourcingFeedList(
+            Integer sellerCompanyId, Integer sellerUserId, String role, String statusStr) {
         // 💡 [교정] ASSIGNED 대신 실제 존재하는 RECOMMENDED 상태 사용
         List<SourcingSupplier> suppliers = sourcingSupplierRepository.findSellerRequests(
                 sellerCompanyId,
                 SourcingSupplierStatus.RECOMMENDED,
-                "SOURCING"
+                "SOURCING",
+                sellerUserId,
+                role
         );
 
         if (suppliers.isEmpty()) return Collections.emptyList();
@@ -234,12 +247,15 @@ public class DashboardService {
     /**
      * [셀러 2] 작성 중이거나 마감 임박인 견적서 조회
      */
-    public List<QuoteDraftDashboardResponse> getSellerQuoteDrafts(Integer sellerCompanyId, String statusStr) {
+    public List<QuoteDraftDashboardResponse> getSellerQuoteDrafts(
+            Integer sellerCompanyId, Integer sellerUserId, String role, String statusStr) {
         // 💡 [교정] ASSIGNED 대신 실제 존재하는 RECOMMENDED 상태 사용
         List<SourcingSupplier> sellerAllocations = sourcingSupplierRepository.findSellerRequests(
                 sellerCompanyId,
                 SourcingSupplierStatus.RECOMMENDED,
-                "SOURCING"
+                "SOURCING",
+                sellerUserId,
+                role
         );
 
         return sellerAllocations.stream()

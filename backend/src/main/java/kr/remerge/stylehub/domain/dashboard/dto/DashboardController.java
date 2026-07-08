@@ -1,7 +1,8 @@
-package kr.remerge.stylehub.domain.dashboard;
+package kr.remerge.stylehub.domain.dashboard.dto;
 
 import kr.remerge.stylehub.domain.dashboard.dto.buyer.*;
 import kr.remerge.stylehub.domain.dashboard.dto.seller.*;
+import kr.remerge.stylehub.domain.user.enumtype.UserRole;
 import kr.remerge.stylehub.global.auth.dto.login.AuthUser;
 import kr.remerge.stylehub.global.auth.security.LoginUser;
 import kr.remerge.stylehub.global.response.ApiResponse;
@@ -34,7 +35,10 @@ public class DashboardController {
             @LoginUser AuthUser authUser,
             @RequestParam(value = "status", required = false, defaultValue = "PENDING,QUOTED,NEGOTIATING") String status
     ) {
-        List<BuyerSourcingDashboardResponse> data = dashboardService.getBuyerSourcingDashboardList(authUser.userId(), status);
+        // 💡 [수정] 기존에는 companyId 자리에 userId를 잘못 넘기고 있었음.
+        // 대표는 회사 전체, 직원은 본인 작성 건만 보이도록 companyId + userId + role을 모두 전달.
+        List<BuyerSourcingDashboardResponse> data = dashboardService.getBuyerSourcingDashboardList(
+                authUser.companyId(), authUser.userId(), authUser.role(), status);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
@@ -47,7 +51,9 @@ public class DashboardController {
             @LoginUser AuthUser authUser,
             @RequestParam(value = "status", required = false, defaultValue = "SUBMITTED") String status
     ) {
-        List<BuyerQuoteDashboardResponse> data = dashboardService.getBuyerReceivedQuotes(authUser.userId(), status);
+        // 💡 [수정] 기존에는 companyId 자리에 userId를 잘못 넘기고 있었음.
+        List<BuyerQuoteDashboardResponse> data = dashboardService.getBuyerReceivedQuotes(
+                authUser.companyId(), authUser.userId(), authUser.role(), status);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
@@ -117,7 +123,7 @@ public class DashboardController {
             @LoginUser AuthUser authUser,
             @RequestParam(value = "status", required = false, defaultValue = "PENDING") String status
     ) {
-        List<SellerSourcingFeedResponse> data = dashboardService.getSellerSourcingFeedList(authUser.companyId(), status);
+        List<SellerSourcingFeedResponse> data = dashboardService.getSellerSourcingFeedList(authUser.companyId(), authUser.userId() ,authUser.role(), status);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 
@@ -130,7 +136,7 @@ public class DashboardController {
             @LoginUser AuthUser authUser,
             @RequestParam(value = "status", required = false, defaultValue = "DRAFT") String status
     ) {
-        List<QuoteDraftDashboardResponse> data = dashboardService.getSellerQuoteDrafts(authUser.companyId(), status);
+        List<QuoteDraftDashboardResponse> data = dashboardService.getSellerQuoteDrafts(authUser.companyId(), authUser.userId(), authUser.role(), status);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 

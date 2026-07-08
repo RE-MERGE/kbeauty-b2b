@@ -74,8 +74,8 @@ public class BuyerOrderService {
 
         order.agree();
 
-        // 💡 신규 추가: 거래 확정(COMPLETED) 시점에 정산 건을 자동 생성
-        settlementService.createSettlementForOrder(order);
+
+
 
         orderLogRepository.save(
                 OrderLog.createStatusLog(

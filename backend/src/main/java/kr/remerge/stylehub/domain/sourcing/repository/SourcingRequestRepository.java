@@ -4,6 +4,7 @@ import io.lettuce.core.dynamic.annotation.Param;
 import jakarta.persistence.Tuple;
 import kr.remerge.stylehub.domain.sourcing.entity.SourcingRequest;
 import kr.remerge.stylehub.domain.sourcing.enumtype.SourcingStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -44,8 +45,34 @@ public interface SourcingRequestRepository extends JpaRepository<SourcingRequest
         """)
     List<Tuple> countAllGroupedByStatus();
 
-    List<SourcingRequest> findByBuyerCompanyIdAndStatusInOrderByCreatedAtDesc(
-            Integer buyerCompanyId,
-            Collection<SourcingStatus> statuses
+    // [바이어 대시보드 전용 신규 쿼리]
+    // 회사 ID + 상태 조건에 맞으면서, 대표(PRESIDENT)거나 본인이 작성한 소싱 요청 중 최신 5개만 조회
+    @Query("""
+            SELECT sr FROM SourcingRequest sr
+            WHERE sr.buyerCompanyId = :buyerCompanyId
+              AND sr.status IN :statuses
+              AND (:role = 'PRESIDENT' OR sr.buyer.userId = :userId)
+            ORDER BY sr.createdAt DESC
+            """)
+    List<SourcingRequest> findTop5BuyerDashboardFeeds(
+            @Param("buyerCompanyId") Integer buyerCompanyId,
+            @Param("statuses") Collection<SourcingStatus> statuses,
+            @Param("userId") Integer userId,
+            @Param("role") String role,
+            Pageable pageable // 💡 딱 5개만 끊어오기 위한 페이징 파라미터
+    );
+
+    // 2. 상단 카운트 카드에 뿌려줄 '진짜 전체 대기중 건수' 세어오기 (COUNT 전용)
+    @Query("""
+            SELECT COUNT(sr) FROM SourcingRequest sr
+            WHERE sr.buyerCompanyId = :buyerCompanyId
+              AND sr.status IN :statuses
+              AND (:role = 'PRESIDENT' OR sr.buyer.userId = :userId)
+            """)
+    long countAllBuyerDashboardFeeds(
+            @Param("buyerCompanyId") Integer buyerCompanyId,
+            @Param("statuses") Collection<SourcingStatus> statuses,
+            @Param("userId") Integer userId,
+            @Param("role") String role
     );
 }
